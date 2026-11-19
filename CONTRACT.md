@@ -53,7 +53,7 @@ project = {
     notes: "Notas generales del proyecto"
   },
   settings: {
-    units: "m",                       // solo presentación; datos en mm
+    units: "m",                       // "m" (métrico) | "ft" (imperial); solo presentación, datos en mm
     grid: 250,                        // separación de rejilla en mm
     wallThickness: 150,               // mm, valor por defecto para muros nuevos
     wallHeight: 2700,                 // mm

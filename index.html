@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#111820">
   <title>EngDraft — Planos residenciales 2D / 3D</title>
   <meta name="description" content="EngDraft: dibujo de planos de residencias en 2D y 3D, ambientes, mobiliario, hojas de título y exportación PDF / DWG-compatible.">
+  <meta name="author" content="Prof. Raymond Rosa Ávila">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f5a623'/%3E%3Cpath d='M18 46V18h28v8H27v4h15v7H27v3h20v6z' fill='%23111a22'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="css/app.css">
 </head>
@@ -128,14 +129,14 @@
         </div>
 
         <footer class="statusbar">
-          <div class="status-left"><span class="status-dot"></span><span id="statusTool">Listo</span></div>
+          <div class="status-left"><span class="status-dot"></span><span id="statusTool">Listo</span><span class="status-sep"></span><span class="status-author" title="Autor de EngDraft">Prof. Raymond Rosa Ávila</span></div>
           <div class="status-center" id="statusCoords">X: 0.00 m &nbsp; Y: 0.00 m</div>
           <div class="status-right">
             <span id="statusZoom">Zoom 100%</span>
             <span class="status-sep"></span>
             <span id="statusLevel">Planta baja</span>
             <span class="status-sep"></span>
-            <span>mm · m²</span>
+            <button id="btnUnits" class="status-units" type="button" title="Cambiar entre sistema métrico e imperial">m · m²</button>
             <button id="btnHelpStatus" class="status-help" title="Atajos de teclado">?</button>
           </div>
         </footer>

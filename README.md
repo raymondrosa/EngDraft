@@ -3,6 +3,8 @@
 **Planos de residencias en 2D y 3D, directo en el navegador.**
 EngDraft es una aplicación HTML offline pensada para ingenieros civiles y diseñadores: dibuja la planta, inserta muros, puertas, ventanas, ambientes y mobiliario, revisa la maqueta 3D y entrega el juego de planos en PDF vectorial o DXF compatible con AutoCAD.
 
+📘 **Manual completo:** [`manual/EngDraft-Manual.pdf`](manual/EngDraft-Manual.pdf) · versión editable en Word: [`manual/EngDraft-Manual.docx`](manual/EngDraft-Manual.docx). Incluye tutorial paso a paso, referencia de herramientas, 3D, láminas, archivos, buenas prácticas, ejercicios para estudiantes, FAQ y checklist de entrega.
+
 ![Vista 2D](docs/vista-2d.png)
 
 ## Abrir la aplicación
@@ -24,9 +26,10 @@ Todos los datos se dibujan y se guardan en tu equipo. No se envía nada a ningú
 
 ### Plano 2D
 - Muros encadenados con espesor y altura editables, uniones automáticas y snapping a extremos, medios, vértices y rejilla.
-- Puertas y ventanas insertadas sobre el muro, con abanico, jambas, vidrio y antepecho.
+- Puertas y ventanas insertadas sobre el muro, con abanico, jambas, vidrio y antepecho. Puedes **girar la hoja, invertir la bisagra** y editar ancho, alto, posición y antepecho.
+- **Sistema métrico o imperial** conmutable desde la barra de estado o Datos del proyecto: m / m² o ft / ft² en cotas, áreas, propiedades, láminas y 3D.
 - Ambientes con nombre, acabado, color y **área calculada**; detección automática de recintos cerrados.
-- Biblioteca de **más de 35 muebles y accesorios** de sala, cocina, baño, dormitorio y exterior.
+- Biblioteca de **más de 40 muebles y accesorios** de sala, cocina, baño, dormitorio y exterior.
 - Cotas manuales y cotas generales automáticas, textos, norte, rejilla adaptativa, capas con visibilidad y bloqueo.
 - Selección, arrastre, rotación, duplicado, borrado, deshacer/rehacer y edición numérica de cada objeto.
 - Niveles ilimitados con pestañas de planta.
@@ -142,4 +145,6 @@ Las pruebas de navegador se hicieron contra Microsoft Edge (Chromium) servido po
 
 ---
 
-**EngDraft 1.0** · HTML + CSS + JavaScript clásico · sin dependencias externas · funciona offline.
+**EngDraft 1.1** · HTML + CSS + JavaScript clásico · sin dependencias externas · funciona offline.
+
+**Autor:** Prof. Raymond Rosa Ávila.
