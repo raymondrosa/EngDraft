@@ -141,18 +141,172 @@
     return { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 };
   };
 
+  // ---------------------------------------------------------------- curvas
+  // Muros curvos: wall.curve = { type:'arc', bulge } | { type:'spline', pts:[{x,y},...] }
+  // Un muro recto NO tiene curve. bulge = tan(barrido/4) (convención DXF):
+  //   positivo = arco en sentido antihorario de a→b; |bulge|=1 es media circunferencia.
+  // En `spline`, pts son puntos intermedios ABSOLUTOS entre wall.a y wall.b;
+  // la curva pasa por todos ellos (Catmull-Rom).
+  Geo.wallIsCurved = function (wall) {
+    if (!wall || !wall.curve) return false;
+    var c = wall.curve;
+    if (c.type === 'arc') return Math.abs(Number(c.bulge) || 0) > 1e-4;
+    if (c.type === 'spline') return (c.pts || []).length > 0;
+    return false;
+  };
+
+  function catmullRomPoint(p0, p1, p2, p3, t) {
+    var t2 = t * t, t3 = t2 * t;
+    return {
+      x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t +
+        (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+        (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+      y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t +
+        (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+        (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+    };
+  }
+
+  // Polilínea suave que pasa por todos los puntos.
+  Geo.catmullRomPath = function (points, samplesPerSegment) {
+    var list = (points || []).filter(function (p) { return p && isFinite(p.x) && isFinite(p.y); });
+    if (list.length <= 2) return list.map(function (p) { return { x: p.x, y: p.y }; });
+    var out = [];
+    var n = list.length;
+    for (var i = 0; i < n - 1; i++) {
+      var p0 = list[i - 1] || list[i];
+      var p1 = list[i];
+      var p2 = list[i + 1];
+      var p3 = list[i + 2] || list[i + 1];
+      var steps = samplesPerSegment || Math.max(4, Math.min(26, Math.round(Geo.dist(p1, p2) / 200)));
+      for (var s = 0; s < steps; s++) {
+        out.push(catmullRomPoint(p0, p1, p2, p3, s / steps));
+      }
+    }
+    var last = list[n - 1];
+    out.push({ x: last.x, y: last.y });
+    return out;
+  };
+
+  // Arco definido por extremos y bulge (sagitta = (cuerda/2) * bulge).
+  Geo.arcFromBulge = function (a, b, bulge) {
+    if (!a || !b) return null;
+    var vx = b.x - a.x, vy = b.y - a.y;
+    var c = Math.sqrt(vx * vx + vy * vy);
+    if (!(c > 1e-9)) return null;
+    var bgl = Number(bulge) || 0;
+    if (Math.abs(bgl) < 1e-9) return null;
+    var sweep = 4 * Math.atan(bgl);
+    var ux = vx / c, uy = vy / c;
+    var nx = -uy, ny = ux;                          // normal izquierda del sentido a→b
+    var d = (c / 2) / Math.tan(sweep / 2);          // distancia firmada del centro a la cuerda
+    var mx = a.x + vx / 2, my = a.y + vy / 2;
+    var center = { x: mx + nx * d, y: my + ny * d };
+    var radius = Math.sqrt((c / 2) * (c / 2) + d * d);
+    var startAngle = Math.atan2(a.y - center.y, a.x - center.x);
+    return {
+      center: center, radius: radius, startAngle: startAngle,
+      endAngle: startAngle + sweep, sweep: sweep
+    };
+  };
+
+  // Bulge a partir de un punto de la flecha (centro visual del arco).
+  Geo.bulgeFromPoint = function (a, b, point) {
+    var len = Geo.dist(a, b);
+    if (!(len > 1e-6) || !point) return 0;
+    var ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;
+    var rx = uy, ry = -ux;                          // normal derecha
+    var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    var sag = (point.x - mx) * rx + (point.y - my) * ry;
+    return Geo.clamp(2 * sag / len, -4, 4);
+  };
+
+  // Polilínea del eje del muro (recta: 2 puntos; curva: muestreada).
+  Geo.wallPath = function (wall, opts) {
+    if (!wall || !wall.a || !wall.b) return [];
+    var a = wall.a, b = wall.b;
+    if (!Geo.wallIsCurved(wall)) return [{ x: a.x, y: a.y }, { x: b.x, y: b.y }];
+    var c = wall.curve;
+    if (c.type === 'arc') {
+      var arc = Geo.arcFromBulge(a, b, c.bulge);
+      if (!arc) return [{ x: a.x, y: a.y }, { x: b.x, y: b.y }];
+      var steps = Geo.clamp(Math.ceil(Math.abs(arc.sweep) / (Math.PI / 24)), 8, 96);
+      var pts = [];
+      for (var i = 0; i <= steps; i++) {
+        var ang = arc.startAngle + arc.sweep * (i / steps);
+        pts.push({ x: arc.center.x + Math.cos(ang) * arc.radius, y: arc.center.y + Math.sin(ang) * arc.radius });
+      }
+      return pts;
+    }
+    var ctrl = [{ x: a.x, y: a.y }];
+    (c.pts || []).forEach(function (p) {
+      if (p && isFinite(p.x) && isFinite(p.y)) ctrl.push({ x: p.x, y: p.y });
+    });
+    ctrl.push({ x: b.x, y: b.y });
+    return Geo.catmullRomPath(ctrl, opts && opts.samples);
+  };
+
   Geo.wallLength = function (wall) {
-    return Geo.dist(wall.a, wall.b);
+    if (!wall || !wall.a || !wall.b) return 0;
+    if (!Geo.wallIsCurved(wall)) return Geo.dist(wall.a, wall.b);
+    var path = Geo.wallPath(wall);
+    var len = 0;
+    for (var i = 1; i < path.length; i++) len += Geo.dist(path[i - 1], path[i]);
+    return len;
   };
 
   Geo.wallAngle = function (wall) {
+    if (!wall || !wall.a || !wall.b) return 0;
     return Geo.angle(wall.a, wall.b);
+  };
+
+  // Punto del eje del muro a una fracción t (0..1) de su longitud.
+  Geo.wallPointAt = function (wall, t) {
+    if (!wall || !wall.a) return { x: 0, y: 0 };
+    var path = Geo.wallPath(wall);
+    if (path.length < 2) return { x: wall.a.x, y: wall.a.y };
+    var total = Geo.wallLength(wall);
+    var target = Geo.clamp(t == null ? 0.5 : t, 0, 1) * total;
+    var acc = 0;
+    for (var i = 1; i < path.length; i++) {
+      var d = Geo.dist(path[i - 1], path[i]);
+      if (acc + d >= target) {
+        var tt = d > 1e-9 ? (target - acc) / d : 0;
+        return {
+          x: path[i - 1].x + (path[i].x - path[i - 1].x) * tt,
+          y: path[i - 1].y + (path[i].y - path[i - 1].y) * tt
+        };
+      }
+      acc += d;
+    }
+    return { x: path[path.length - 1].x, y: path[path.length - 1].y };
+  };
+
+  // Distancia de un punto al eje del muro, con la fracción t del punto más cercano.
+  Geo.distToWall = function (p, wall) {
+    if (!wall || !wall.a || !wall.b) return { dist: Infinity, t: 0, point: { x: 0, y: 0 } };
+    if (!Geo.wallIsCurved(wall)) return Geo.distToSegment(p, wall.a, wall.b);
+    var path = Geo.wallPath(wall);
+    var total = 0, acc = 0;
+    for (var i = 1; i < path.length; i++) total += Geo.dist(path[i - 1], path[i]);
+    var best = { dist: Infinity, t: 0, point: { x: 0, y: 0 } };
+    for (var k = 1; k < path.length; k++) {
+      var seg = Geo.distToSegment(p, path[k - 1], path[k]);
+      var segLen = Geo.dist(path[k - 1], path[k]);
+      if (seg.dist < best.dist) {
+        best.dist = seg.dist;
+        best.point = seg.point;
+        best.t = total > 0 ? (acc + seg.t * segLen) / total : 0;
+      }
+      acc += segLen;
+    }
+    return best;
   };
 
   Geo.wallPolygon = function (wall, extendEnds) {
     var t = Math.max(1, wall.thickness || 150);
-    var len = Geo.wallLength(wall);
     var half = t / 2;
+    var len = Geo.wallLength(wall);
     if (len < 0.001) {
       return [
         { x: wall.a.x - half, y: wall.a.y - half },
@@ -161,18 +315,39 @@
         { x: wall.a.x - half, y: wall.a.y + half }
       ];
     }
-    var ux = (wall.b.x - wall.a.x) / len;
-    var uy = (wall.b.y - wall.a.y) / len;
-    var nx = -uy, ny = ux;
-    var ext = extendEnds === false ? 0 : half;
-    var a = { x: wall.a.x - ux * ext, y: wall.a.y - uy * ext };
-    var b = { x: wall.b.x + ux * ext, y: wall.b.y + uy * ext };
-    return [
-      { x: a.x + nx * half, y: a.y + ny * half },
-      { x: b.x + nx * half, y: b.y + ny * half },
-      { x: b.x - nx * half, y: b.y - ny * half },
-      { x: a.x - nx * half, y: a.y - ny * half }
-    ];
+    if (!Geo.wallIsCurved(wall)) {
+      var chord = Geo.dist(wall.a, wall.b);
+      var ux = (wall.b.x - wall.a.x) / chord;
+      var uy = (wall.b.y - wall.a.y) / chord;
+      var nx = -uy, ny = ux;
+      var ext = extendEnds === false ? 0 : half;
+      var a = { x: wall.a.x - ux * ext, y: wall.a.y - uy * ext };
+      var b = { x: wall.b.x + ux * ext, y: wall.b.y + uy * ext };
+      return [
+        { x: a.x + nx * half, y: a.y + ny * half },
+        { x: b.x + nx * half, y: b.y + ny * half },
+        { x: b.x - nx * half, y: b.y - ny * half },
+        { x: a.x - nx * half, y: a.y - ny * half }
+      ];
+    }
+    // Banda del muro curvo: desplaza el eje ±espesor/2 por su normal.
+    var path = Geo.wallPath(wall);
+    if (path.length < 2) return [];
+    var ext2 = extendEnds === false ? 0 : half;
+    var left = [], right = [];
+    for (var i = 0; i < path.length; i++) {
+      var prev = path[i - 1] || path[i];
+      var next = path[i + 1] || path[i];
+      var tx = next.x - prev.x, ty = next.y - prev.y;
+      var tl = Math.sqrt(tx * tx + ty * ty) || 1;
+      var sx = -ty / tl, sy = tx / tl;
+      var px = path[i].x, py = path[i].y;
+      if (i === 0 && ext2) { px -= tx / tl * ext2; py -= ty / tl * ext2; }
+      if (i === path.length - 1 && ext2) { px += tx / tl * ext2; py += ty / tl * ext2; }
+      left.push({ x: px + sx * half, y: py + sy * half });
+      right.push({ x: px - sx * half, y: py - sy * half });
+    }
+    return left.concat(right.reverse());
   };
 
   Geo.openingSpan = function (wall, opening) {

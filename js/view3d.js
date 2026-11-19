@@ -5,11 +5,16 @@
  * API:
  *   var view = new ED.View3D(canvas, { store });   // store opcional
  *   view.setStore(store)
- *   view.setOptions({ roof, furniture, labels, dimensions, ground, levels })
+ *   view.setOptions({ roof, furniture, labels, dimensions, ground, levels,
+ *                     renderMode:'schematic'|'realistic', materials:{wall,roof,trim,ground},
+ *                     roofStyle:'flat'|'gable'|'arc'|'spline', roofHeight, roofOverhang,
+ *                     roofColor, roofTexture, shadows, textures, sunAngle })
  *   view.setLevelFilter('all' | 'active' | levelId)
  *   view.setPreset('iso' | 'top' | 'front' | 'right')
  *   view.fit() / render() / resize()
  *   view.screenshot(scaleOpcional) -> dataURL PNG
+ *   view.getRenderInfo() -> { mode, textures, faces, roofStyle, shadows, flying }
+ *   view.startFlight({ duration }) / stopFlight() / isFlying()
  *   view.destroy()
  */
 (function (ED) {
@@ -21,8 +26,10 @@
   var NEAR = 60;               // plano cercano (mm)
   var MAX_LABELS = 90;
 
-  // Luz direccional (desde el noreste, alta). Usada para sombrear caras.
+  // Luz direccional. Se recalcula desde options.sunAngle al construir la escena.
+  // Usada para sombrear caras (y para orientar las sombras del terreno).
   var LIGHT = { x: 0.34, y: 0.52, z: 0.78 };
+  var SHADE_REALISTIC = false;
 
   var WALL_COLOR = '#f8f3e9';
   var TRIM_COLOR = '#fdfaf2';
@@ -38,6 +45,22 @@
   var SHADOW_KY = -0.67;
   var SHADOW_MAX = 520;
 
+  var ROOF_STYLES = { flat: 1, gable: 1, arc: 1, spline: 1 };
+  var WALL_TEXTURES = { stucco: 1, brick: 1, wood: 1, stone: 1, smooth: 1 };
+  var ROOF_TEXTURES = { tile: 1, shingle: 1, metal: 1, wood: 1, concrete: 1, smooth: 1 };
+  var GROUND_TEXTURES = { grass: 1, paving: 1, gravel: 1, smooth: 1 };
+
+  // Materiales por defecto (se completan con project.settings.materials).
+  var DEFAULT_MATERIALS = {
+    wall: { color: '#f3eee2', texture: 'stucco' },
+    roof: { color: '#b49a7c', texture: 'tile' },
+    trim: { color: '#fdfaf2' },
+    ground: { color: '#c9d3ab', texture: 'grass' }
+  };
+
+  // Presupuesto aproximado de trazos de textura por fotograma.
+  var TEXTURE_BUDGET = 26000;
+
   var PRESETS = {
     iso: { yaw: -52, pitch: 29 },
     top: { yaw: -90, pitch: 89.2 },
@@ -52,6 +75,16 @@
     concrete: '#d5d2c7',
     marble: '#eae7de',
     grass: '#c9d6a8'
+  };
+
+  // Textura procedural asociada a cada acabado de piso (modo realista).
+  var FINISH_TEXTURES = {
+    wood: 'wood',
+    tile: 'tile',
+    carpet: 'smooth',
+    concrete: 'concrete',
+    marble: 'stone',
+    grass: 'grass'
   };
 
   var DETAIL_STYLES = {
@@ -107,17 +140,51 @@
   function shade(color, n, alpha) {
     var c = parseColor(color);
     var d = n.x * LIGHT.x + n.y * LIGHT.y + n.z * LIGHT.z;
-    var f = 0.89 + 0.17 * (d > 0 ? d : 0);
-    if (n.z > 0.5) f += 0.04;
-    else if (n.z < -0.5) f *= 0.78;
-    f = clamp(f, 0.3, 1.04);
-    // Eleva las caras en sombra hacia el blanco: blancos cálidos de maqueta.
-    var lift = Math.max(0, 0.28 * (1 - f));
+    var f, lift;
+    if (SHADE_REALISTIC) {
+      // Modo realista: más contraste direccional y menos "blanqueado".
+      var dl = d > 0 ? d : 0;
+      f = 0.62 + 0.52 * dl;
+      if (n.z > 0.5) f += 0.05;
+      else if (n.z < -0.5) f *= 0.72;
+      f = clamp(f, 0.36, 1.12);
+      lift = Math.max(0, 0.14 * (1 - f));
+    } else {
+      f = 0.89 + 0.17 * (d > 0 ? d : 0);
+      if (n.z > 0.5) f += 0.04;
+      else if (n.z < -0.5) f *= 0.78;
+      f = clamp(f, 0.3, 1.04);
+      // Eleva las caras en sombra hacia el blanco: blancos cálidos de maqueta.
+      lift = Math.max(0, 0.28 * (1 - f));
+    }
     var r = Math.round(clamp(c[0] * f + 255 * lift, 0, 255));
     var g = Math.round(clamp(c[1] * f + 254 * lift, 0, 255));
     var b = Math.round(clamp(c[2] * f + 251 * lift, 0, 255));
     if (alpha == null || alpha >= 1) return 'rgb(' + r + ',' + g + ',' + b + ')';
     return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+  }
+
+  function mixColor(a, b, t) {
+    var ca = parseColor(a), cb = parseColor(b);
+    var k = clamp(num(t), 0, 1);
+    return 'rgb(' + Math.round(lerp(ca[0], cb[0], k)) + ',' +
+      Math.round(lerp(ca[1], cb[1], k)) + ',' +
+      Math.round(lerp(ca[2], cb[2], k)) + ')';
+  }
+
+  // Orientación de la luz y desplazamiento de sombras a partir de sunAngle.
+  function applyLight(cfg) {
+    var ang = (num(cfg.sunAngle) % 360) * DEG;
+    var elev = 52 * DEG;                      // altura del sol (constante, agradable)
+    var hz = Math.cos(elev);
+    LIGHT.x = Math.cos(ang) * hz;
+    LIGHT.y = Math.sin(ang) * hz;
+    LIGHT.z = Math.sin(elev);
+    var l = Math.sqrt(LIGHT.x * LIGHT.x + LIGHT.y * LIGHT.y + LIGHT.z * LIGHT.z) || 1;
+    LIGHT.x /= l; LIGHT.y /= l; LIGHT.z /= l;
+    SHADE_REALISTIC = !!cfg.realistic;
+    SHADOW_KX = clamp(-LIGHT.x / Math.max(0.2, LIGHT.z), -1.5, 1.5);
+    SHADOW_KY = clamp(-LIGHT.y / Math.max(0.2, LIGHT.z), -1.5, 1.5);
   }
 
   function tintColor(color, factor) {
@@ -237,6 +304,22 @@
     return fbWallPolygon(wall);
   }
 
+  // Polilínea del eje del muro (recto o curvo). Respaldo recto si no hay Geo.
+  function wallPathOf(wall, G) {
+    if (G && typeof G.wallPath === 'function') {
+      try {
+        var p = G.wallPath(wall);
+        if (p && p.length >= 2) return p;
+      } catch (e) { /* respaldo */ }
+    }
+    return [{ x: wall.a.x, y: wall.a.y }, { x: wall.b.x, y: wall.b.y }];
+  }
+
+  function wallIsCurved(wall, G) {
+    if (!G || typeof G.wallIsCurved !== 'function') return false;
+    try { return !!G.wallIsCurved(wall); } catch (e) { return false; }
+  }
+
   function openingSpanOf(wall, opening, G) {
     if (G && typeof G.openingSpan === 'function') {
       try {
@@ -307,6 +390,7 @@
   }
 
   // Crea una cara con color ya sombreado y buffers de proyección reutilizables.
+  // o.tex: identificador de textura procedural ('stucco', 'brick', 'tile', …).
   function addFace(list, pts, color, o) {
     o = o || {};
     var n = faceNormal(pts);
@@ -322,6 +406,7 @@
       lw: o.lw || 0.7,
       twoSided: !!o.twoSided,
       details: o.details || null,
+      tex: o.tex || null,
       px: new Float64Array(count),
       py: new Float64Array(count),
       pn: 0,
@@ -331,13 +416,24 @@
     return f;
   }
 
-  function addBox(list, corners, z0, z1, color, edge) {
+  // Como addFace pero garantiza que la normal apunte hacia `outward`.
+  function addFaceOriented(list, pts, color, o, outward) {
+    if (outward) {
+      var n = faceNormal(pts);
+      if (n.x * outward.x + n.y * outward.y + n.z * outward.z < 0) {
+        pts = pts.slice().reverse();
+      }
+    }
+    return addFace(list, pts, color, o);
+  }
+
+  function addBox(list, corners, z0, z1, color, edge, tex) {
     var ccw = ensureCCW(corners);
     var n = ccw.length;
     var top = [], bottom = [], i, p;
     for (i = 0; i < n; i++) top.push({ x: ccw[i].x, y: ccw[i].y, z: z1 });
     for (i = n - 1; i >= 0; i--) bottom.push({ x: ccw[i].x, y: ccw[i].y, z: z0 });
-    addFace(list, top, color, { edge: edge });
+    addFace(list, top, color, { edge: edge, tex: tex });
     addFace(list, bottom, color, { edge: edge });
     for (i = 0; i < n; i++) {
       p = ccw[i];
@@ -347,7 +443,7 @@
         { x: q.x, y: q.y, z: z0 },
         { x: q.x, y: q.y, z: z1 },
         { x: p.x, y: p.y, z: z1 }
-      ], color, { edge: edge });
+      ], color, { edge: edge, tex: tex });
     }
   }
 
@@ -409,7 +505,19 @@
       dimensions: false,
       ground: true,
       levels: 'all',
-      wallsCut: false
+      wallsCut: false,
+      // Ampliación 1.2: techo, materiales, realismo.
+      // null = heredar de project.settings (roof/materials/render).
+      roofStyle: null,
+      roofHeight: null,
+      roofOverhang: null,
+      roofColor: null,
+      roofTexture: null,
+      renderMode: null,
+      materials: null,
+      shadows: null,
+      textures: null,
+      sunAngle: null
     };
     this.camera = {
       yaw: PRESETS.iso.yaw * DEG,
@@ -439,6 +547,10 @@
     this._ro = null;
     this._handlers = null;
     this._onWinResize = null;
+    this._cfg = null;
+    this._texBudget = 0;
+    this._flight = null;
+    this._flightRaf = 0;
 
     this._bindEvents();
     this.resize();
@@ -454,6 +566,7 @@
 
     h.down = function (e) {
       if (self._destroyed) return;
+      self.stopFlight();
       self._cancelAnim();
       var pan = (e.button === 2) || e.shiftKey || (e.button === 1);
       self._pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
@@ -620,16 +733,53 @@
       var lv = patch.levels;
       o.levels = (lv === 'active' || lv === 'all' || (typeof lv === 'string' && lv)) ? lv : 'all';
     }
+    // --- ampliación 1.2 ---
+    if ('roofStyle' in patch) o.roofStyle = ROOF_STYLES[patch.roofStyle] ? patch.roofStyle : null;
+    if ('roofHeight' in patch) o.roofHeight = isFinite(Number(patch.roofHeight)) ? num(patch.roofHeight) : null;
+    if ('roofOverhang' in patch) o.roofOverhang = isFinite(Number(patch.roofOverhang)) ? num(patch.roofOverhang) : null;
+    if ('roofColor' in patch) o.roofColor = (typeof patch.roofColor === 'string' && patch.roofColor) ? patch.roofColor : null;
+    if ('roofTexture' in patch) o.roofTexture = ROOF_TEXTURES[patch.roofTexture] ? patch.roofTexture : null;
+    if ('renderMode' in patch) {
+      o.renderMode = (patch.renderMode === 'realistic' || patch.renderMode === 'schematic') ? patch.renderMode : null;
+    }
+    if ('materials' in patch) o.materials = mergeMaterials(o.materials, patch.materials);
+    if ('shadows' in patch) o.shadows = patch.shadows == null ? null : !!patch.shadows;
+    if ('textures' in patch) o.textures = patch.textures == null ? null : !!patch.textures;
+    if ('sunAngle' in patch) o.sunAngle = isFinite(Number(patch.sunAngle)) ? num(patch.sunAngle) : null;
     this.invalidate();
     this._requestRender();
     return this;
   };
 
+  // Mezcla profunda de materiales {wall,roof,trim,ground} sin perder texturas.
+  function mergeMaterials(base, patch) {
+    if (!patch || typeof patch !== 'object') return base || null;
+    var out = {};
+    var keys = ['wall', 'roof', 'trim', 'ground'];
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var b = (base && base[k]) || null;
+      var p = patch[k];
+      if (p && typeof p === 'object') {
+        out[k] = {};
+        for (var kk in b) if (Object.prototype.hasOwnProperty.call(b, kk)) out[k][kk] = b[kk];
+        for (var pk in p) if (Object.prototype.hasOwnProperty.call(p, pk)) out[k][pk] = p[pk];
+      } else if (b) {
+        out[k] = {};
+        for (var bk in b) if (Object.prototype.hasOwnProperty.call(b, bk)) out[k][bk] = b[bk];
+      }
+    }
+    return out;
+  }
+
   View3D.prototype.getOptions = function () {
     var o = this.options;
     return {
       roof: o.roof, furniture: o.furniture, labels: o.labels, dimensions: o.dimensions,
-      ground: o.ground, levels: o.levels, wallsCut: o.wallsCut
+      ground: o.ground, levels: o.levels, wallsCut: o.wallsCut,
+      roofStyle: o.roofStyle, roofHeight: o.roofHeight, roofOverhang: o.roofOverhang,
+      roofColor: o.roofColor, roofTexture: o.roofTexture, renderMode: o.renderMode,
+      materials: o.materials, shadows: o.shadows, textures: o.textures, sunAngle: o.sunAngle
     };
   };
 
@@ -654,6 +804,7 @@
 
   View3D.prototype.fit = function () {
     if (this._destroyed) return this;
+    this.stopFlight();
     this._cancelAnim();
     this._ensureScene();
     var st = this._fitState(this.camera.yaw, this.camera.pitch);
@@ -671,6 +822,7 @@
   View3D.prototype.invalidate = function () {
     this._dirty = true;
     this._scene = null;
+    this._sky = null;
     return this;
   };
 
@@ -719,6 +871,7 @@
     var w = this._cssW, h = this._cssH;
     try {
       this._ensureScene();
+      this._texBudget = (this._cfg && this._cfg.realistic && this._cfg.textures) ? TEXTURE_BUDGET : 0;
       ctx.setTransform(this._dpr, 0, 0, this._dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       this._drawSky(ctx, w, h);
@@ -769,6 +922,7 @@
   View3D.prototype.destroy = function () {
     if (this._destroyed) return;
     this._destroyed = true;
+    this.stopFlight();
     this._cancelAnim();
     if (this._raf) {
       try { cancelAnimationFrame(this._raf); } catch (e) { /* tolerar */ }
@@ -793,6 +947,104 @@
     this._handlers = null;
     this._scene = null;
     this.ctx = null;
+  };
+
+  // ---------- vuelo de dron ----------
+  // Animación cinematográfica en bucle (~14 s): órbita, subida/bajada suave y
+  // desplazamiento ligero del objetivo. No bloquea: usa requestAnimationFrame.
+  View3D.prototype.startFlight = function (opts) {
+    if (this._destroyed) return this;
+    opts = opts || {};
+    this.stopFlight();
+    this._cancelAnim();
+    this._ensureScene();
+    var st = this._fitState(this.camera.yaw, this.camera.pitch);
+    this._distRange = st.range;
+    var b = (this._scene && this._scene.bounds) || { minX: -4000, minY: -4000, maxX: 4000, maxY: 4000, minZ: 0, maxZ: 2800 };
+    var flight = {
+      t0: nowMs(),
+      dur: Math.max(3000, num(opts.duration) || 14000),
+      loop: opts.loop !== false,
+      raf: 0,
+      base: st,
+      range: st.range,
+      span: Math.max(2000, Math.max(b.maxX - b.minX, b.maxY - b.minY)),
+      height: Math.max(1200, (b.maxZ - b.minZ) || 2700)
+    };
+    this._flight = flight;
+    var self = this;
+    if (typeof requestAnimationFrame !== 'function') {
+      this._applyFlight(0, flight);
+      this.render();
+      return this;
+    }
+    function step() {
+      if (self._destroyed || self._flight !== flight) { flight.raf = 0; return; }
+      var elapsed = nowMs() - flight.t0;
+      var t = elapsed / flight.dur;
+      var phase = flight.loop ? (t % 1) : clamp(t, 0, 1);
+      self._applyFlight(phase, flight);
+      self.render();
+      if (!flight.loop && t >= 1) {
+        self._flight = null;
+        flight.raf = 0;
+        return;
+      }
+      flight.raf = requestAnimationFrame(step);
+    }
+    this._applyFlight(0, flight);
+    this.render();
+    flight.raf = requestAnimationFrame(step);
+    return this;
+  };
+
+  View3D.prototype._applyFlight = function (t, flight) {
+    flight = flight || this._flight;
+    if (!flight) return;
+    var base = flight.base;
+    var wave = Math.sin(TAU * t);
+    var cam = this.camera;
+    cam.yaw = base.yaw + TAU * t;
+    cam.pitch = clamp(base.pitch + wave * 15 * DEG, 4 * DEG, 72 * DEG);
+    cam.dist = clamp(base.dist * (1 - 0.13 * wave), flight.range.min, flight.range.max);
+    cam.target.x = base.target.x + Math.cos(TAU * t) * flight.span * 0.085;
+    cam.target.y = base.target.y + Math.sin(TAU * t) * flight.span * 0.085;
+    cam.target.z = base.target.z + wave * flight.height * 0.12;
+  };
+
+  View3D.prototype.stopFlight = function () {
+    var flight = this._flight;
+    if (!flight) return this;
+    this._flight = null;
+    if (flight.raf) {
+      try { cancelAnimationFrame(flight.raf); } catch (e) { /* tolerar */ }
+      flight.raf = 0;
+    }
+    this._requestRender();
+    return this;
+  };
+
+  View3D.prototype.isFlying = function () {
+    return !!(this._flight && !this._destroyed);
+  };
+
+  View3D.prototype.getRenderInfo = function () {
+    var cfg = this._cfg;
+    var faces = 0;
+    try {
+      var scene = this._ensureScene();
+      faces = (scene && scene.faceTotal) || 0;
+      cfg = this._cfg || cfg;
+    } catch (e) { faces = 0; }
+    return {
+      mode: (cfg && cfg.realistic) ? 'realistic' : 'schematic',
+      textures: !!(cfg && cfg.textures),
+      faces: faces,
+      roofStyle: (cfg && cfg.roofStyle) || 'flat',
+      shadows: !!(cfg && cfg.shadows),
+      sunAngle: cfg ? cfg.sunAngle : 135,
+      flying: this.isFlying()
+    };
   };
 
   // ---------- cámara ----------
@@ -1077,7 +1329,252 @@
       ctx.lineWidth = f.lw;
       ctx.stroke();
     }
+    if (f.tex) this._paintTexture(ctx, f);
     if (f.details && f.details.length) this._paintDetails(ctx, f.details);
+  };
+
+  View3D.prototype._texTick = function (cost) {
+    if (!(this._texBudget > 0)) return false;
+    this._texBudget -= (cost || 1);
+    return this._texBudget > 0;
+  };
+
+  // Texturas procedurales sin imágenes: se recortan al polígono de la cara y se
+  // dibujan a partir de su caja en pantalla (aprox.). Presupuesto por fotograma.
+  View3D.prototype._paintTexture = function (ctx, f) {
+    var kind = f.tex;
+    if (!kind || kind === 'smooth') return;
+    var cfg = this._cfg;
+    if (!cfg || !cfg.textures || !cfg.realistic) return;
+    if (f.pn < 3 || !(this._texBudget > 0)) return;
+    var i, X, Y;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (i = 0; i < f.pn; i++) {
+      X = f.px[i]; Y = f.py[i];
+      if (X < minX) minX = X;
+      if (X > maxX) maxX = X;
+      if (Y < minY) minY = Y;
+      if (Y > maxY) maxY = Y;
+    }
+    var bw = maxX - minX, bh = maxY - minY;
+    if (bw < 15 || bh < 15 || bw * bh < 1100) return;
+    ctx.save();
+    try {
+      this._pathFace(ctx, f);
+      ctx.clip();
+      this._drawTexture(ctx, kind, f, minX, minY, bw, bh);
+    } catch (e) { /* tolerar */ }
+    ctx.restore();
+  };
+
+  View3D.prototype._drawTexture = function (ctx, kind, f, minX, minY, bw, bh) {
+    var self = this;
+    var seed = hash01(kind + '|' + f.fill + '|' + Math.round(minX) + '|' + Math.round(minY));
+    var x1 = minX + bw, y1 = minY + bh;
+    ctx.lineCap = 'butt';
+
+    function line(ax, ay, bx2, by2, color, lw) {
+      if (!self._texTick(1)) return false;
+      ctx.beginPath();
+      ctx.moveTo(ax, ay);
+      ctx.lineTo(bx2, by2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lw || 0.7;
+      ctx.stroke();
+      return true;
+    }
+    function dot(cx, cy, r, color) {
+      if (!self._texTick(1)) return false;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, TAU);
+      ctx.fillStyle = color;
+      ctx.fill();
+      return true;
+    }
+    function rows(count, color, lw) {
+      for (var r = 1; r < count; r++) {
+        var y = minY + (bh * r) / count;
+        if (!line(minX, y, x1, y, color, lw)) return false;
+      }
+      return true;
+    }
+    function rnd(i, salt) { return hash01(seed + salt + i * 7.317); }
+    var i, r, y, x, count, step, rowsN, off, brickW, color;
+
+    switch (kind) {
+      case 'stucco': {
+        // Ruido sutil de grano fino.
+        count = clamp(Math.round((bw * bh) / 950), 10, 190);
+        color = 'rgba(88, 80, 68, 0.055)';
+        for (i = 0; i < count; i++) {
+          x = minX + rnd(i, 1.7) * bw;
+          y = minY + rnd(i, 9.1) * bh;
+          if (!dot(x, y, 0.5 + rnd(i, 3.3) * 0.9, color)) break;
+        }
+        // Manchas de estuco aplicado.
+        count = clamp(Math.round((bw * bh) / 12000), 3, 26);
+        for (i = 0; i < count; i++) {
+          x = minX + rnd(i, 21.3) * bw;
+          y = minY + rnd(i, 31.9) * bh;
+          if (!dot(x, y, 3 + rnd(i, 5.1) * 7, 'rgba(255, 252, 244, 0.04)')) break;
+        }
+        break;
+      }
+      case 'brick': {
+        rowsN = clamp(Math.round(bh / 24), 3, 18);
+        color = 'rgba(96, 74, 62, 0.18)';
+        if (!rows(rowsN, color, 0.8)) break;
+        var rowH = bh / rowsN;
+        brickW = Math.max(10, rowH * 2.2);
+        for (r = 0; r < rowsN; r++) {
+          y = minY + rowH * r;
+          off = (r % 2) * brickW * 0.5;
+          step = clamp(Math.round(bw / brickW), 1, 30);
+          for (i = 0; i <= step; i++) {
+            x = minX + off + (bw * i) / step;
+            if (x > x1 - 1) break;
+            if (!line(x, y, x, y + rowH, color, 0.7)) { r = rowsN; break; }
+          }
+        }
+        break;
+      }
+      case 'stone': {
+        rowsN = clamp(Math.round(bh / 34), 2, 12);
+        color = 'rgba(84, 82, 76, 0.17)';
+        if (!rows(rowsN, color, 0.9)) break;
+        var sRowH = bh / rowsN;
+        for (r = 0; r < rowsN; r++) {
+          y = minY + sRowH * r;
+          brickW = sRowH * (1.5 + rnd(r, 4.3) * 1.4);
+          off = rnd(r, 8.7) * brickW;
+          for (x = minX + off; x < x1; x += brickW) {
+            if (!line(x, y, x, y + sRowH, color, 0.8)) { r = rowsN; break; }
+          }
+        }
+        break;
+      }
+      case 'wood': {
+        // Vetas a lo largo del lado mayor en pantalla.
+        var vertical = bw >= bh;
+        var len = vertical ? bh : bw;
+        var across = vertical ? bw : bh;
+        count = clamp(Math.round(across / 11), 3, 20);
+        color = 'rgba(96, 68, 40, 0.12)';
+        for (i = 0; i < count; i++) {
+          var u = (i + 0.5) / count;
+          var wob = (rnd(i, 2.9) - 0.5) * Math.min(10, across * 0.06);
+          if (!self._texTick(2)) break;
+          ctx.beginPath();
+          if (vertical) {
+            var xx = minX + across * u;
+            ctx.moveTo(xx, minY);
+            ctx.quadraticCurveTo(xx + wob, minY + len * 0.5, xx + wob * 0.4, y1);
+          } else {
+            var yy = minY + across * u;
+            ctx.moveTo(minX, yy);
+            ctx.quadraticCurveTo(minX + len * 0.5, yy + wob, x1, yy + wob * 0.4);
+          }
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 0.8;
+          ctx.stroke();
+        }
+        break;
+      }
+      case 'tile': {
+        rowsN = clamp(Math.round(bh / 16), 4, 26);
+        color = 'rgba(96, 72, 52, 0.20)';
+        if (!rows(rowsN, color, 0.8)) break;
+        var tRowH = bh / rowsN;
+        for (r = 0; r < rowsN; r++) {
+          y = minY + tRowH * r;
+          off = (r % 2) * tRowH * 0.7;
+          step = Math.max(9, tRowH * 1.4);
+          for (x = minX + off; x < x1; x += step) {
+            if (!line(x, y, x, y + tRowH, 'rgba(104, 80, 58, 0.13)', 0.7)) { r = rowsN; break; }
+          }
+        }
+        break;
+      }
+      case 'shingle': {
+        rowsN = clamp(Math.round(bh / 14), 5, 30);
+        color = 'rgba(70, 68, 64, 0.20)';
+        if (!rows(rowsN, color, 0.9)) break;
+        var hRowH = bh / rowsN;
+        for (r = 0; r < rowsN; r++) {
+          y = minY + hRowH * r;
+          off = (r % 2) * hRowH * 0.9;
+          step = Math.max(8, hRowH * 1.8);
+          for (x = minX + off; x < x1; x += step) {
+            if (!line(x, y, x, y + hRowH * 0.9, 'rgba(80, 78, 72, 0.12)', 0.7)) { r = rowsN; break; }
+          }
+        }
+        break;
+      }
+      case 'metal': {
+        count = clamp(Math.round(bw / 26), 3, 12);
+        color = 'rgba(72, 78, 82, 0.18)';
+        for (i = 1; i < count; i++) {
+          x = minX + (bw * i) / count;
+          if (!line(x, minY, x, y1, color, 1)) break;
+        }
+        if (bh > 60) line(minX, minY + bh * 0.5, x1, minY + bh * 0.5, 'rgba(72, 78, 82, 0.10)', 0.8);
+        break;
+      }
+      case 'concrete': {
+        rowsN = clamp(Math.round(bh / 42), 2, 8);
+        if (!rows(rowsN, 'rgba(84, 82, 76, 0.10)', 0.7)) break;
+        count = clamp(Math.round((bw * bh) / 2600), 6, 70);
+        for (i = 0; i < count; i++) {
+          x = minX + rnd(i, 6.1) * bw;
+          y = minY + rnd(i, 12.7) * bh;
+          if (!dot(x, y, 0.5 + rnd(i, 4.4), 'rgba(90, 88, 82, 0.05)')) break;
+        }
+        break;
+      }
+      case 'grass': {
+        count = clamp(Math.round((bw * bh) / 1500), 18, 240);
+        var greens = ['rgba(66, 98, 46, 0.10)', 'rgba(96, 124, 62, 0.10)', 'rgba(126, 142, 84, 0.09)'];
+        for (i = 0; i < count; i++) {
+          x = minX + rnd(i, 2.2) * bw;
+          y = minY + rnd(i, 7.7) * bh;
+          if (!dot(x, y, 0.8 + rnd(i, 3.9) * 2.2, greens[i % 3])) break;
+        }
+        count = clamp(Math.round((bw * bh) / 9000), 3, 40);
+        for (i = 0; i < count; i++) {
+          x = minX + rnd(i, 17.1) * bw;
+          y = minY + rnd(i, 23.5) * bh;
+          if (!dot(x, y, 3 + rnd(i, 8.8) * 8, 'rgba(140, 156, 96, 0.055)')) break;
+        }
+        break;
+      }
+      case 'paving': {
+        var cols = clamp(Math.round(bw / 42), 2, 14);
+        var pRows = clamp(Math.round(bh / 38), 2, 12);
+        color = 'rgba(88, 84, 76, 0.16)';
+        for (i = 1; i < cols; i++) {
+          x = minX + (bw * i) / cols;
+          if (!line(x, minY, x, y1, color, 0.8)) break;
+        }
+        for (r = 1; r < pRows; r++) {
+          y = minY + (bh * r) / pRows;
+          if (!line(minX, y, x1, y, color, 0.8)) break;
+        }
+        break;
+      }
+      case 'gravel': {
+        count = clamp(Math.round((bw * bh) / 1100), 30, 320);
+        for (i = 0; i < count; i++) {
+          x = minX + rnd(i, 5.4) * bw;
+          y = minY + rnd(i, 13.3) * bh;
+          var shade2 = rnd(i, 19.7);
+          color = shade2 > 0.5 ? 'rgba(120, 116, 106, 0.13)' : 'rgba(168, 162, 150, 0.12)';
+          if (!dot(x, y, 0.7 + rnd(i, 27.1) * 1.5, color)) break;
+        }
+        break;
+      }
+      default:
+        break;
+    }
   };
 
   View3D.prototype._paintDetails = function (ctx, details, view) {
@@ -1096,21 +1593,53 @@
     }
   };
 
+  View3D.prototype._sunScreen = function (w, h) {
+    var x = w * (0.5 - 0.44 * LIGHT.x);
+    var y = h * (0.24 - 0.26 * LIGHT.y);
+    return { x: clamp(x, w * 0.06, w * 0.94), y: clamp(y, h * 0.04, h * 0.46) };
+  };
+
   View3D.prototype._drawSky = function (ctx, w, h) {
-    if (!this._sky) {
+    var cfg = this._cfg || {};
+    var realistic = !!cfg.realistic;
+    var key = (realistic ? 'r' : 's') + '|' + w + 'x' + h;
+    if (!this._sky || this._sky.key !== key) {
       var g = ctx.createLinearGradient(0, 0, 0, h);
-      g.addColorStop(0, '#dfe9ee');
-      g.addColorStop(0.5, '#e6edef');
-      g.addColorStop(1, '#f4f1e8');
-      this._sky = g;
+      if (realistic) {
+        g.addColorStop(0, '#6f9dc4');
+        g.addColorStop(0.38, '#a8c6da');
+        g.addColorStop(0.68, '#d3e1e5');
+        g.addColorStop(1, '#edf0e9');
+      } else {
+        g.addColorStop(0, '#dfe9ee');
+        g.addColorStop(0.5, '#e6edef');
+        g.addColorStop(1, '#f4f1e8');
+      }
+      this._sky = { key: key, grad: g };
     }
-    ctx.fillStyle = this._sky;
+    ctx.fillStyle = this._sky.grad;
     ctx.fillRect(0, 0, w, h);
-    var glow = ctx.createRadialGradient(w * 0.78, h * 0.1, 0, w * 0.78, h * 0.1, Math.max(w, h) * 0.62);
-    glow.addColorStop(0, 'rgba(255, 250, 232, 0.55)');
-    glow.addColorStop(1, 'rgba(255, 250, 232, 0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, 0, w, h);
+    if (realistic) {
+      var sun = this._sunScreen(w, h);
+      var rad = Math.max(w, h) * 0.62;
+      var glow = ctx.createRadialGradient(sun.x, sun.y, 0, sun.x, sun.y, rad);
+      glow.addColorStop(0, 'rgba(255, 250, 232, 0.92)');
+      glow.addColorStop(0.12, 'rgba(255, 246, 218, 0.42)');
+      glow.addColorStop(0.42, 'rgba(255, 244, 214, 0.10)');
+      glow.addColorStop(1, 'rgba(255, 244, 214, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, w, h);
+      ctx.beginPath();
+      ctx.arc(sun.x, sun.y, Math.max(9, Math.min(w, h) * 0.022), 0, TAU);
+      ctx.fillStyle = 'rgba(255, 253, 244, 0.96)';
+      ctx.fill();
+    } else {
+      var glow2 = ctx.createRadialGradient(w * 0.78, h * 0.1, 0, w * 0.78, h * 0.1, Math.max(w, h) * 0.62);
+      glow2.addColorStop(0, 'rgba(255, 250, 232, 0.55)');
+      glow2.addColorStop(1, 'rgba(255, 250, 232, 0)');
+      ctx.fillStyle = glow2;
+      ctx.fillRect(0, 0, w, h);
+    }
   };
 
   View3D.prototype._drawGroundPass = function (ctx, view) {
@@ -1129,8 +1658,10 @@
           ctx.clip();
           var r = Math.max(120, Math.max(view.w, view.h) * 0.72);
           var rg = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-          rg.addColorStop(0, 'rgba(255, 255, 250, 0.30)');
-          rg.addColorStop(0.6, 'rgba(255, 255, 250, 0.10)');
+          var gGlow = (this._cfg && this._cfg.groundGlow) || 'rgba(255, 255, 250, 0.30)';
+          var gGlow2 = (this._cfg && this._cfg.realistic) ? 'rgba(255, 255, 250, 0.06)' : 'rgba(255, 255, 250, 0.10)';
+          rg.addColorStop(0, gGlow);
+          rg.addColorStop(0.6, gGlow2);
           rg.addColorStop(1, 'rgba(255, 255, 250, 0)');
           ctx.fillStyle = rg;
           ctx.fillRect(0, 0, view.w, view.h);
@@ -1331,11 +1862,95 @@
     return this._scene;
   };
 
+  // Resuelve el aspecto de la escena mezclando options con project.settings
+  // (roof/materials/render). En modo esquemático conserva la paleta anterior.
+  View3D.prototype._resolveConfig = function (settings) {
+    settings = settings || {};
+    var o = this.options || {};
+    var sRoof = settings.roof || {};
+    var sMats = settings.materials || {};
+    var sRender = settings.render || {};
+    var oM = o.materials || {};
+    var sWall = sMats.wall || {}, sRoofM = sMats.roof || {}, sTrim = sMats.trim || {}, sGround = sMats.ground || {};
+    var oWall = oM.wall || {}, oRoofM = oM.roof || {}, oTrim = oM.trim || {}, oGround = oM.ground || {};
+
+    var wall = {
+      color: oWall.color || sWall.color || DEFAULT_MATERIALS.wall.color,
+      texture: WALL_TEXTURES[oWall.texture] ? oWall.texture
+        : (WALL_TEXTURES[sWall.texture] ? sWall.texture : DEFAULT_MATERIALS.wall.texture)
+    };
+    var roof = {
+      color: oRoofM.color || sRoofM.color || DEFAULT_MATERIALS.roof.color,
+      texture: ROOF_TEXTURES[oRoofM.texture] ? oRoofM.texture
+        : (ROOF_TEXTURES[sRoofM.texture] ? sRoofM.texture : DEFAULT_MATERIALS.roof.texture)
+    };
+    var trim = { color: oTrim.color || sTrim.color || DEFAULT_MATERIALS.trim.color };
+    var ground = {
+      color: oGround.color || sGround.color || DEFAULT_MATERIALS.ground.color,
+      texture: GROUND_TEXTURES[oGround.texture] ? oGround.texture
+        : (GROUND_TEXTURES[sGround.texture] ? sGround.texture : DEFAULT_MATERIALS.ground.texture)
+    };
+
+    var mode = (o.renderMode === 'realistic' || o.renderMode === 'schematic')
+      ? o.renderMode : (sRender.mode === 'realistic' ? 'realistic' : 'schematic');
+    var realistic = mode === 'realistic';
+    var shadows = o.shadows == null ? (sRender.shadows !== false) : !!o.shadows;
+    var textures = o.textures == null ? (sRender.textures !== false) : !!o.textures;
+    var sunAngle = o.sunAngle == null
+      ? (isFinite(Number(sRender.sunAngle)) ? num(sRender.sunAngle) : 135)
+      : num(o.sunAngle);
+    var style = ROOF_STYLES[o.roofStyle] ? o.roofStyle
+      : (ROOF_STYLES[sRoof.style] ? sRoof.style : 'flat');
+    var rh = o.roofHeight == null ? num(sRoof.height) : num(o.roofHeight);
+    if (!isFinite(rh) || rh <= 0) rh = 1200;
+    var ov = o.roofOverhang == null ? num(sRoof.overhang) : num(o.roofOverhang);
+    if (!isFinite(ov)) ov = 400;
+
+    var roofColor = o.roofColor || roof.color || DEFAULT_MATERIALS.roof.color;
+    var roofTexture = ROOF_TEXTURES[o.roofTexture] ? o.roofTexture : roof.texture;
+    var wallTexture = wall.texture;
+    var groundTexture = ground.texture;
+
+    var cfg = {
+      realistic: realistic,
+      renderMode: mode,
+      shadows: shadows,
+      textures: textures,
+      sunAngle: sunAngle,
+      roofStyle: style,
+      roofHeight: clamp(rh, 150, 8000),
+      roofOverhang: clamp(ov, 0, 2500),
+      materials: { wall: wall, roof: roof, trim: trim, ground: ground },
+      wallColor: realistic ? wall.color : WALL_COLOR,
+      trimColor: realistic ? trim.color : TRIM_COLOR,
+      doorColor: realistic ? mixColor(wall.color, '#8a5a2b', 0.5) : DOOR_COLOR,
+      garageColor: realistic ? mixColor(trim.color, '#5d5b52', 0.2) : '#cfc8b9',
+      roofColor: realistic ? roofColor : '#d9d2c2',
+      wallTexture: textures ? wallTexture : 'smooth',
+      roofTexture: textures ? roofTexture : 'smooth',
+      groundColor: realistic ? ground.color : '#e4dfd1',
+      groundTexture: textures ? groundTexture : 'smooth',
+      floorTextures: realistic && textures,
+      slabColor: realistic ? tintColor(trim.color, -0.06) : '#e6e0d3',
+      padTopColor: realistic ? mixColor(ground.color, '#b0a894', 0.3) : '#efeade',
+      padSideColor: realistic ? mixColor(ground.color, '#7d7768', 0.45) : '#ded8ca',
+      edge: realistic ? 'rgba(62, 60, 54, 0.28)' : EDGE_SOLID,
+      glassFill: realistic ? 'rgba(150, 193, 214, 0.46)' : GLASS_FILL,
+      glassStroke: realistic ? 'rgba(96, 124, 138, 0.5)' : GLASS_STROKE,
+      groundGlow: realistic ? 'rgba(255, 255, 250, 0.18)' : 'rgba(255, 255, 250, 0.30)'
+    };
+    return cfg;
+  };
+
   View3D.prototype._buildScene = function () {
     var store = this.store;
     var opts = this.options;
     var G = (ED && ED.Geo) || null;
     var project = store && store.project;
+    var settings = (project && project.settings) || {};
+    var cfg = this._resolveConfig(settings);
+    this._cfg = cfg;
+    applyLight(cfg);
     var scene = {
       passes: [],
       dims: [],
@@ -1352,7 +1967,6 @@
     var padMin = { x: Infinity, y: Infinity }, padMax = { x: -Infinity, y: -Infinity };
     var shadowCount = 0;
     var padFound = false;
-    var settings = (project && project.settings) || {};
 
     function bump(x, y, z) {
       if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return;
@@ -1383,7 +1997,7 @@
       return total;
     }
     function shadow(corners2, topZ) {
-      if (!opts.ground || shadowCount >= SHADOW_MAX) return;
+      if (!opts.ground || !cfg.shadows || shadowCount >= SHADOW_MAX) return;
       shadowCount++;
       var ox = topZ * SHADOW_KX, oy = topZ * SHADOW_KY;
       var pts = [], i;
@@ -1396,14 +2010,19 @@
       var farPts = [], midPts = [];
       for (i = 0; i < far.length; i++) farPts.push({ x: far[i].x, y: far[i].y, z: 4 });
       for (i = 0; i < mid.length; i++) midPts.push({ x: mid[i].x, y: mid[i].y, z: 4 });
-      scene.shadowFaces.push(addFace([], farPts, '#000', { fill: 'rgba(62, 74, 86, 0.016)', edge: false, twoSided: true }));
-      scene.shadowFaces.push(addFace([], midPts, '#000', { fill: 'rgba(62, 74, 86, 0.026)', edge: false, twoSided: true }));
-      scene.shadowFaces.push(addFace([], poly, '#000', { fill: 'rgba(62, 74, 86, 0.042)', edge: false, twoSided: true }));
+      var aFar = cfg.realistic ? 0.028 : 0.016;
+      var aMid = cfg.realistic ? 0.046 : 0.026;
+      var aCore = cfg.realistic ? 0.085 : 0.042;
+      var aContact = cfg.realistic ? 0.032 : 0.018;
+      var shCol = cfg.realistic ? '44, 54, 66' : '62, 74, 86';
+      scene.shadowFaces.push(addFace([], farPts, '#000', { fill: 'rgba(' + shCol + ', ' + aFar + ')', edge: false, twoSided: true }));
+      scene.shadowFaces.push(addFace([], midPts, '#000', { fill: 'rgba(' + shCol + ', ' + aMid + ')', edge: false, twoSided: true }));
+      scene.shadowFaces.push(addFace([], poly, '#000', { fill: 'rgba(' + shCol + ', ' + aCore + ')', edge: false, twoSided: true }));
       // Contacto suave bajo el volumen (oclusión ambiental).
       var contact = expandPoly(poly, 1.02);
       var contactPts = [];
       for (i = 0; i < contact.length; i++) contactPts.push({ x: contact[i].x, y: contact[i].y, z: 4 });
-      scene.shadowFaces.push(addFace([], contactPts, '#000', { fill: 'rgba(58, 68, 78, 0.018)', edge: false, twoSided: true }));
+      scene.shadowFaces.push(addFace([], contactPts, '#000', { fill: 'rgba(58, 68, 78, ' + aContact + ')', edge: false, twoSided: true }));
     }
 
     // --- niveles visibles ---
@@ -1466,6 +2085,7 @@
         bumpPad(ccw[pi].x, ccw[pi].y);
       }
       var floorFace = face(passR.floors, zPts, tintColor(base, variation), { edge: EDGE_FLOOR });
+      if (cfg.floorTextures && floorFace) floorFace.tex = FINISH_TEXTURES[finish] || null;
       addFloorDetails(floorFace, poly, floorZ, finish);
       roomCount++;
 
@@ -1539,6 +2159,11 @@
 
     function buildWall(pass, wall) {
       var a = wall.a, b = wall.b;
+      // Muros curvos: pared continua extruida (sin aberturas en esta versión).
+      if (wallIsCurved(wall, G)) {
+        buildCurvedWall(pass, wall);
+        return;
+      }
       var len = dist2(a, b);
       if (!(len > 20)) return;
       var thick = Math.max(30, num(wall.thickness) || num(settings.wallThickness) || 150);
@@ -1609,7 +2234,7 @@
         var ss0 = solids[bj][0], ss1 = solids[bj][1];
         var e0 = ss0 <= 0.5 ? half : 0;
         var e1 = ss1 >= len - 0.5 ? half : 0;
-        addBox(pass.others, corners(ss0, ss1, e0, e1), z0, z1, WALL_COLOR, EDGE_SOLID);
+        addBox(pass.others, corners(ss0, ss1, e0, e1), z0, z1, cfg.wallColor, cfg.edge, cfg.wallTexture);
       }
 
       // Aberturas: antepechos, dinteles, marcos, vidrio y hojas.
@@ -1631,19 +2256,19 @@
           top = Math.min(z1, z0 + Math.max(150, num(o.height) || 2100));
         }
         if (bottom > z0 + 8) {
-          addBox(pass.others, corners(from2, to2, 0, 0), z0, Math.min(bottom, z1), WALL_COLOR, EDGE_SOLID);
+          addBox(pass.others, corners(from2, to2, 0, 0), z0, Math.min(bottom, z1), cfg.wallColor, cfg.edge, cfg.wallTexture);
         }
         if (top < z1 - 8) {
-          addBox(pass.others, corners(from2, to2, 0, 0), Math.max(top, z0), z1, WALL_COLOR, EDGE_SOLID);
+          addBox(pass.others, corners(from2, to2, 0, 0), Math.max(top, z0), z1, cfg.wallColor, cfg.edge, cfg.wallTexture);
         }
 
         // Marcos (solo si la escena no es enorme)
         if (wop > 220 && totalFacesNow() < 15000) {
           var tw = Math.min(55, wop * 0.1);
           var trimHalf = half + 12;
-          addBox(pass.others, corners(from2 - tw, from2, 0, 0, trimHalf), bottom, top, TRIM_COLOR, EDGE_SOLID);
-          addBox(pass.others, corners(to2, to2 + tw, 0, 0, trimHalf), bottom, top, TRIM_COLOR, EDGE_SOLID);
-          addBox(pass.others, corners(from2 - tw, to2 + tw, 0, 0, trimHalf), top, Math.min(top + tw, z1), TRIM_COLOR, EDGE_SOLID);
+          addBox(pass.others, corners(from2 - tw, from2, 0, 0, trimHalf), bottom, top, cfg.trimColor, cfg.edge);
+          addBox(pass.others, corners(to2, to2 + tw, 0, 0, trimHalf), bottom, top, cfg.trimColor, cfg.edge);
+          addBox(pass.others, corners(from2 - tw, to2 + tw, 0, 0, trimHalf), top, Math.min(top + tw, z1), cfg.trimColor, cfg.edge);
         }
 
         // Vidrio y montantes
@@ -1656,7 +2281,7 @@
             { x: p1.x, y: p1.y, z: top },
             { x: p0.x, y: p0.y, z: top }
           ];
-          var glass = face(pass.others, gpts, GLASS_FILL, { fill: GLASS_FILL, stroke: GLASS_STROKE, lw: 0.9, twoSided: true, edge: false });
+          var glass = face(pass.others, gpts, cfg.glassFill, { fill: cfg.glassFill, stroke: cfg.glassStroke, lw: 0.9, twoSided: true, edge: false });
           if (glass) {
             glass.details = glass.details || [];
             var midx = (p0.x + p1.x) / 2, midy = (p0.y + p1.y) / 2;
@@ -1683,7 +2308,7 @@
             { x: q1.x, y: q1.y, z: bottom + 10 },
             { x: q1.x, y: q1.y, z: top - 10 },
             { x: q0.x, y: q0.y, z: top - 10 }
-          ], '#cfc8b9', { edge: EDGE_SOLID });
+          ], cfg.garageColor, { edge: cfg.edge });
           if (panel) {
             panel.details = panel.details || [];
             var ribs = Math.min(6, Math.floor((top - bottom) / 350));
@@ -1715,7 +2340,7 @@
             ];
             var leafZ0 = Math.min(z1 - 40, z0 + 35);
             var leafZ1 = Math.max(leafZ0 + 60, top - 40);
-            addBox(pass.others, leafCorners, leafZ0, leafZ1, DOOR_COLOR, EDGE_FURN);
+            addBox(pass.others, leafCorners, leafZ0, leafZ1, cfg.doorColor, EDGE_FURN);
           }
         }
       }
@@ -1729,6 +2354,130 @@
       }
     }
 
+    // Muro curvo (arco o spline): pared continua extruida entre z0 y z1 con
+    // caras exteriores/interiores por tramos, tapa superior continua y tapas
+    // de extremo. Sin aberturas (el modelo de datos las vacía para curvas).
+    function buildCurvedWall(pass, wall) {
+      var thick = Math.max(30, num(wall.thickness) || num(settings.wallThickness) || 150);
+      var height = Math.max(200, num(wall.height) || num(pass.level.height) || num(settings.wallHeight) || 2700);
+      var z0 = pass.elevation;
+      var z1 = z0 + height;
+      var half = thick / 2;
+      var path = wallPathOf(wall, G);
+      var pts = [], i;
+      for (i = 0; i < path.length; i++) {
+        var pp = path[i];
+        if (!pp || !isFinite(pp.x) || !isFinite(pp.y)) continue;
+        var lastP = pts[pts.length - 1];
+        if (lastP && Math.abs(lastP.x - pp.x) < 0.5 && Math.abs(lastP.y - pp.y) < 0.5) continue;
+        pts.push({ x: num(pp.x), y: num(pp.y) });
+      }
+      if (pts.length < 2) {
+        // Degenerado: tratar como muro recto mínimo.
+        var fb = [
+          { x: wall.a.x - half, y: wall.a.y - half }, { x: wall.a.x + half, y: wall.a.y - half },
+          { x: wall.a.x + half, y: wall.a.y + half }, { x: wall.a.x - half, y: wall.a.y + half }
+        ];
+        addBox(pass.others, fb, z0, z1, cfg.wallColor, cfg.edge, cfg.wallTexture);
+        bump(wall.a.x, wall.a.y, z0); bump(wall.a.x, wall.a.y, z1);
+        bumpPad(wall.a.x, wall.a.y);
+        if (pass.maxWallTop < z1) pass.maxWallTop = z1;
+        return;
+      }
+
+      // Banda de espesor constante: desplaza el eje ± half por su normal suavizada.
+      var left = [], right = [];
+      for (i = 0; i < pts.length; i++) {
+        var prev = pts[i - 1] || pts[i];
+        var next = pts[i + 1] || pts[i];
+        var tx = next.x - prev.x, ty = next.y - prev.y;
+        var tl = Math.sqrt(tx * tx + ty * ty) || 1;
+        var sx = -ty / tl, sy = tx / tl;
+        var px = pts[i].x, py = pts[i].y;
+        if (i === 0) { px -= (tx / tl) * half; py -= (ty / tl) * half; }
+        if (i === pts.length - 1) { px += (tx / tl) * half; py += (ty / tl) * half; }
+        left.push({ x: px + sx * half, y: py + sy * half });
+        right.push({ x: px - sx * half, y: py - sy * half });
+      }
+
+      function quadZ(p0, p1, za, zb) {
+        return [
+          { x: p0.x, y: p0.y, z: za },
+          { x: p1.x, y: p1.y, z: za },
+          { x: p1.x, y: p1.y, z: zb },
+          { x: p0.x, y: p0.y, z: zb }
+        ];
+      }
+
+      // Caras laterales: exterior (izquierda) e interior (derecha). Sin borde por
+      // tramo para que la pared curva se lea continua (solo tapa y extremos).
+      for (i = 0; i + 1 < pts.length; i++) {
+        var stx = pts[i + 1].x - pts[i].x, sty = pts[i + 1].y - pts[i].y;
+        var stl = Math.sqrt(stx * stx + sty * sty) || 1;
+        var snx = -sty / stl, sny = stx / stl;
+        addFaceOriented(pass.others, quadZ(left[i], left[i + 1], z0, z1), cfg.wallColor,
+          { edge: false, tex: cfg.wallTexture }, { x: snx, y: sny, z: 0 });
+        addFaceOriented(pass.others, quadZ(right[i], right[i + 1], z0, z1), cfg.wallColor,
+          { edge: false, tex: cfg.wallTexture }, { x: -snx, y: -sny, z: 0 });
+      }
+
+      // Tapa superior: polígono continuo del anillo (izquierda + derecha inversa).
+      var ring = left.concat(right.slice().reverse());
+      var capPts = [];
+      for (i = 0; i < ring.length; i++) capPts.push({ x: ring[i].x, y: ring[i].y, z: z1 });
+      addFaceOriented(pass.others, ensureCCW(capPts), cfg.wallColor,
+        { edge: cfg.edge, tex: cfg.wallTexture }, { x: 0, y: 0, z: 1 });
+
+      // Tapas de extremo para cerrar el volumen.
+      var t0x = pts[1].x - pts[0].x, t0y = pts[1].y - pts[0].y;
+      var t0l = Math.sqrt(t0x * t0x + t0y * t0y) || 1;
+      addFaceOriented(pass.others, quadZ(left[0], right[0], z0, z1), cfg.wallColor,
+        { edge: cfg.edge, tex: cfg.wallTexture }, { x: -t0x / t0l, y: -t0y / t0l, z: 0 });
+      var nPts = pts.length;
+      var t1x = pts[nPts - 1].x - pts[nPts - 2].x, t1y = pts[nPts - 1].y - pts[nPts - 2].y;
+      var t1l = Math.sqrt(t1x * t1x + t1y * t1y) || 1;
+      addFaceOriented(pass.others, quadZ(left[nPts - 1], right[nPts - 1], z0, z1), cfg.wallColor,
+        { edge: cfg.edge, tex: cfg.wallTexture }, { x: t1x / t1l, y: t1y / t1l, z: 0 });
+
+      // Cotas de la planta del muro (extremos y muestras del eje).
+      bump(wall.a.x, wall.a.y, z0); bump(wall.a.x, wall.a.y, z1);
+      bump(wall.b.x, wall.b.y, z0); bump(wall.b.x, wall.b.y, z1);
+      var loX = Infinity, loY = Infinity, hiX = -Infinity, hiY = -Infinity;
+      for (i = 0; i < pts.length; i++) {
+        bump(pts[i].x, pts[i].y, z0);
+        bump(pts[i].x, pts[i].y, z1);
+        for (var side = 0; side < 2; side++) {
+          var q = side === 0 ? left[i] : right[i];
+          bump(q.x, q.y, z0); bump(q.x, q.y, z1);
+          bumpPad(q.x, q.y);
+          if (q.x < loX) loX = q.x;
+          if (q.y < loY) loY = q.y;
+          if (q.x > hiX) hiX = q.x;
+          if (q.y > hiY) hiY = q.y;
+        }
+      }
+      if (pass.maxWallTop < z1) pass.maxWallTop = z1;
+      if (isFinite(loX)) {
+        if (!pass.wallBounds) {
+          pass.wallBounds = { minX: loX, minY: loY, maxX: hiX, maxY: hiY };
+        } else {
+          var cwb = pass.wallBounds;
+          cwb.minX = Math.min(cwb.minX, loX);
+          cwb.minY = Math.min(cwb.minY, loY);
+          cwb.maxX = Math.max(cwb.maxX, hiX);
+          cwb.maxY = Math.max(cwb.maxY, hiY);
+        }
+      }
+
+      // Sombra sobre el terreno con el contorno curvo (Geo.wallPolygon).
+      if (opts.ground && cfg.shadows) {
+        var wpoly = wallPolygonOf(wall, G);
+        var shPts = [];
+        for (i = 0; i < wpoly.length; i++) shPts.push({ x: wpoly[i].x, y: wpoly[i].y });
+        if (shPts.length >= 3) shadow(shPts, z1);
+      }
+    }
+
     // --- mobiliario ---
     if (opts.furniture) {
       var items = project.items || [];
@@ -1739,6 +2488,19 @@
         var passI = passByLevel[item.level];
         var def = libGet(item.libId);
         var boxes = (def && def.boxes && def.boxes.length) ? def.boxes : fallbackBoxes(item);
+        // Tolerancia a definiciones antiguas: aplana arrays anidados y descarta
+        // cajas sin volumen útil.
+        if (Array.isArray(boxes[0])) {
+          var flatBoxes = [];
+          for (var fb = 0; fb < boxes.length; fb++) {
+            if (Array.isArray(boxes[fb])) flatBoxes = flatBoxes.concat(boxes[fb]);
+            else if (boxes[fb]) flatBoxes.push(boxes[fb]);
+          }
+          boxes = flatBoxes;
+        }
+        boxes = boxes.filter(function (b) {
+          return b && (num(b.w) > 0 && num(b.d) > 0 && num(b.h) > 0);
+        });
         var rot = num(item.rotation) || 0;
         var rad = rot * DEG, cosr = Math.cos(rad), sinr = Math.sin(rad);
         var ix = num(item.x), iy = num(item.y);
@@ -1810,51 +2572,143 @@
         // sin muros: derivar de ambientes del nivel
         continue;
       }
+      // La losa del nivel inferior queda bajo el terreno: no debe pintarse
+      // (el pintor por capas la mostraría sobre el terreno).
+      if (p2.elevation - 6 <= 2) continue;
       var sbx0 = sb.minX - 30, sby0 = sb.minY - 30, sbx1 = sb.maxX + 30, sby1 = sb.maxY + 30;
       addBox(p2.slabs, [
         { x: sbx0, y: sby0 }, { x: sbx1, y: sby0 }, { x: sbx1, y: sby1 }, { x: sbx0, y: sby1 }
-      ], p2.elevation - 140, p2.elevation - 6, '#e6e0d3', EDGE_FLOOR);
+      ], p2.elevation - 140, p2.elevation - 6, cfg.slabColor, EDGE_FLOOR);
       bump(sbx0, sby0, p2.elevation - 140);
       bump(sbx1, sby1, p2.elevation - 6);
     }
 
-    // --- techo plano opcional ---
-    if (opts.roof && scene.passes.length) {
+    // --- techo según estilo (flat | gable | arc | spline) ---
+    buildRoof();
+
+    function buildRoof() {
+      if (!opts.roof || !scene.passes.length) return;
       var topPass = scene.passes[scene.passes.length - 1];
       var rb = topPass.wallBounds;
-      if (rb) {
-        var ov = clamp((rb.maxX - rb.minX) * 0.05, 260, 700);
-        var roofZ = topPass.maxWallTop || (topPass.elevation + num(topPass.level.height) || 2700);
-        var rr = [
-          { x: rb.minX - ov, y: rb.minY - ov },
-          { x: rb.maxX + ov, y: rb.minY - ov },
-          { x: rb.maxX + ov, y: rb.maxY + ov },
-          { x: rb.minX - ov, y: rb.maxY + ov }
-        ];
-        addBox(scene.roofFaces, rr, roofZ, roofZ + 260, '#d9d2c2', EDGE_ROOF);
-        // Juntas de la membrana del techo (detalle sutil en planta).
+      if (!rb) return;
+      var style = cfg.roofStyle;
+      var baseZ = topPass.maxWallTop || (topPass.elevation + num(topPass.level.height)) || 2700;
+      var rh = clamp(cfg.roofHeight, 150, 8000);
+      var ov = clamp(cfg.roofOverhang, 0, 2500);
+      var x0 = rb.minX - ov, x1 = rb.maxX + ov, y0 = rb.minY - ov, y1 = rb.maxY + ov;
+      var w = x1 - x0, d = y1 - y0;
+      if (!(w > 200) || !(d > 200)) return;
+      var alongX = w >= d;
+      var roofCol = cfg.roofColor;
+      var roofTex = cfg.roofTexture;
+      var edge = EDGE_ROOF;
+      var peakZ = baseZ;
+      var i;
+
+      // ---- losa plana ----
+      if (style === 'flat') {
+        var slabH = clamp(Math.round(rh * 0.18), 120, 280);
+        addBox(scene.roofFaces, [
+          { x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }
+        ], baseZ, baseZ + slabH, roofCol, edge);
+        var capZ = baseZ + slabH + 2;
         var capPts = [
-          { x: rr[0].x, y: rr[0].y, z: roofZ + 261 }, { x: rr[1].x, y: rr[1].y, z: roofZ + 261 },
-          { x: rr[2].x, y: rr[2].y, z: roofZ + 261 }, { x: rr[3].x, y: rr[3].y, z: roofZ + 261 }
+          { x: x0, y: y0, z: capZ }, { x: x1, y: y0, z: capZ },
+          { x: x1, y: y1, z: capZ }, { x: x0, y: y1, z: capZ }
         ];
-        var roofCap = addFace(scene.roofFaces, capPts, '#000', { fill: 'rgba(0,0,0,0)', edge: false });
-        var seamStep = 1200, seamColor = 'rgba(96, 88, 72, 0.24)', roofZc = roofZ + 262;
-        var seamCount = 0;
+        var roofCap = addFace(scene.roofFaces, ensureCCW(capPts), '#000', { fill: 'rgba(0,0,0,0)', edge: false });
         if (roofCap) {
+          roofCap.tex = roofTex;
           roofCap.details = roofCap.details || [];
-          for (var sxr = rr[0].x + seamStep; sxr < rr[1].x && seamCount < 40; sxr += seamStep) {
-            roofCap.details.push({ a: { x: sxr, y: rr[0].y, z: roofZc }, b: { x: sxr, y: rr[3].y, z: roofZc }, color: seamColor, lw: 0.8 });
+          var seamStep = 1200, seamColor = 'rgba(96, 88, 72, 0.24)', seamCount = 0;
+          for (var sxr = x0 + seamStep; sxr < x1 && seamCount < 40; sxr += seamStep) {
+            roofCap.details.push({ a: { x: sxr, y: y0, z: capZ + 1 }, b: { x: sxr, y: y1, z: capZ + 1 }, color: seamColor, lw: 0.8 });
             seamCount++;
           }
-          for (var syr = rr[0].y + seamStep; syr < rr[3].y && seamCount < 80; syr += seamStep) {
-            roofCap.details.push({ a: { x: rr[0].x, y: syr, z: roofZc }, b: { x: rr[1].x, y: syr, z: roofZc }, color: seamColor, lw: 0.8 });
+          for (var syr = y0 + seamStep; syr < y1 && seamCount < 80; syr += seamStep) {
+            roofCap.details.push({ a: { x: x0, y: syr, z: capZ + 1 }, b: { x: x1, y: syr, z: capZ + 1 }, color: seamColor, lw: 0.8 });
             seamCount++;
           }
         }
-        for (var rk = 0; rk < rr.length; rk++) {
-          bump(rr[rk].x, rr[rk].y, roofZ);
-          bump(rr[rk].x, rr[rk].y, roofZ + 260);
+        peakZ = baseZ + slabH;
+        bump(x0, y0, baseZ); bump(x1, y0, baseZ);
+        bump(x1, y1, peakZ); bump(x0, y1, peakZ);
+        if (cfg.realistic && cfg.shadows) {
+          shadow([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], peakZ);
         }
+        return;
+      }
+
+      // ---- perfiles: gable (2 aguas), arc (bóveda) y spline (coseno) ----
+      var steps = style === 'gable' ? 2 : (style === 'arc' ? 12 : 11);
+      var profile = [];
+      for (i = 0; i <= steps; i++) {
+        var u = i / steps;
+        var z;
+        if (style === 'gable') z = baseZ + rh * (1 - Math.abs(2 * u - 1));
+        else if (style === 'arc') z = baseZ + rh * Math.sin(Math.PI * u);
+        else z = baseZ + rh * Math.pow(Math.sin(Math.PI * u), 1.55);
+        profile.push({ u: u, z: z });
+      }
+      var longA = alongX ? x0 : y0;
+      var longB = alongX ? x1 : y1;
+      var crossA = alongX ? y0 : x0;
+      var crossB = alongX ? y1 : x1;
+      function pt(u2, z2, along) {
+        return alongX
+          ? { x: along, y: crossA + u2 * (crossB - crossA), z: z2 }
+          : { x: crossA + u2 * (crossB - crossA), y: along, z: z2 };
+      }
+      // Superficie de cubierta por tramos del perfil.
+      for (i = 0; i + 1 < profile.length; i++) {
+        var pA = profile[i], pB = profile[i + 1];
+        var quad = [
+          pt(pA.u, pA.z, longA),
+          pt(pA.u, pA.z, longB),
+          pt(pB.u, pB.z, longB),
+          pt(pB.u, pB.z, longA)
+        ];
+        var du = pB.u - pA.u, dz = pB.z - pA.z;
+        var outward = alongX ? { x: 0, y: -dz, z: du } : { x: -dz, y: 0, z: du };
+        addFaceOriented(scene.roofFaces, quad, roofCol, { edge: edge, tex: roofTex }, outward);
+      }
+      // Tapas frontales (hastiales en gable; tapas de bóveda en arc/spline).
+      var capCol = style === 'gable' ? cfg.wallColor : tintColor(roofCol, 0.06);
+      var capTex = style === 'gable' ? cfg.wallTexture : roofTex;
+      for (var ci = 0; ci < 2; ci++) {
+        var along2 = ci === 0 ? longA : longB;
+        var ring = [];
+        for (i = 0; i < profile.length; i++) ring.push(pt(profile[i].u, profile[i].z, along2));
+        var out2 = alongX
+          ? { x: (ci === 0 ? -1 : 1), y: 0, z: 0 }
+          : { x: 0, y: (ci === 0 ? -1 : 1), z: 0 };
+        addFaceOriented(scene.roofFaces, ring, capCol, { edge: edge, tex: capTex }, out2);
+      }
+      // Tabla de alero en los bordes largos (gable y spline, si hay vuelo).
+      if (ov > 80 && style !== 'arc') {
+        var fh = clamp(Math.round(rh * 0.09), 70, 170);
+        for (var fi = 0; fi < 2; fi++) {
+          var uEdge = fi === 0 ? 0 : 1;
+          var e0 = pt(uEdge, baseZ, longA);
+          var e1 = pt(uEdge, baseZ, longB);
+          var fq = [
+            { x: e0.x, y: e0.y, z: baseZ - fh },
+            { x: e1.x, y: e1.y, z: baseZ - fh },
+            { x: e1.x, y: e1.y, z: baseZ },
+            { x: e0.x, y: e0.y, z: baseZ }
+          ];
+          var out3 = alongX
+            ? { x: 0, y: (fi === 0 ? -1 : 1), z: 0 }
+            : { x: (fi === 0 ? -1 : 1), y: 0, z: 0 };
+          addFaceOriented(scene.roofFaces, fq, cfg.trimColor, { edge: edge }, out3);
+        }
+      }
+      peakZ = baseZ + rh;
+      bump(x0, y0, baseZ); bump(x1, y0, baseZ);
+      bump(x1, y1, baseZ); bump(x0, y1, baseZ);
+      bump(x0, y1, peakZ); bump(x1, y0, peakZ);
+      if (cfg.realistic && cfg.shadows) {
+        shadow([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], peakZ * 0.86);
       }
     }
 
@@ -1880,7 +2734,10 @@
       var gang = (gsi / groundSegments) * TAU;
       gq.push({ x: bc.x + Math.cos(gang) * groundRadius, y: bc.y + Math.sin(gang) * groundRadius, z: 0 });
     }
-    scene.groundFace = addFace([], gq, '#e4dfd1', { edge: false });
+    scene.groundFace = addFace([], gq, cfg.groundColor, { edge: false });
+    if (scene.groundFace && cfg.textures && cfg.groundTexture !== 'smooth') {
+      scene.groundFace.tex = cfg.groundTexture;
+    }
     scene.groundRadius = groundRadius;
 
     // Base/podio
@@ -1895,12 +2752,16 @@
         scene.padFaces.push(addFace([], [
           { x: pp.x, y: pp.y, z: z0p }, { x: pq.x, y: pq.y, z: z0p },
           { x: pq.x, y: pq.y, z: z1p }, { x: pp.x, y: pp.y, z: z1p }
-        ], '#ded8ca', { edge: false }));
+        ], cfg.padSideColor, { edge: false }));
       }
-      scene.padFaces.push(addFace([], [
+      var padTop = addFace([], [
         { x: px0, y: py0, z: z1p }, { x: px1, y: py0, z: z1p },
         { x: px1, y: py1, z: z1p }, { x: px0, y: py1, z: z1p }
-      ], '#efeade', { edge: 'rgba(120, 116, 104, 0.16)' }));
+      ], cfg.padTopColor, { edge: 'rgba(120, 116, 104, 0.16)' });
+      if (padTop) {
+        scene.padFaces.push(padTop);
+        if (cfg.realistic && cfg.textures) padTop.tex = 'paving';
+      }
     }
 
     // Rejilla (se recorta contra el disco del terreno al dibujar)

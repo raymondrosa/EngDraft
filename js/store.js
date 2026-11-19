@@ -38,6 +38,41 @@
     return x;
   }
 
+  var ROOF_STYLES = { flat: 1, gable: 1, arc: 1, spline: 1 };
+  var WALL_TEXTURES = { stucco: 1, brick: 1, wood: 1, stone: 1, smooth: 1 };
+  var ROOF_TEXTURES = { tile: 1, shingle: 1, metal: 1, wood: 1, concrete: 1, smooth: 1 };
+  var GROUND_TEXTURES = { grass: 1, paving: 1, gravel: 1, smooth: 1 };
+
+  function colorOr(value, fallback) {
+    var s = String(value == null ? '' : value).trim();
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(s) ? s : fallback;
+  }
+
+  function textureOr(value, table, fallback) {
+    return table[value] ? value : fallback;
+  }
+
+  // Curva de un muro: { type:'arc', bulge } | { type:'spline', pts } | sin curva.
+  function normalizeWallCurve(w) {
+    var c = w.curve;
+    if (!c || typeof c !== 'object') { delete w.curve; return; }
+    if (c.type === 'arc') {
+      var b = finiteNumber(c.bulge, 0);
+      if (Math.abs(b) < 1e-4) { delete w.curve; return; }
+      w.curve = { type: 'arc', bulge: ED.Geo.clamp(b, -4, 4) };
+      return;
+    }
+    if (c.type === 'spline') {
+      var pts = (Array.isArray(c.pts) ? c.pts : []).filter(function (p) {
+        return p && isFinite(Number(p.x)) && isFinite(Number(p.y));
+      }).slice(0, 32).map(function (p) { return { x: Number(p.x), y: Number(p.y) }; });
+      if (!pts.length) { delete w.curve; return; }
+      w.curve = { type: 'spline', pts: pts };
+      return;
+    }
+    delete w.curve;
+  }
+
   function normalizeProject(input) {
     if (!input || typeof input !== 'object') throw new Error('El archivo no contiene un proyecto válido.');
     var p = input;
@@ -70,6 +105,36 @@
     s.gridAdaptive = s.gridAdaptive !== false;
     s.gridStyle = s.gridStyle === 'dots' ? 'dots' : 'lines';
     s.showAxes = s.showAxes !== false;
+    // Techo 3D, materiales y modo de renderizado.
+    s.roof = (s.roof && typeof s.roof === 'object') ? s.roof : {};
+    s.roof.style = ROOF_STYLES[s.roof.style] ? s.roof.style : 'flat';
+    s.roof.height = gridNumber(s.roof.height, 1200, 200, 8000);
+    s.roof.overhang = gridNumber(s.roof.overhang, 400, 0, 2500);
+    var mats = (s.materials && typeof s.materials === 'object') ? s.materials : {};
+    var mWall = (mats.wall && typeof mats.wall === 'object') ? mats.wall : {};
+    var mRoof = (mats.roof && typeof mats.roof === 'object') ? mats.roof : {};
+    var mTrim = (mats.trim && typeof mats.trim === 'object') ? mats.trim : {};
+    var mGround = (mats.ground && typeof mats.ground === 'object') ? mats.ground : {};
+    s.materials = {
+      wall: {
+        color: colorOr(mWall.color, '#f3eee2'),
+        texture: textureOr(mWall.texture, WALL_TEXTURES, 'stucco')
+      },
+      roof: {
+        color: colorOr(mRoof.color, '#b49a7c'),
+        texture: textureOr(mRoof.texture, ROOF_TEXTURES, 'tile')
+      },
+      trim: { color: colorOr(mTrim.color, '#fdfaf2') },
+      ground: {
+        color: colorOr(mGround.color, '#c9d3ab'),
+        texture: textureOr(mGround.texture, GROUND_TEXTURES, 'grass')
+      }
+    };
+    s.render = (s.render && typeof s.render === 'object') ? s.render : {};
+    s.render.mode = s.render.mode === 'realistic' ? 'realistic' : 'schematic';
+    s.render.shadows = s.render.shadows !== false;
+    s.render.textures = s.render.textures !== false;
+    s.render.sunAngle = gridNumber(s.render.sunAngle, 135, 0, 360);
     s.wallThickness = s.wallThickness || 150;
     s.wallHeight = s.wallHeight || 2700;
     s.floorHeight = s.floorHeight || 2800;
@@ -114,7 +179,10 @@
       w.layerId = w.layerId || 'walls';
       w.thickness = Number(w.thickness) || p.settings.wallThickness;
       w.height = Number(w.height) || p.settings.wallHeight;
+      normalizeWallCurve(w);
       w.openings = (Array.isArray(w.openings) ? w.openings : []).filter(function (o) { return o && o.type; });
+      // Los muros curvos no admiten aberturas en esta versión.
+      if (w.curve) w.openings = [];
       w.openings.forEach(function (o) {
         o.id = o.id || ED.Geo.uid('o');
         o.t = ED.Geo.clamp(Number(o.t) || 0.5, 0, 1);

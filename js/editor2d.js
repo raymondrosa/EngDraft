@@ -94,6 +94,11 @@
   Editor2D.prototype.statusText = function () {
     switch (this.tool) {
       case 'wall': return this.drawing ? 'Clic para fijar el siguiente punto · Esc para terminar' : 'Clic para iniciar un muro · Esc para salir';
+      case 'wallArc':
+        if (!this.drawing) return 'Muro en arco: clic en el inicio del arco';
+        if (this.drawing.phase === 'end') return 'Clic en el final del arco · Esc cancela';
+        return 'Mueve el cursor para dar curvatura y haz clic para fijar el arco · Esc cancela';
+      case 'wallSpline': return this.drawing ? 'Clic para añadir puntos de la spline (mín. 2) · Enter o doble clic para terminar · Esc cancela' : 'Muro spline: clic en el inicio';
       case 'door': return 'Clic sobre un muro para insertar una puerta';
       case 'window': return 'Clic sobre un muro para insertar una ventana';
       case 'furniture': return 'Clic para colocar · R para rotar · Esc para salir';
@@ -113,7 +118,7 @@
     this._onUp = function (e) { self._pointerUp(e); };
     this._onWheel = function (e) { self._wheel(e); };
     this._onDbl = function (e) { self._dblClick(e); };
-    this._onCtx = function (e) { e.preventDefault(); self._finishChain(true); };
+    this._onCtx = function (e) { e.preventDefault(); self._finishDraw(true); };
     this._onKeyDown = function (e) { self._keyDown(e); };
     this._onKeyUp = function (e) { self._keyUp(e); };
     this._onBlur = function () { self.spaceDown = false; self.canvas.style.cursor = ''; };
@@ -363,12 +368,16 @@
     this.store.project.walls.forEach(function (w) {
       if (w.level !== level) return;
       add(w.a, 'EXT'); add(w.b, 'EXT');
-      add(Geo.lerp(w.a, w.b, 0.5), 'MED');
-      w.openings.forEach(function (o) {
-        var sp = Geo.openingSpan(w, o);
-        add(Geo.lerp(w.a, w.b, sp.from / Math.max(1, Geo.wallLength(w))), 'JAMBA');
-        add(Geo.lerp(w.a, w.b, sp.to / Math.max(1, Geo.wallLength(w))), 'JAMBA');
-      });
+      add(Geo.wallPointAt(w, 0.5), 'MED');
+      if (Geo.wallIsCurved(w)) {
+        (w.curve.pts || []).forEach(function (p) { add(p, 'CURVA'); });
+      } else {
+        w.openings.forEach(function (o) {
+          var sp = Geo.openingSpan(w, o);
+          add(Geo.lerp(w.a, w.b, sp.from / Math.max(1, Geo.wallLength(w))), 'JAMBA');
+          add(Geo.lerp(w.a, w.b, sp.to / Math.max(1, Geo.wallLength(w))), 'JAMBA');
+        });
+      }
     });
     this.store.project.rooms.forEach(function (r) {
       if (r.level !== level) return;
@@ -660,8 +669,12 @@
 
     this.store.walls().forEach(function (wall) {
       if (Geo.wallLength(wall) < 1) return;
-      var info = self._wallSegments(wall);
       var selected = !!selectedIds['wall:' + wall.id];
+      if (Geo.wallIsCurved(wall)) {
+        self._drawCurvedWall(wall, selected, hoverId === wall.id);
+        return;
+      }
+      var info = self._wallSegments(wall);
 
       info.solids.forEach(function (seg, idx) {
         var extStart = idx === 0 && seg.from <= 0.5;
@@ -707,6 +720,76 @@
         self._drawHandle(wall.b, C.selection);
       }
     });
+  };
+
+  // Muro curvo (arco o spline): banda rellena, directriz suave y tiradores.
+  Editor2D.prototype._drawCurvedWall = function (wall, selected, hovered) {
+    var self = this;
+    var ctx = this.ctx;
+    var poly = Geo.wallPolygon(wall, true);
+    if (poly.length < 4) return;
+    var pts = poly.map(function (p) { return self.worldToScreen(p); });
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+    ctx.fillStyle = selected ? '#3c4653' : C.wall;
+    ctx.fill();
+    ctx.strokeStyle = selected ? C.selection : C.wallEdge;
+    ctx.lineWidth = selected ? 1.6 : 1.1;
+    ctx.stroke();
+    if (hovered && !selected) { ctx.fillStyle = C.wallHover; ctx.fill(); }
+
+    var path = Geo.wallPath(wall).map(function (p) { return self.worldToScreen(p); });
+    if (path.length > 2) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(path[0].x, path[0].y);
+      for (var k = 1; k < path.length; k++) ctx.lineTo(path[k].x, path[k].y);
+      ctx.strokeStyle = selected ? 'rgba(245,166,35,0.5)' : 'rgba(20,29,38,0.10)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (selected) {
+      this._drawHandle(wall.a, C.selection);
+      this._drawHandle(wall.b, C.selection);
+      this._wallCurveHandles(wall).forEach(function (h) {
+        self._drawCurveHandle(h.point, C.selection);
+      });
+    }
+  };
+
+  Editor2D.prototype._wallCurveHandles = function (wall) {
+    var out = [];
+    if (!Geo.wallIsCurved(wall)) return out;
+    if (wall.curve.type === 'arc') {
+      out.push({ point: Geo.wallPointAt(wall, 0.5), kind: 'bulge' });
+    } else {
+      (wall.curve.pts || []).forEach(function (p, i) {
+        out.push({ point: { x: p.x, y: p.y }, kind: 'spline', index: i });
+      });
+    }
+    return out;
+  };
+
+  Editor2D.prototype._drawCurveHandle = function (world, color) {
+    var p = this.worldToScreen(world);
+    var ctx = this.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 2, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
   };
 
   Editor2D.prototype._drawOpening = function (wall, opening, from, to) {
@@ -1128,6 +1211,39 @@
       ctx.restore();
     }
 
+    if ((tool === 'wallArc' || tool === 'wallSpline') && this.drawing) {
+      var prev = this._curvePreviewWall();
+      if (prev) {
+        var polyP = Geo.wallPolygon(prev, true).map(function (p) { return this.worldToScreen(p); }, this);
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(polyP[0].x, polyP[0].y);
+        for (var pi = 1; pi < polyP.length; pi++) ctx.lineTo(polyP[pi].x, polyP[pi].y);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(245,166,35,0.18)';
+        ctx.fill();
+        ctx.strokeStyle = C.selection;
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([8, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        if (prev.curve && prev.curve.type === 'spline') {
+          var cps = [{ x: prev.a.x, y: prev.a.y }].concat(prev.curve.pts || [], [{ x: prev.b.x, y: prev.b.y }]);
+          cps.forEach(function (p) {
+            var sp2 = this.worldToScreen(p);
+            ctx.beginPath(); ctx.arc(sp2.x, sp2.y, 3.5, 0, Math.PI * 2);
+            ctx.fillStyle = '#fff'; ctx.fill();
+            ctx.strokeStyle = C.selection; ctx.lineWidth = 1.6; ctx.stroke();
+          }, this);
+        }
+        var lenP = Geo.wallLength(prev);
+        var midP = this.worldToScreen(Geo.wallPointAt(prev, 0.5));
+        this._labelChip(Geo.formatLength(lenP, this._units()) +
+          (prev.curve && prev.curve.type === 'arc' ? ' · arco' : (prev.curve ? ' · spline' : '')), midP.x, midP.y - 18);
+        ctx.restore();
+      }
+    }
+
     if (tool === 'furniture' && this.furnitureId && this.mouse.inside && !this.pan) {
       var def = ED.Library && ED.Library.get ? ED.Library.get(this.furnitureId) : null;
       if (def) {
@@ -1181,6 +1297,32 @@
       if (len3 > 1) this._labelChip(Geo.formatLength(len3, this._units()), (a.x + b.x) / 2, (a.y + b.y) / 2 - 14);
       ctx.restore();
     }
+  };
+
+  // Muro provisional para la previsualización de arco/spline.
+  Editor2D.prototype._curvePreviewWall = function () {
+    var d = this.drawing;
+    if (!d) return null;
+    var thick = this.store.project.settings.wallThickness || 150;
+    if (d.type === 'wallArc') {
+      if (d.phase === 'end') {
+        var endA = this.snapPoint(this.cursor).point;
+        if (Geo.dist(d.start, endA) < 50) return null;
+        return { a: d.start, b: endA, thickness: thick, curve: null };
+      }
+      return { a: d.start, b: d.end, thickness: thick, curve: { type: 'arc', bulge: d.bulge || 0 } };
+    }
+    if (d.type === 'wallSpline') {
+      var pts = d.pts.slice();
+      var last = pts[pts.length - 1];
+      var cur = this.snapPoint(this.cursor).point;
+      if (Geo.dist(last, cur) > 50) pts.push(cur);
+      if (pts.length < 2) return null;
+      var a = pts[0], b = pts[pts.length - 1];
+      var mid = pts.slice(1, -1);
+      return { a: a, b: b, thickness: thick, curve: mid.length ? { type: 'spline', pts: mid } : null };
+    }
+    return null;
   };
 
   function selfPoint(p, ux, uy, nx, ny, off) {
@@ -1316,6 +1458,10 @@
       this._selectDown(raw, e.shiftKey);
     } else if (this.tool === 'wall') {
       this._wallDown(raw);
+    } else if (this.tool === 'wallArc') {
+      this._arcDown(raw);
+    } else if (this.tool === 'wallSpline') {
+      this._splineDown(raw);
     } else if (this.tool === 'door' || this.tool === 'window') {
       this._openingDown(raw, this.tool);
     } else if (this.tool === 'furniture') {
@@ -1362,6 +1508,26 @@
       var wp = this._currentWallPoint();
       this.snapInfo = wp ? this.snapInfo : null;
       this._emitCursor(raw);
+      this.requestRender();
+      return;
+    }
+
+    if (this.tool === 'wallArc' && this.drawing) {
+      if (this.drawing.phase === 'end') {
+        this.snapInfo = this.snapPoint(raw);
+        this._emitCursor(this.snapInfo.point);
+      } else {
+        this.drawing.bulge = Geo.bulgeFromPoint(this.drawing.start, this.drawing.end, raw);
+        this.snapInfo = null;
+        this._emitCursor(raw);
+      }
+      this.requestRender();
+      return;
+    }
+
+    if (this.tool === 'wallSpline' && this.drawing) {
+      this.snapInfo = this.snapPoint(raw);
+      this._emitCursor(this.snapInfo.point);
       this.requestRender();
       return;
     }
@@ -1428,6 +1594,29 @@
     return snap.point;
   };
 
+  // Crea un muro (recto o curvo) con historial y selección.
+  Editor2D.prototype._createWall = function (a, b, curve) {
+    var self = this;
+    var label = curve ? (curve.type === 'arc' ? 'Crear muro en arco' : 'Crear muro spline') : 'Crear muro';
+    var wall = this.store.act(label, function () {
+      var w = {
+        id: self.store.newId('w'), type: 'wall', level: self.store.activeLevel,
+        layerId: 'walls', a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y },
+        thickness: self.store.project.settings.wallThickness || 150,
+        height: self.store.project.settings.wallHeight || 2700,
+        openings: []
+      };
+      if (curve) w.curve = curve;
+      self.store.project.walls.push(w);
+      return w;
+    });
+    this.store.setSelection([{ kind: 'wall', id: wall.id }]);
+    call(this.callbacks.onPlaced, ['wall', wall]);
+    this._emitStatus();
+    this.requestRender();
+    return wall;
+  };
+
   Editor2D.prototype._wallDown = function (raw) {
     var snap = this.snapPoint(raw);
     if (!this.drawing) {
@@ -1438,24 +1627,81 @@
     var end = snap.point;
     if (this.snap.ortho) end = this._constrainOrtho(this.drawing.start, end);
     if (Geo.dist(this.drawing.start, end) < 40) return;
-    var self = this;
-    var wall = this.store.act('Crear muro', function () {
-      var w = {
-        id: self.store.newId('w'), type: 'wall', level: self.store.activeLevel,
-        layerId: 'walls', a: { x: self.drawing.start.x, y: self.drawing.start.y },
-        b: { x: end.x, y: end.y },
-        thickness: self.store.project.settings.wallThickness || 150,
-        height: self.store.project.settings.wallHeight || 2700,
-        openings: []
-      };
-      self.store.project.walls.push(w);
-      return w;
-    });
+    this._createWall(this.drawing.start, end, null);
     this.drawing.count++;
     this.drawing.start = end;
-    call(this.callbacks.onPlaced, ['wall', wall]);
+    this._emitStatus();
+  };
+
+  // Muro en arco: 1.er clic inicio, 2.º clic fin, 3.er clic fija la curvatura.
+  Editor2D.prototype._arcDown = function (raw) {
+    var snap = this.snapPoint(raw).point;
+    if (!this.drawing || this.drawing.type !== 'wallArc') {
+      this.drawing = { type: 'wallArc', phase: 'end', start: snap, bulge: 0.3 };
+      this._emitStatus();
+      return;
+    }
+    if (this.drawing.phase === 'end') {
+      if (Geo.dist(this.drawing.start, snap) < 100) return;
+      this.drawing.end = snap;
+      this.drawing.phase = 'bulge';
+      this.drawing.bulge = 0.3;
+      this._emitStatus();
+      this.requestRender();
+      return;
+    }
+    var bulge = Geo.clamp(this.drawing.bulge || 0, -4, 4);
+    var start = this.drawing.start;
+    var end = this.drawing.end;
+    this.drawing = null;
+    if (Math.abs(bulge) < 0.02) this._createWall(start, end, null);
+    else this._createWall(start, end, { type: 'arc', bulge: Math.round(bulge * 1000) / 1000 });
+  };
+
+  // Muro spline: clics sucesivos; Enter/doble clic cierra con el último punto.
+  Editor2D.prototype._splineDown = function (raw) {
+    var snap = this.snapPoint(raw).point;
+    if (!this.drawing || this.drawing.type !== 'wallSpline') {
+      this.drawing = { type: 'wallSpline', pts: [snap] };
+      this._emitStatus();
+      return;
+    }
+    var pts = this.drawing.pts;
+    if (Geo.dist(pts[pts.length - 1], snap) < 100) return;
+    pts.push(snap);
     this._emitStatus();
     this.requestRender();
+  };
+
+  Editor2D.prototype._finishSpline = function (silent) {
+    var d = this.drawing;
+    if (!d || d.type !== 'wallSpline') return false;
+    var pts = d.pts.slice();
+    this.drawing = null;
+    if (pts.length >= 2) {
+      var a = pts[0], b = pts[pts.length - 1];
+      var mid = pts.slice(1, -1);
+      this._createWall(a, b, mid.length ? { type: 'spline', pts: mid } : null);
+      if (!silent) call(this.callbacks.onStatus, ['Muro spline creado']);
+    } else {
+      this._emitStatus();
+      this.requestRender();
+    }
+    return true;
+  };
+
+  // Termina la creación en curso (muro encadenado, spline o arco).
+  Editor2D.prototype._finishDraw = function (silent) {
+    if (!this.drawing) return false;
+    if (this.drawing.type === 'wall') { this._finishChain(silent); return true; }
+    if (this.drawing.type === 'wallSpline') return this._finishSpline(silent);
+    if (this.drawing.type === 'wallArc') {
+      this.drawing = null;
+      this._emitStatus();
+      this.requestRender();
+      return true;
+    }
+    return false;
   };
 
   Editor2D.prototype._finishChain = function (silent) {
@@ -1491,6 +1737,7 @@
     var tol = 260;
     this.store.walls().forEach(function (w) {
       if (Geo.wallLength(w) < 1) return;
+      if (Geo.wallIsCurved(w)) return;           // los muros curvos no admiten aberturas
       var d = Geo.distToSegment(world, w.a, w.b);
       if (d.dist < tol && d.dist < bestD) { bestD = d.dist; best = { wall: w, t: d.t, point: d.point }; }
     });
@@ -1615,6 +1862,13 @@
         var mp = this.worldToScreen(raw);
         if (Geo.dist(mp, ap) <= 9) { this._startDrag('wall', selObj.obj, 'endpoint-a', raw); return; }
         if (Geo.dist(mp, bp) <= 9) { this._startDrag('wall', selObj.obj, 'endpoint-b', raw); return; }
+        var chs = this._wallCurveHandles(selObj.obj);
+        for (var chi = 0; chi < chs.length; chi++) {
+          if (Geo.dist(mp, this.worldToScreen(chs[chi].point)) <= 9) {
+            this._startDrag('wall', selObj.obj, 'curve-' + chi, raw);
+            return;
+          }
+        }
       }
     }
 
@@ -1692,10 +1946,28 @@
       }
     } else if (d.kind === 'wall') {
       if (d.mode === 'endpoint-a' || d.mode === 'endpoint-b') {
-        var snap = this.snapPoint(raw);
-        var pt = snap.point;
-        if (d.mode === 'endpoint-a') { obj.a.x = pt.x; obj.a.y = pt.y; }
-        else { obj.b.x = pt.x; obj.b.y = pt.y; }
+        var snapW = this.snapPoint(raw);
+        var ptW = snapW.point;
+        if (d.mode === 'endpoint-a') { obj.a.x = ptW.x; obj.a.y = ptW.y; }
+        else { obj.b.x = ptW.x; obj.b.y = ptW.y; }
+      } else if (d.mode.indexOf('curve-') === 0) {
+        if (!obj.curve) return;
+        if (obj.curve.type === 'arc') {
+          var bgl = Geo.bulgeFromPoint(obj.a, obj.b, raw);
+          obj.curve = { type: 'arc', bulge: Math.round(bgl * 1000) / 1000 };
+          call(this.callbacks.onStatus, ['Arco · flecha ' +
+            Geo.formatLength(Math.abs(obj.curve.bulge) * Geo.dist(obj.a, obj.b) / 2, this._units())]);
+        } else if (obj.curve.type === 'spline') {
+          var idx = Number(d.mode.split('-')[1]) || 0;
+          var origPts = (d.orig.curve && d.orig.curve.pts) ? d.orig.curve.pts : obj.curve.pts;
+          var pts2 = origPts.map(function (p) { return { x: p.x, y: p.y }; });
+          if (pts2[idx]) {
+            var sp2 = this.snapPoint(raw).point;
+            pts2[idx] = { x: sp2.x, y: sp2.y };
+          }
+          obj.curve = { type: 'spline', pts: pts2 };
+          call(this.callbacks.onStatus, ['Spline · ' + pts2.length + ' punto(s) de control']);
+        }
       } else {
         var wdx = raw.x - d.startWorld.x;
         var wdy = raw.y - d.startWorld.y;
@@ -1705,6 +1977,12 @@
         var realDx = ax - d.orig.a.x, realDy = ay - d.orig.a.y;
         obj.a.x = ax; obj.a.y = ay;
         obj.b.x = d.orig.b.x + realDx; obj.b.y = d.orig.b.y + realDy;
+        if (obj.curve && obj.curve.type === 'spline' && d.orig.curve && d.orig.curve.pts) {
+          obj.curve = {
+            type: 'spline',
+            pts: d.orig.curve.pts.map(function (p) { return { x: p.x + realDx, y: p.y + realDy }; })
+          };
+        }
       }
     } else if (d.kind === 'room') {
       var rdx = raw.x - d.startWorld.x, rdy = raw.y - d.startWorld.y;
@@ -1750,7 +2028,7 @@
       if (t.x >= b.minX && t.x <= b.maxX && t.y >= b.minY && t.y <= b.maxY) addHit('text', t.id);
     });
     this.store.walls().forEach(function (w) {
-      var mid = Geo.lerp(w.a, w.b, 0.5);
+      var mid = Geo.wallPointAt(w, 0.5);
       if (mid.x >= b.minX && mid.x <= b.maxX && mid.y >= b.minY && mid.y <= b.maxY) addHit('wall', w.id);
     });
     this.store.rooms().forEach(function (r) {
@@ -1804,8 +2082,8 @@
     for (i = this.store.project.walls.length - 1; i >= 0; i--) {
       obj = this.store.project.walls[i];
       if (obj.level !== this.store.activeLevel || !this.store.isVisible(obj.layerId) || this.store.isLocked(obj.layerId)) continue;
-      var d = Geo.distToSegment(p, obj.a, obj.b);
-      if (d.dist <= (obj.thickness || 150) / 2 + Math.max(30, 5 / this.view.zoom)) {
+      var dw = Geo.distToWall(p, obj);
+      if (dw.dist <= (obj.thickness || 150) / 2 + Math.max(30, 5 / this.view.zoom)) {
         return { kind: 'wall', id: obj.id, obj: obj };
       }
     }
@@ -1836,8 +2114,14 @@
     if (e.key === 'Escape') {
       if (this.cancel()) e.preventDefault();
     } else if (e.key === 'Enter') {
-      if (this.drawing && this.drawing.type === 'wall') { this._finishChain(); e.preventDefault(); }
-      else if (this.drawing && this.drawing.type === 'dim') { this.cancel(); e.preventDefault(); }
+      if (this.drawing && (this.drawing.type === 'wall' || this.drawing.type === 'wallSpline')) {
+        this._finishDraw();
+        e.preventDefault();
+      } else if (this.drawing && this.drawing.type === 'wallArc') {
+        if (this.drawing.phase === 'bulge') this._arcDown(this.cursor);
+        else this._finishDraw(true);
+        e.preventDefault();
+      } else if (this.drawing && this.drawing.type === 'dim') { this.cancel(); e.preventDefault(); }
     } else if (e.key === ' ') {
       if (!this.spaceDown) {
         this.spaceDown = true;
@@ -1862,7 +2146,7 @@
   };
 
   Editor2D.prototype._dblClick = function () {
-    if (this.tool === 'wall') this._finishChain();
+    if (this.tool === 'wall' || this.tool === 'wallSpline') this._finishDraw();
   };
 
   Editor2D.prototype.cancel = function () {

@@ -40,7 +40,15 @@
         units: 'm', grid: 250, wallThickness: 150, wallHeight: 2700,
         floorHeight: 2800, northAngle: 0, autoDim: true,
         gridMajor: 4, gridOriginX: 0, gridOriginY: 0, snapStep: 0,
-        gridAdaptive: true, gridStyle: 'lines', showAxes: true
+        gridAdaptive: true, gridStyle: 'lines', showAxes: true,
+        roof: { style: 'flat', height: 1200, overhang: 400 },
+        materials: {
+          wall: { color: '#f3eee2', texture: 'stucco' },
+          roof: { color: '#b49a7c', texture: 'tile' },
+          trim: { color: '#fdfaf2' },
+          ground: { color: '#c9d3ab', texture: 'grass' }
+        },
+        render: { mode: 'schematic', shadows: true, textures: true, sunAngle: 135 }
       },
       layers: JSON.parse(JSON.stringify(LAYERS)),
       levels: [
@@ -271,10 +279,10 @@
     var p = baseProject('Residencia Aurora', 'Vivienda unifamiliar de dos niveles');
     p.meta.client = 'Familia Mendoza';
     p.meta.location = 'Calle Los Nogales 245, Santa Cruz';
-    p.meta.engineer = 'Ing. Ana Martínez';
-    p.meta.license = 'CIP 12-3456';
+    p.meta.engineer = 'Ing. Proyecto';
+    p.meta.license = '***';
     p.meta.phone = '+591 700 12345';
-    p.meta.email = 'ana.martinez@estudioaurora.com';
+    p.meta.email = 'contacto@estudioaurora.com';
     p.meta.date = '2026-11-18';
     p.meta.revision = 'A';
     p.meta.notes = 'Proyecto residencial de dos niveles. Estructura aporticada de hormigón armado, losa maciza y cubierta plana. Todas las cotas están expresadas en metros y los niveles en metros respecto al nivel de terreno natural.';

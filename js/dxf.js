@@ -1,5 +1,10 @@
 /* EngDraft — exportador DXF (DWG compatible, AutoCAD/LibreCAD)
  * Se genera DXF ASCII R12 (AC1009): máxima compatibilidad. Todas las unidades mm.
+ * Los muros curvos (arco/spline) se exportan como LWPOLYLINE de la banda de muro
+ * (cerrada, capa A-WALL) más la directriz como LWPOLYLINE abierta; el tramo de
+ * arco se conserva exacto con su bulge DXF. Como LWPOLYLINE no forma parte de
+ * R12, cuando la exportación contiene curvas la cabecera sube a AC1015 (R2000);
+ * sin curvas el archivo sigue siendo R12 como siempre.
  */
 (function (ED) {
   'use strict';
@@ -99,12 +104,34 @@
       this.line(a.x, a.y, b.x, b.y, layer, z);
     }
   };
+  // LWPOLYLINE: una sola entidad para contornos/directrices (curvas muestreadas) y,
+  // con `bulge`, un tramo de arco exacto según la convención DXF.
+  // Los marcadores 100 AcDbEntity/AcDbPolyline los exigen los lectores modernos.
+  Writer.prototype.lwpolyline = function (points, close, layer, z, bulges) {
+    var list = points || [];
+    if (list.length < 2) return;
+    this.raw(0, 'LWPOLYLINE');
+    this.raw(100, 'AcDbEntity');
+    this.raw(8, layer || '0');
+    this.raw(100, 'AcDbPolyline');
+    this.raw(90, list.length);
+    this.raw(70, close ? 1 : 0);
+    this.raw(43, 0);
+    if (z) this.raw(38, num(z));
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i] || {};
+      this.raw(10, num(p.x));
+      this.raw(20, num(p.y));
+      var bulge = bulges && bulges[i] != null ? bulges[i] : p.bulge;
+      if (isFinite(bulge) && Math.abs(bulge) > 1e-9) this.raw(42, num(bulge));
+    }
+  };
   Writer.prototype.toString = function () { return this.parts.join('\r\n') + '\r\n'; };
 
-  function buildHeader(w, ext) {
+  function buildHeader(w, ext, version) {
     w.raw(0, 'SECTION');
     w.raw(2, 'HEADER');
-    w.raw(9, '$ACADVER'); w.raw(1, 'AC1009');
+    w.raw(9, '$ACADVER'); w.raw(1, version || 'AC1009');
     w.raw(9, '$INSUNITS'); w.raw(70, 4);
     w.raw(9, '$MEASUREMENT'); w.raw(70, 1);
     w.raw(9, '$LUNITS'); w.raw(70, 2);
@@ -158,21 +185,53 @@
     return { wall: 'A-WALL', door: 'A-DOOR', window: 'A-WIND', furniture: 'A-FURN', room: 'A-ROOM', text: 'A-TEXT', dim: 'A-DIM' }[kind] || '0';
   }
 
-  function projectBounds(project, levels) {
+  // Caja de un nivel tal como se dibuja (muros + ambientes; el mobiliario no
+  // define la separación entre niveles, igual que en buildEntities).
+  function levelExtent(project, levelId) {
     var pts = [];
     project.walls.forEach(function (wall) {
-      if (levels && levels.indexOf(wall.level) < 0) return;
-      var poly = Geo.wallPolygon(wall, true);
-      for (var i = 0; i < poly.length; i++) pts.push(poly[i]);
+      if (wall.level !== levelId) return;
+      pts = pts.concat(Geo.wallPolygon(wall, true));
     });
     project.rooms.forEach(function (r) {
-      if (levels && levels.indexOf(r.level) < 0) return;
+      if (r.level !== levelId) return;
       pts = pts.concat(r.polygon);
     });
-    project.items.forEach(function (it) {
-      if (levels && levels.indexOf(it.level) < 0) return;
-      pts.push({ x: it.x - it.w / 2 - 800, y: it.y - it.d / 2 - 800 });
-      pts.push({ x: it.x + it.w / 2 + 800, y: it.y + it.d / 2 + 800 });
+    return pts.length ? Geo.bounds(pts) : { minX: 0, minY: 0, maxX: 0, maxY: 0, w: 0, h: 0 };
+  }
+
+  function resolveLevels(project, options) {
+    options = options || {};
+    var levels = options.levels === 'all' ? project.levels.slice() : project.levels.filter(function (l) {
+      return l.id === (options.levelId || project.levels[0].id);
+    });
+    if (!levels.length) levels = [project.levels[0]];
+    return levels;
+  }
+
+  // Extents del DXF: incluye el desplazamiento ox de cada nivel (los niveles se
+  // dibujan uno al lado del otro) y todos los vértices del contorno curvo.
+  function projectBounds(project, levels) {
+    var pts = [];
+    var cursorX = 0;
+    levels.forEach(function (level) {
+      var bb = levelExtent(project, level.id);
+      var ox = cursorX - bb.minX;
+      project.walls.forEach(function (wall) {
+        if (wall.level !== level.id) return;
+        var poly = Geo.wallPolygon(wall, true);
+        for (var i = 0; i < poly.length; i++) pts.push({ x: poly[i].x + ox, y: poly[i].y });
+      });
+      project.rooms.forEach(function (r) {
+        if (r.level !== level.id || !r.polygon) return;
+        for (var i = 0; i < r.polygon.length; i++) pts.push({ x: r.polygon[i].x + ox, y: r.polygon[i].y });
+      });
+      project.items.forEach(function (it) {
+        if (it.level !== level.id) return;
+        pts.push({ x: it.x - it.w / 2 - 800 + ox, y: it.y - it.d / 2 - 800 });
+        pts.push({ x: it.x + it.w / 2 + 800 + ox, y: it.y + it.d / 2 + 800 });
+      });
+      cursorX += bb.w + 4000;
     });
     if (!pts.length) return { minX: -5000, minY: -5000, maxX: 5000, maxY: 5000, w: 10000, h: 10000 };
     return Geo.bounds(pts);
@@ -219,9 +278,50 @@
     }
   }
 
+  // Muro curvo: banda de muro como LWPOLYLINE cerrada (capa A-WALL) y directriz
+  // como LWPOLYLINE abierta (capa A-WALL). El arco se exporta exacto con su bulge;
+  // el spline se muestrea con Geo.wallPath. Los muros curvos no llevan aberturas.
+  function shiftedPts(points, ox) {
+    var out = [];
+    for (var i = 0; i < (points ? points.length : 0); i++) {
+      var p = points[i];
+      if (!p || !isFinite(p.x) || !isFinite(p.y)) continue;
+      out.push({ x: p.x + ox, y: p.y });
+    }
+    return out;
+  }
+
+  function emitCurvedWall(w, wall, ox) {
+    var c = wall.curve || {};
+    var target = wall;
+    var bulge = 0;
+    if (c.type === 'arc') {
+      // Sanea el bulge como hace normalizeProject (se conserva exacto en DXF).
+      bulge = Geo.clamp(Number(c.bulge) || 0, -4, 4);
+      if (bulge !== Number(c.bulge)) {
+        target = {
+          a: wall.a, b: wall.b, thickness: wall.thickness, height: wall.height,
+          curve: { type: 'arc', bulge: bulge }, openings: []
+        };
+      }
+    }
+    var contour = shiftedPts(Geo.wallPolygon(target, true), ox);
+    if (contour.length >= 3) w.lwpolyline(contour, true, 'A-WALL');
+    if (c.type === 'arc' && bulge) {
+      w.lwpolyline([
+        { x: wall.a.x + ox, y: wall.a.y, bulge: bulge },
+        { x: wall.b.x + ox, y: wall.b.y }
+      ], false, 'A-WALL');
+      return;
+    }
+    var axis = shiftedPts(Geo.wallPath(target), ox);
+    if (axis.length >= 2) w.lwpolyline(axis, false, 'A-WALL');
+  }
+
   function emitWall(w, wall, ox) {
     var len = Geo.wallLength(wall);
     if (len < 1) return;
+    if (Geo.wallIsCurved(wall)) { emitCurvedWall(w, wall, ox); return; }
     var half = (wall.thickness || 150) / 2;
     var ux = (wall.b.x - wall.a.x) / len;
     var uy = (wall.b.y - wall.a.y) / len;
@@ -316,10 +416,7 @@
 
   function buildEntities(project, options) {
     var w = new Writer();
-    var levels = options.levels === 'all' ? project.levels.slice() : project.levels.filter(function (l) {
-      return l.id === (options.levelId || project.levels[0].id);
-    });
-    if (!levels.length) levels = [project.levels[0]];
+    var levels = resolveLevels(project, options);
     var cursorX = 0;
     levels.forEach(function (level, index) {
       var lvlWalls = project.walls.filter(function (x) { return x.level === level.id; });
@@ -327,10 +424,7 @@
       var lvlItems = project.items.filter(function (x) { return x.level === level.id; });
       var lvlTexts = project.texts.filter(function (x) { return x.level === level.id; });
       var lvlDims = project.dims.filter(function (x) { return x.level === level.id; });
-      var pts = [];
-      lvlWalls.forEach(function (wall) { pts = pts.concat(Geo.wallPolygon(wall, true)); });
-      lvlRooms.forEach(function (r) { pts = pts.concat(r.polygon); });
-      var bb = pts.length ? Geo.bounds(pts) : { minX: 0, minY: 0, maxX: 0, maxY: 0, w: 0, h: 0 };
+      var bb = levelExtent(project, level.id);
       var ox = cursorX - bb.minX;
       lvlWalls.forEach(function (wall) { emitWall(w, wall, ox); });
       lvlRooms.forEach(function (room) { emitRoom(w, room, ox); });
@@ -348,20 +442,30 @@
     LAYERS: LAYERS,
     create: function (project, options) {
       options = options || {};
-      var levels = options.levels === 'all' ? project.levels.map(function (l) { return l.id; })
-        : [options.levelId || project.levels[0].id];
-      var ext = projectBounds(project, levels);
+      var levelObjs = resolveLevels(project, options);
+      var levelIds = levelObjs.map(function (l) { return l.id; });
+      var hasCurves = project.walls.some(function (wall) {
+        return levelIds.indexOf(wall.level) >= 0 && Geo.wallIsCurved(wall);
+      });
+      var ext = projectBounds(project, levelObjs);
       var w = new Writer();
       w.raw(999, 'EngDraft — ' + clean(project.meta && project.meta.name || 'Proyecto'));
-      w.raw(999, 'DXF ASCII R12 · unidades milimetros · exportado ' + new Date().toISOString());
-      buildHeader(w, ext);
+      w.raw(999, 'DXF ASCII · unidades milimetros · exportado ' + new Date().toISOString());
+      // LWPOLYLINE no existe en DXF R12: si la exportación incluye muros curvos
+      // se declara R2000 (AC1015) para que la polilínea se interprete bien.
+      // Sin curvas se mantiene R12 (AC1009) como siempre.
+      buildHeader(w, ext, hasCurves ? 'AC1015' : 'AC1009');
       buildTables(w);
       w.raw(0, 'SECTION');
       w.raw(2, 'BLOCKS');
       w.raw(0, 'ENDSEC');
       w.raw(0, 'SECTION');
       w.raw(2, 'ENTITIES');
-      w.parts.push(buildEntities(project, { levels: options.levels, levelId: options.levelId }));
+      // buildEntities ya devuelve sus líneas con CRLF: se recorta el salto final
+      // para no dejar una línea vacía (código de grupo inválido) antes de ENDSEC.
+      var body = buildEntities(project, { levels: options.levels, levelId: options.levelId })
+        .replace(/[\r\n]+$/, '');
+      if (body) w.parts.push(body);
       w.raw(0, 'ENDSEC');
       w.raw(0, 'EOF');
       return w.toString();

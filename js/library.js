@@ -419,8 +419,7 @@
     B(-900, -300, 0, 1800, 600, 2200, '#dacbb4'),
     B(-880, -280, 80, 860, 560, 2050, '#cbb99f'),
     B(20, -280, 80, 860, 560, 2050, '#cbb99f'),
-    B(-20, 250, 1050, 40, 30, 260, '#9b876b'),
-    B(-20, 250, 1050, 0, 0, 0, '#000000')
+    B(-20, 250, 1050, 40, 30, 260, '#9b876b')
   ], 'ropero closet guardarropa');
 
   add('dresser', 'Cómoda', 'dormitorio', 1400, 500, 900, '#c1a987', [
@@ -446,6 +445,12 @@
     B(-150, -150, 0, 300, 300, 2700, '#dad7d1')
   ], 'columna estructura concreto');
 
+  var stairBoxes = [];
+  for (var st = 0; st < 8; st++) {
+    stairBoxes.push(B(-1200 + st * 300, -500, 0, 300, 1000, 170 + st * 170, '#d6cfc2'));
+  }
+  stairBoxes.push(B(-1200, 440, 0, 2400, 60, 40, '#b9b0a1'));
+
   add('stairs', 'Escalera', 'exterior', 2400, 1000, 2700, '#cfc7b9', [
     R(-1200, -500, 2400, 1000, 8, '#d9d3c7'),
     L(-900, -500, -900, 500, '#b8afa0'),
@@ -456,15 +461,7 @@
     L(600, -500, 600, 500, '#b8afa0'),
     L(900, -500, 900, 500, '#b8afa0'),
     P([{ x: 1050, y: -500 }, { x: 1200, y: -500 }, { x: 1200, y: 500 }, { x: 1050, y: 500 }], '#b6ad9e', '#a59b8b')
-  ], [
-    (function () {
-      var arr = [];
-      for (var i = 0; i < 8; i++) {
-        arr.push(B(-1200 + i * 300, -500, 0, 300, 1000, 170 + i * 170, '#d6cfc2'));
-      }
-      return arr;
-    })(), B(-1200, 440, 0, 2400, 60, 40, '#b9b0a1')
-  ], 'escalera gradas estructura');
+  ], stairBoxes, 'escalera gradas estructura');
 
   add('plant', 'Planta', 'exterior', 600, 600, 1400, '#a9bf9b', [
     C(0, 0, 260, '#c9d8bc', '#8fa583'),
@@ -518,13 +515,376 @@
     B(-400, 280, 900, 800, 60, 40, '#3d4852')
   ], 'parrilla bbq exterior');
 
+  // ------------------------------------------------------------------ plantas
+  (function () {
+    var plan = [
+      C(0, 0, 395, '#e6efdd', '#c3d4b6')
+    ];
+    var boxes = [
+      B(-75, -75, 0, 150, 150, 3900, '#b6a186'),
+      B(-95, -95, 3860, 190, 190, 220, '#c2ad90')
+    ];
+    var greens = ['#8db079', '#9cbd87', '#a8c894', '#93b57f'];
+    var i, a, cx, cy, hx, hy, leaf, r0, r1, half;
+    for (i = 0; i < 10; i++) {
+      a = (Math.PI * 2 / 10) * i + Math.PI / 10;
+      half = 0.17;
+      r0 = 110;
+      r1 = 385;
+      leaf = [
+        { x: Math.cos(a - half) * r0, y: Math.sin(a - half) * r0 },
+        { x: Math.cos(a - half * 1.35) * (r0 + (r1 - r0) * 0.55), y: Math.sin(a - half * 1.35) * (r0 + (r1 - r0) * 0.55) },
+        { x: Math.cos(a) * r1, y: Math.sin(a) * r1 },
+        { x: Math.cos(a + half * 1.35) * (r0 + (r1 - r0) * 0.55), y: Math.sin(a + half * 1.35) * (r0 + (r1 - r0) * 0.55) },
+        { x: Math.cos(a + half) * r0, y: Math.sin(a + half) * r0 }
+      ];
+      plan.push(P(leaf, greens[i % 3], '#7f9c6d'));
+      cx = Math.cos(a) * 210;
+      cy = Math.sin(a) * 210;
+      hx = Math.abs(Math.cos(a)) * 110 + 55;
+      hy = Math.abs(Math.sin(a)) * 110 + 55;
+      boxes.push(B(cx - hx, cy - hy, 3940, hx * 2, hy * 2, 300, greens[i % 4]));
+    }
+    plan.push(C(0, 0, 95, '#8f7a5f', '#7a6750'));
+    plan.push(C(0, 0, 45, '#b7a083', '#8f7a5f'));
+    for (i = 0; i < 6; i++) {
+      a = (Math.PI * 2 / 6) * i + Math.PI / 6;
+      cx = Math.cos(a) * 150;
+      cy = Math.sin(a) * 150;
+      hx = Math.abs(Math.cos(a)) * 95 + 50;
+      hy = Math.abs(Math.sin(a)) * 95 + 50;
+      boxes.push(B(cx - hx, cy - hy, 4200, hx * 2, hy * 2, 260, greens[(i + 2) % 4]));
+    }
+    add('palm', 'Palmera', 'plantas', 800, 800, 4500, '#9cb98a', plan, boxes,
+      'palmera palma cocotero fronda tropical planta arbol');
+  })();
+
+  (function () {
+    var plan = [
+      C(0, 0, 1150, '#b6cba3', '#8fa583'),
+      C(0, 0, 940, '#a7c191', '#8fa583'),
+      C(0, 0, 700, '#9ab882', '#8fa583'),
+      C(0, 0, 430, '#8fb077', '#8fa583'),
+      C(0, 0, 95, '#8a7357', '#7a6750')
+    ];
+    for (var i = 0; i < 6; i++) {
+      var a = (Math.PI * 2 / 6) * i;
+      plan.push(L(Math.cos(a) * 130, Math.sin(a) * 130, Math.cos(a) * 1080, Math.sin(a) * 1080, '#7f9c6d', 2));
+    }
+    add('tree', 'Árbol', 'plantas', 2400, 2400, 5000, '#8fa573', plan, [
+      B(-120, -120, 0, 240, 240, 2200, '#a2907a'),
+      B(-1050, -1050, 2050, 2100, 2100, 1050, '#8fae7c'),
+      B(-800, -800, 2950, 1600, 1600, 1000, '#9dbc8a'),
+      B(-500, -500, 3800, 1000, 1000, 900, '#a9c996')
+    ], 'arbol arboleda copa sombra planta jardin');
+  })();
+
+  add('bush', 'Arbusto', 'plantas', 1000, 1000, 900, '#94b180', [
+    C(-90, 60, 420, '#a3c08e', '#839f70'),
+    C(170, 40, 310, '#9dbc88', '#839f70'),
+    C(-40, -150, 280, '#b0cb9c', '#839f70'),
+    C(0, 0, 70, '#7f9a6c', '#6d875c')
+  ], [
+    B(-480, -400, 0, 960, 800, 430, '#94b180'),
+    B(-330, -480, 380, 700, 960, 320, '#9dbc88'),
+    B(-190, -220, 680, 460, 440, 220, '#aac694')
+  ], 'arbusto mata planta jardin seto bajo');
+
+  (function () {
+    var plan = [
+      R(-900, -225, 1800, 450, 40, '#a4bd90', '#7f9c6d'),
+      R(-860, -190, 1720, 380, 30, '#b6cfa2', '#7f9c6d')
+    ];
+    var boxes = [B(-900, -225, 0, 1800, 450, 1100, '#91af7c')];
+    for (var i = 0; i < 8; i++) {
+      plan.push(C(-780 + i * 215, 40, 58, '#94b180', '#7f9c6d'));
+      plan.push(C(-680 + i * 215, -70, 50, '#a3bf8e', '#7f9c6d'));
+    }
+    for (var k = 0; k < 4; k++) {
+      boxes.push(B(-900 + k * 450, -210, 1100, 430, 420, 100, k % 2 ? '#9cb98a' : '#a5c193'));
+    }
+    add('hedge', 'Seto', 'plantas', 1800, 450, 1200, '#9cb98a', plan, boxes,
+      'seto cerco vivo arbusto largo jardin jardinera');
+  })();
+
+  (function () {
+    var plan = [
+      R(-700, -450, 1400, 900, 70, '#cfc9bc', '#a9a294'),
+      R(-620, -370, 1240, 740, 50, '#8d7a63', '#7a6750'),
+      R(-660, -410, 1320, 820, 60, 'rgba(255,255,255,0)', '#bdb6a8')
+    ];
+    var flowers = [
+      [-430, 160, '#d9b45b'], [-130, 250, '#d78f9e'], [230, 150, '#c96f62'],
+      [420, -130, '#e6e2d6'], [-40, -180, '#b58ac4'], [-330, -230, '#d9b45b'],
+      [120, -210, '#d78f9e']
+    ];
+    var boxes = [
+      B(-700, -450, 0, 1400, 900, 180, '#c9c3b6'),
+      B(-620, -370, 180, 1240, 740, 140, '#8d7a63')
+    ];
+    for (var i = 0; i < flowers.length; i++) {
+      var fx = flowers[i][0], fy = flowers[i][1];
+      plan.push(C(fx, fy, 62, flowers[i][2], '#8f7a63'));
+      plan.push(C(fx, fy, 20, '#f7f4e6', '#d9d4c6'));
+      boxes.push(B(fx - 55, fy - 55, 320, 110, 110, 180, flowers[i][2]));
+    }
+    add('flowerBed', 'Macizo floral', 'plantas', 1400, 900, 500, '#a9bd8c', plan, boxes,
+      'macizo floral flores jardin cantero parterre');
+  })();
+
+  add('ornamentalPlant', 'Planta ornamental', 'plantas', 500, 500, 1000, '#a8c48f', [
+    C(0, 0, 200, '#c8b79f', '#9b8a72'),
+    C(0, 0, 150, '#b18d68', '#8f7350'),
+    C(-40, 30, 150, '#a8c48f', '#8fa583'),
+    C(45, -35, 120, '#b9d1a3', '#8fa583'),
+    C(0, 60, 70, '#c6dcb2', '#8fa583')
+  ], [
+    B(-110, -110, 0, 220, 220, 380, '#c1af96'),
+    B(-200, -200, 380, 400, 400, 420, '#93b07f'),
+    B(-140, -140, 780, 280, 280, 220, '#a6c292')
+  ], 'planta ornamental decorativa maceta interior jardin');
+
+  // ------------------------------------------------------------------ jardines
+  (function () {
+    var plan = [
+      R(-1500, -1000, 3000, 2000, 24, '#b7cfa0', '#93ac7c'),
+      R(-1420, -920, 2840, 1840, 18, '#c3d9ad', '#9db886')
+    ];
+    var boxes = [
+      B(-1500, -1000, 0, 3000, 2000, 40, '#b7cfa0'),
+      B(-1450, -950, 40, 2900, 1900, 20, '#c2d8ab')
+    ];
+    for (var i = 0; i < 8; i++) {
+      plan.push(R(-1490 + i * 372, -980, 150, 1960, 6, 'rgba(233,243,219,0.55)', 'rgba(0,0,0,0)'));
+    }
+    add('lawn', 'Césped', 'jardines', 3000, 2000, 60, '#b7cfa0', plan, boxes,
+      'cesped pasto grama jardin verde area');
+  })();
+
+  add('planter', 'Jardinera', 'jardines', 1600, 600, 500, '#a9bd8c', [
+    R(-800, -300, 1600, 600, 36, '#cfc8b8', '#a9a294'),
+    R(-740, -240, 1480, 480, 26, '#8d7a63', '#7a6750'),
+    C(-520, 0, 120, '#9dbc8b', '#839f70'),
+    C(-160, -60, 110, '#a8c894', '#839f70'),
+    C(180, 40, 130, '#93b57f', '#839f70'),
+    C(520, -20, 100, '#b3cd9f', '#839f70')
+  ], [
+    B(-800, -300, 0, 1600, 600, 320, '#cbc4b4'),
+    B(-740, -240, 320, 1480, 480, 40, '#9a8a6f'),
+    B(-640, -120, 360, 240, 240, 140, '#9dbc8b'),
+    B(-270, -180, 360, 220, 220, 140, '#a8c894'),
+    B(60, -80, 360, 240, 240, 140, '#93b57f'),
+    B(420, -120, 360, 200, 200, 140, '#b3cd9f')
+  ], 'jardinera jardin maceta grande flores parterre');
+
+  (function () {
+    var plan = [
+      R(-1000, -450, 2000, 900, 14, '#cfc9bc', '#a9a294'),
+      R(-960, -410, 1920, 820, 10, '#d8d2c5', '#b3ada0')
+    ];
+    var boxes = [B(-1000, -450, 0, 2000, 900, 20, '#cfc9bc')];
+    for (var i = 0; i < 4; i++) {
+      var x = -850 + i * 460;
+      plan.push(R(x, -340, 320, 680, 34, '#ded9cd', '#b3ada0'));
+      boxes.push(B(x, -340, 20, 320, 680, 20, '#e2ddd1'));
+    }
+    add('gardenPath', 'Sendero de jardín', 'jardines', 2000, 900, 40, '#d3cdc0', plan, boxes,
+      'sendero camino jardin losas piedra paso jardin');
+  })();
+
+  add('fountain', 'Fuente', 'jardines', 1800, 1800, 700, '#c9d6d8', [
+    C(0, 0, 880, '#d7d2c6', '#a9a294'),
+    C(0, 0, 790, '#c9c3b5', '#a9a294'),
+    C(0, 0, 640, 'rgba(151,199,210,0.55)', '#8fb0b8'),
+    C(0, 0, 210, '#ded9cd', '#a9a294'),
+    C(0, 0, 120, 'rgba(160,206,216,0.7)', '#8fb0b8'),
+    ARC(0, 0, 470, 0, 360, '#a6c4ca'),
+    L(-120, 130, -300, 300, '#a6c4ca', 1),
+    L(120, 130, 300, 300, '#a6c4ca', 1),
+    L(120, -130, 300, -300, '#a6c4ca', 1),
+    L(-120, -130, -300, -300, '#a6c4ca', 1)
+  ], [
+    B(-880, -880, 0, 1760, 1760, 320, '#d2ccc0'),
+    B(-760, -760, 300, 1520, 1520, 180, 'rgba(130,180,195,0.55)'),
+    B(-240, -240, 320, 480, 480, 340, '#d9d4c8'),
+    B(-390, -390, 660, 780, 780, 40, '#e0dcd0')
+  ], 'fuente agua jardin patio estanque pila');
+
+  add('rockGarden', 'Rocalla', 'jardines', 1200, 900, 400, '#b8b5ab', [
+    R(-600, -450, 1200, 900, 30, '#d3cec1', '#b3ada0'),
+    P([{ x: -560, y: -260 }, { x: -260, y: -330 }, { x: -180, y: -60 }, { x: -320, y: 140 }, { x: -560, y: 80 }], '#b3b0a8', '#8f8c84'),
+    P([{ x: 60, y: -340 }, { x: 380, y: -280 }, { x: 430, y: -90 }, { x: 250, y: -40 }], '#a9a69e', '#8f8c84'),
+    P([{ x: -120, y: 120 }, { x: 160, y: 60 }, { x: 300, y: 220 }, { x: 120, y: 330 }, { x: -80, y: 300 }], '#bdbbb3', '#8f8c84'),
+    P([{ x: 330, y: 150 }, { x: 520, y: 180 }, { x: 540, y: 330 }, { x: 380, y: 300 }], '#b0ada5', '#8f8c84')
+  ], [
+    B(-600, -450, 0, 1200, 900, 100, '#ccc6b9'),
+    B(-560, -330, 100, 380, 360, 220, '#b3b0a8'),
+    B(-180, -350, 100, 400, 300, 160, '#a9a69e'),
+    B(-120, 60, 100, 420, 260, 200, '#bdbbb3'),
+    B(330, 130, 100, 210, 190, 300, '#b0ada5')
+  ], 'rocalla roca piedra jardin decorativo gravilla');
+
+  // ------------------------------------------------------------------ vias y accesos
+  function curvedLane(id, name, w, d, h, cx, cy, rOut, rIn, base, lineCol, centerCol, tags) {
+    var plan = [];
+    var pts = [];
+    var steps = 10;
+    var i, a;
+    for (i = 0; i <= steps; i++) {
+      a = (Math.PI / 2) * (i / steps);
+      pts.push({ x: cx + Math.cos(a) * rOut, y: cy + Math.sin(a) * rOut });
+    }
+    for (i = steps; i >= 0; i--) {
+      a = (Math.PI / 2) * (i / steps);
+      pts.push({ x: cx + Math.cos(a) * rIn, y: cy + Math.sin(a) * rIn });
+    }
+    plan.push(P(pts, base, '#74797f'));
+    var seg = 8;
+    for (i = 0; i < seg; i++) {
+      var a0 = (Math.PI / 2) * (i / seg);
+      var a1 = (Math.PI / 2) * ((i + 1) / seg);
+      plan.push(L(cx + Math.cos(a0) * (rOut - 150), cy + Math.sin(a0) * (rOut - 150),
+        cx + Math.cos(a1) * (rOut - 150), cy + Math.sin(a1) * (rOut - 150), lineCol, 2));
+      plan.push(L(cx + Math.cos(a0) * (rIn + 150), cy + Math.sin(a0) * (rIn + 150),
+        cx + Math.cos(a1) * (rIn + 150), cy + Math.sin(a1) * (rIn + 150), lineCol, 2));
+    }
+    var boxes = [];
+    var sectors = 8;
+    var radial = 1;
+    var width = rOut - rIn;
+    for (i = 0; i < sectors; i++) {
+      var b0 = (Math.PI / 2) * (i / sectors);
+      var b1 = (Math.PI / 2) * ((i + 1) / sectors);
+      for (var k = 0; k < radial; k++) {
+        var ra = rIn + width * (k / radial);
+        var rb = rIn + width * ((k + 1) / radial) + 30;
+        var corners = [
+          { x: cx + Math.cos(b0) * ra, y: cy + Math.sin(b0) * ra },
+          { x: cx + Math.cos(b0) * rb, y: cy + Math.sin(b0) * rb },
+          { x: cx + Math.cos(b1) * ra, y: cy + Math.sin(b1) * ra },
+          { x: cx + Math.cos(b1) * rb, y: cy + Math.sin(b1) * rb }
+        ];
+        var minX = corners[0].x, maxX = corners[0].x, minY = corners[0].y, maxY = corners[0].y;
+        for (var q = 1; q < 4; q++) {
+          if (corners[q].x < minX) minX = corners[q].x;
+          if (corners[q].x > maxX) maxX = corners[q].x;
+          if (corners[q].y < minY) minY = corners[q].y;
+          if (corners[q].y > maxY) maxY = corners[q].y;
+        }
+        boxes.push(B(minX, minY, 0, maxX - minX, maxY - minY, 12, (i + k) % 2 ? '#8f959c' : '#8a9097'));
+      }
+    }
+    if (centerCol) {
+      for (i = 0; i < sectors; i += 2) {
+        var c0 = (Math.PI / 2) * ((i + 0.15) / sectors);
+        var c1 = (Math.PI / 2) * ((i + 0.85) / sectors);
+        var mid = (rOut + rIn) / 2;
+        var px0 = cx + Math.cos(c0) * mid, py0 = cy + Math.sin(c0) * mid;
+        var px1 = cx + Math.cos(c1) * mid, py1 = cy + Math.sin(c1) * mid;
+        var dminX = Math.min(px0, px1) - 70, dmaxX = Math.max(px0, px1) + 70;
+        var dminY = Math.min(py0, py1) - 70, dmaxY = Math.max(py0, py1) + 70;
+        boxes.push(B(dminX, dminY, 12, dmaxX - dminX, dmaxY - dminY, 8, centerCol));
+        for (var t = 0; t < 2; t++) {
+          var ta = c0 + (c1 - c0) * (t / 2);
+          var tb = c0 + (c1 - c0) * ((t + 1) / 2);
+          plan.push(L(cx + Math.cos(ta) * mid, cy + Math.sin(ta) * mid,
+            cx + Math.cos(tb) * mid, cy + Math.sin(tb) * mid, centerCol, 2));
+        }
+      }
+    }
+    add(id, name, 'vias', w, d, h, base, plan, boxes, tags);
+  }
+
+  add('roadStraight', 'Carretera recta', 'vias', 7000, 6000, 20, '#8b9198', (function () {
+    var plan = [
+      R(-3500, -3000, 7000, 6000, 0, '#8b9198', '#74797f'),
+      R(-3500, -2820, 7000, 120, 0, '#e9e5da', 'rgba(0,0,0,0)'),
+      R(-3500, 2700, 7000, 120, 0, '#e9e5da', 'rgba(0,0,0,0)'),
+      R(-3500, -2400, 7000, 90, 0, 'rgba(255,255,255,0.10)', 'rgba(0,0,0,0)'),
+      R(-3500, 2310, 7000, 90, 0, 'rgba(255,255,255,0.10)', 'rgba(0,0,0,0)')
+    ];
+    for (var i = 0; i < 9; i++) {
+      plan.push(R(-3400 + i * 780, -60, 420, 120, 10, '#e8dfa0', 'rgba(0,0,0,0)'));
+    }
+    return plan;
+  })(), [
+    B(-3500, -3000, 0, 7000, 6000, 12, '#8b9198'),
+    B(-3500, -2820, 12, 7000, 120, 8, '#e9e5da'),
+    B(-3500, 2700, 12, 7000, 120, 8, '#e9e5da'),
+    B(-3400, -60, 12, 6800, 120, 8, '#e8dfa0')
+  ], 'carretera calle via acceso asfalto recta camino');
+
+  add('driveway', 'Entrada recta', 'vias', 4500, 3000, 20, '#c7c4bc', [
+    R(-2250, -1500, 4500, 3000, 10, '#c7c4bc', '#a9a294'),
+    R(-2200, -1450, 4400, 2900, 8, '#cfccc4', '#b3ada0'),
+    L(-1125, -1450, -1125, 1450, '#b8b5ad', 1),
+    L(0, -1450, 0, 1450, '#b8b5ad', 1),
+    L(1125, -1450, 1125, 1450, '#b8b5ad', 1),
+    L(-2200, 0, 2200, 0, '#b8b5ad', 1)
+  ], [
+    B(-2250, -1500, 0, 4500, 3000, 14, '#c7c4bc'),
+    B(-1135, -1450, 14, 20, 2900, 6, '#b0ada5'),
+    B(-10, -1450, 14, 20, 2900, 6, '#b0ada5'),
+    B(1115, -1450, 14, 20, 2900, 6, '#b0ada5')
+  ], 'entrada acceso cochera concreto recta vado garaje');
+
+  add('sidewalk', 'Acera', 'vias', 6000, 1200, 120, '#cbc8c0', (function () {
+    var plan = [
+      R(-3000, -600, 6000, 1200, 12, '#cbc8c0', '#a9a294'),
+      R(-2950, -550, 5900, 1100, 10, '#d4d1c9', '#b3ada0'),
+      R(-3000, 520, 6000, 80, 0, '#b6b2a9', '#9e9a92')
+    ];
+    for (var i = 0; i < 10; i++) {
+      plan.push(L(-2700 + i * 600, -550, -2700 + i * 600, 550, '#b8b4ab', 1));
+    }
+    return plan;
+  })(), [
+    B(-3000, -600, 0, 6000, 1200, 90, '#cbc8c0'),
+    B(-3000, 520, 90, 6000, 80, 30, '#bdb9b0'),
+    B(-3000, -600, 90, 6000, 80, 30, '#c4c0b7')
+  ], 'acera vereda anden peatonal concreto banqueta');
+
+  add('parking', 'Estacionamiento', 'vias', 5000, 4500, 20, '#8b9198', (function () {
+    var plan = [
+      R(-2500, -2250, 5000, 4500, 0, '#8b9198', '#74797f'),
+      L(-2500, 1050, 2500, 1050, '#e9e5da', 2),
+      L(-2500, -1050, 2500, -1050, '#e9e5da', 2)
+    ];
+    for (var i = 0; i <= 4; i++) {
+      var x = -2500 + i * 1250;
+      plan.push(L(x, 1050, x, 2250, '#e9e5da', 2));
+      plan.push(L(x, -1050, x, -2250, '#e9e5da', 2));
+    }
+    plan.push(P([{ x: 0, y: -160 }, { x: 60, y: -160 }, { x: 60, y: 120 }, { x: 0, y: 120 }], '#e8dfa0', 'rgba(0,0,0,0)'));
+    plan.push(P([{ x: -70, y: 120 }, { x: 130, y: 120 }, { x: 30, y: 280 }], '#e8dfa0', 'rgba(0,0,0,0)'));
+    return plan;
+  })(), (function () {
+    var boxes = [B(-2500, -2250, 0, 5000, 4500, 12, '#8b9198')];
+    boxes.push(B(-2500, 1040, 12, 5000, 20, 8, '#e9e5da'));
+    boxes.push(B(-2500, -1060, 12, 5000, 20, 8, '#e9e5da'));
+    for (var i = 0; i <= 4; i++) {
+      var x = -2500 + i * 1250;
+      boxes.push(B(x - 10, 1050, 12, 20, 1200, 8, '#e9e5da'));
+      boxes.push(B(x - 10, -2250, 12, 20, 1200, 8, '#e9e5da'));
+    }
+    return boxes;
+  })(), 'estacionamiento parking parqueo plazas vehiculos auto');
+
+  curvedLane('roadCurve', 'Carretera en curva', 7000, 7000, 20, -3500, -3500, 6800, 3800,
+    '#8b9198', '#e9e5da', '#e8dfa0', 'carretera calle curva via acceso asfalto giro 90');
+  curvedLane('drivewayCurve', 'Entrada en curva', 4500, 4500, 20, -2250, -2250, 4400, 1400,
+    '#c7c4bc', '#e6e2d8', null, 'entrada acceso curva cochera concreto giro garaje');
+
   var categories = [
     { id: 'todos', name: 'Todos', icon: 'grid' },
     { id: 'muebles', name: 'Muebles', icon: 'sofa' },
     { id: 'cocina', name: 'Cocina', icon: 'kitchen' },
     { id: 'bano', name: 'Baño', icon: 'bath' },
     { id: 'dormitorio', name: 'Dormitorio', icon: 'bed' },
-    { id: 'exterior', name: 'Exterior', icon: 'tree' }
+    { id: 'exterior', name: 'Exterior', icon: 'tree' },
+    { id: 'plantas', name: 'Plantas', icon: 'tree' },
+    { id: 'jardines', name: 'Jardines', icon: 'garden' },
+    { id: 'vias', name: 'Vías y accesos', icon: 'road' }
   ];
 
   var Library = {
