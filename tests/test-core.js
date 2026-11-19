@@ -98,14 +98,105 @@ for (const def of lib.list()) {
     'Categoría inexistente "' + def.cat + '" en ' + def.id);
 }
 // Nota de diagnóstico: la biblioteca histórica agrupa las cajas de algunos ítems
-// en arrays anidados y deja marcadores de volumen 0. Se toleran en la validación.
+// en arrays anidados y deja marcadores de volumen 0. View3D 1.3 ya aplana los
+// arrays anidados y descarta las cajas sin volumen; la validación los tolera.
 const conCajasAnidadas = lib.list().filter(function (d) {
   return (d.boxes || []).some(Array.isArray);
 }).map(function (d) { return d.id; });
 if (conCajasAnidadas.length) {
   console.log('Nota: cajas 3D anidadas en', conCajasAnidadas.join(', '),
-    '(View3D solo recorre el primer nivel)');
+    '(View3D 1.3 las aplana al renderizar)');
 }
+
+// ---------------------------------------------------------------------------
+// Biblioteca 1.3: mallas poligonales opcionales (def.mesh) — CONTRACT §14.1
+// ---------------------------------------------------------------------------
+// Área de un polígono 3D (norma de Newell / 2). Sirve para descartar caras
+// degeneradas sin exigir que el polígono sea perfectamente plano.
+function areaCara3D(pts) {
+  var nx = 0, ny = 0, nz = 0, n = pts.length;
+  for (var i = 0; i < n; i++) {
+    var a = pts[i], b = pts[(i + 1) % n];
+    nx += (a.y - b.y) * (a.z + b.z);
+    ny += (a.z - b.z) * (a.x + b.x);
+    nz += (a.x - b.x) * (a.y + b.y);
+  }
+  return Math.sqrt(nx * nx + ny * ny + nz * nz) / 2;
+}
+const MESH_ITEMS = ['palm', 'tree', 'bush', 'hedge', 'flowerBed', 'car'];
+const MESH_FACES_MIN = 20;       // el encargo pide ≥20 caras por malla
+const MESH_FACES_MAX = 600;      // presupuesto del contrato por ítem
+const MESH_POINTS_MIN = 3;
+const MESH_POINTS_MAX = 64;      // View3D acepta hasta 64 (contrato: 3..8)
+var conMalla = [];
+lib.list().forEach(function (def) {
+  if (def.mesh == null) return;
+  assert(Array.isArray(def.mesh), 'def.mesh de ' + def.id + ' debe ser un array');
+  assert(def.mesh.length >= MESH_FACES_MIN,
+    'La malla de ' + def.id + ' debe tener al menos ' + MESH_FACES_MIN +
+    ' caras; tiene ' + def.mesh.length);
+  assert(def.mesh.length <= MESH_FACES_MAX,
+    'La malla de ' + def.id + ' supera el presupuesto de ' + MESH_FACES_MAX +
+    ' caras; tiene ' + def.mesh.length);
+  // La malla es solo visual: el ítem debe conservar planta y cajas válidas.
+  assert(Array.isArray(def.plan) && def.plan.length,
+    'El ítem con malla ' + def.id + ' debe conservar su planta');
+  assert(cajasPlanas(def.boxes).length > 0,
+    'El ítem con malla ' + def.id + ' debe conservar sus cajas 3D');
+  def.mesh.forEach(function (cara, ci) {
+    assert(cara && typeof cara === 'object', 'Cara ' + ci + ' de ' + def.id + ' inválida');
+    assert(typeof cara.color === 'string' && cara.color.trim(),
+      'Cara ' + ci + ' de ' + def.id + ' sin color base');
+    if (cara.twoSided != null) {
+      assert(typeof cara.twoSided === 'boolean', 'twoSided no booleano en la cara ' + ci + ' de ' + def.id);
+    }
+    if (cara.edge != null) {
+      assert(typeof cara.edge === 'boolean' || typeof cara.edge === 'string',
+        'edge inválido en la cara ' + ci + ' de ' + def.id);
+    }
+    if (cara.tex != null) {
+      assert(typeof cara.tex === 'string' && cara.tex.trim(),
+        'tex inválido en la cara ' + ci + ' de ' + def.id);
+    }
+    assert(Array.isArray(cara.points), 'La cara ' + ci + ' de ' + def.id + ' no tiene points[]');
+    assert(cara.points.length >= MESH_POINTS_MIN && cara.points.length <= MESH_POINTS_MAX,
+      'La cara ' + ci + ' de ' + def.id + ' debe tener entre ' + MESH_POINTS_MIN +
+      ' y ' + MESH_POINTS_MAX + ' puntos; tiene ' + cara.points.length);
+    cara.points.forEach(function (p, pi) {
+      assert(p && typeof p === 'object',
+        'Punto ' + pi + ' nulo en la cara ' + ci + ' de ' + def.id);
+      numeroFinito(p.x, 'Punto ' + pi + ' de la cara ' + ci + ' de ' + def.id + ': x');
+      numeroFinito(p.y, 'Punto ' + pi + ' de la cara ' + ci + ' de ' + def.id + ': y');
+      numeroFinito(p.z, 'Punto ' + pi + ' de la cara ' + ci + ' de ' + def.id + ': z');
+    });
+    var area = areaCara3D(cara.points);
+    assert(isFinite(area) && area > 1e-6,
+      'La cara ' + ci + ' de ' + def.id + ' es degenerada (área ' + area + ')');
+  });
+  // IMPORTANTE: no se comprueba que la malla quepa en ±w/2/±d/2. Las frondas
+  // de la palmera (w = 800 mm) superan a propósito ese footprint.
+  conMalla.push(def.id);
+});
+MESH_ITEMS.forEach(function (id) {
+  const def = lib.get(id);
+  assert(def, 'Falta el ítem con malla "' + id + '"');
+  assert(Array.isArray(def.mesh) && def.mesh.length >= MESH_FACES_MIN,
+    'El ítem "' + id + '" debe traer def.mesh con al menos ' + MESH_FACES_MIN + ' caras');
+});
+assert(conMalla.length >= MESH_ITEMS.length,
+  'Se esperaban al menos ' + MESH_ITEMS.length + ' ítems con malla; hay ' + conMalla.length);
+// Los ítems sin malla siguen siendo válidos con planta + cajas (la validación
+// general de arriba ya lo comprueba; aquí se deja explícito el recuento).
+const sinMalla = lib.list().filter(function (d) {
+  return !(Array.isArray(d.mesh) && d.mesh.length);
+});
+assert(sinMalla.length >= 1, 'Debe haber ítems sin malla que sigan usando cajas');
+sinMalla.forEach(function (d) {
+  assert(Array.isArray(d.plan) && d.plan.length, 'El ítem sin malla ' + d.id + ' perdió su planta');
+  assert(cajasPlanas(d.boxes).length > 0, 'El ítem sin malla ' + d.id + ' perdió sus cajas 3D');
+});
+console.log('Mallas 1.3:', conMalla.length, 'ítems con def.mesh (' + conMalla.join(', ') + ');',
+  sinMalla.length, 'ítems siguen con planta+boxes — OK');
 
 // Mínimos y nombres de las categorías nuevas (CONTRACT §13.5).
 const minimosNuevos = { plantas: 5, jardines: 4, vias: 5 };
