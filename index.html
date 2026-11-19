@@ -120,6 +120,24 @@
 
           <section id="view3d" class="view view-3d" aria-label="Vista 3D">
             <canvas id="canvas3d"></canvas>
+            <div class="view3d-tools" id="view3dTools">
+              <label class="view3d-tool"><span>Techo</span>
+                <select id="roofQuick" aria-label="Tipo de techo">
+                  <option value="off">Sin techo</option>
+                  <option value="flat">Plano</option>
+                  <option value="gable">A dos aguas</option>
+                  <option value="arc">Arco</option>
+                  <option value="spline">Spline</option>
+                </select>
+              </label>
+              <label class="view3d-tool"><span>Modo</span>
+                <select id="modeQuick" aria-label="Modo de renderizado">
+                  <option value="schematic">Esquemático</option>
+                  <option value="realistic">Realista</option>
+                </select>
+              </label>
+              <button id="btnSceneQuick" class="view3d-chip" type="button" title="Abrir colores, texturas y materiales de la escena">Colores y texturas</button>
+            </div>
             <div class="view3d-flight" id="view3dFlight" hidden>Vuelo de dron</div>
             <div class="view3d-hint" id="view3dHint">Arrastra para orbitar · clic derecho o dos dedos para desplazar · rueda para acercar</div>
             <div class="view3d-loading" id="view3dLoading">Preparando la maqueta…</div>

@@ -527,3 +527,38 @@ Cada ítem mantiene el formato actual (`id/name/cat/tags/w/d/h/color/plan[]/boxe
 - Biblioteca: todos los ítems con `plan` y `boxes` válidos; las 3 categorías nuevas existen con sus mínimos.
 - View3D: proyecto con muros curvos, 4 estilos de techo, modo realista y `startFlight()/stopFlight()` sin excepciones con canvas falso.
 - Láminas y DXF: un proyecto con muro curvo se exporta sin `NaN` y el DXF abre (estructura válida).
+
+---
+
+## 14. Ampliación 1.3 — malla 3D en la biblioteca y controles rápidos de escena
+
+### 14.1 Geometría de malla en las definiciones de biblioteca
+
+`def.mesh` (opcional, solo para el 3D; la planta sigue en `def.plan` y las cajas en `def.boxes`):
+
+```js
+def.mesh = [
+  { points: [ {x,y,z}, {x,y,z}, {x,y,z}, … ],  // 3..8 puntos, polígono convexo simple
+    color: '#5a7d3f',        // color base (se sombrea por normal)
+    edge: false,             // arista opcional (por defecto false)
+    twoSided: true,          // caras visibles por ambos lados (hojas, telas)
+    tex: 'wood' }            // textura procedural opcional, misma lista que las cajas
+];
+```
+
+- Coordenadas locales idénticas a `boxes`: centro del objeto en (0,0), Y = norte, z desde el piso del nivel; en milímetros.
+- El ítem escala la malla con el mismo criterio que las cajas (`item.w/d/h` frente a `def.w/d/h`) y aplica rotación/posición del ítem.
+- `View3D` debe transformar los puntos y añadir cada polígono como cara iluminada (`addFace`), respetando `twoSided`, `edge` y, si existe, `tex`.
+- Presupuesto: máximo ~600 caras de malla por ítem y ~40 000 por escena (descarta el resto sin romper).
+- `library.js` puede generar mallas con bucles/funciones auxiliares (esferas, cilindros, conos, hojas curvas) en tiempo de carga; no se serializan en el proyecto.
+- Las mallas son visuales: los tests de integridad siguen exigiendo `plan` y `boxes` válidos.
+
+### 14.2 Controles rápidos de escena en la vista 3D
+
+- Overlay `#view3dTools.view3d-tools` en la esquina superior izquierda de la vista 3D con:
+  - selector **Techo**: `Sin techo | Plano | A dos aguas | Arco | Spline` (al elegir un estilo se activa `options3d.roof` automáticamente);
+  - selector **Modo**: `Esquemático | Realista`;
+  - botón **Colores y texturas** que abre el panel de ajustes en la pestaña Escena y desplaza hasta la sección Materiales.
+- Los cambios se reflejan al instante y se sincronizan con la pestaña Escena (misma fuente: `project.settings.roof/materials/render` + `options3d.roof`).
+- En la pestaña Escena, cambiar el tipo de techo activa "Mostrar techo" y la sección Materiales queda identificada (`#sceneMaterials`) para el acceso rápido.
+- El control rápido debe ser legible sobre el fondo claro del 3D y no tapar el indicador norte ni el canvas.

@@ -61,11 +61,17 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 - Renderizador propio sobre Canvas 2D (sin WebGL ni librerías externas): perspectiva orbital, iluminación, sombras suaves y cielo.
 - Muros con huecos reales de puertas y ventanas, vidrios, dinteles y antepechos; los **muros en arco y spline** se extruyen como pared continua, sin huecos ni cortes.
 - **Cuatro estilos de techo**: plano, a dos aguas, arco y spline, con altura/flecha y alero ajustables. Las cubiertas curvas se generan sobre la planta del nivel superior.
+- **Controles rápidos en la propia vista 3D**: selector **Techo** (sin techo, plano, a dos aguas, arco o spline), selector **Modo** (esquemático/realista) y botón **Colores y texturas** que abre los materiales de paredes, techo y suelo.
 - **Modo realista**: cielo con sol, sombras, colores por material (paredes, techo, marcos y suelo) y **texturas procedurales** de estuco, ladrillo, madera, piedra, teja, metal, césped y pavimento, sin imágenes ni red. El modo esquemático conserva la paleta de planos.
+- **Vegetación y vehículos con volumen real**: palmeras, árboles, arbustos, setos y automóviles se dibujan con mallas 3D (troncos cilíndricos, copas esféricas, frondas curvas y ruedas), no como cajas. Las **vías curvas** también son superficies continuas con bordes y eje pintado.
 - **Vuelo de dron**: la cámara recorre la maqueta en bucle durante unos 14 segundos; se inicia y detiene desde **Escena** o con el botón **Vuelo**, y un clic sobre la vista 3D lo detiene.
 - Pisos por ambiente, mobiliario 3D, plantas, jardines y vías, etiquetas de ambiente y captura PNG de alta resolución para las láminas.
 - Presets **Iso / Planta / Frente / Lateral**, encuadre automático, filtro de nivel activo o ambos niveles.
 - Órbita con arrastre, desplazamiento con botón derecho/Shift, rueda para zoom y doble clic para encuadrar.
+
+![Vegetación y vehículos con volumen 3D real](docs/vegetacion-autos.png)
+
+![Materiales de paredes, techo y suelo en la pestaña Escena](docs/materiales-3d.png)
 
 ![Escena 3D en modo realista con techo en arco](docs/escena-3d.png)
 
@@ -180,6 +186,6 @@ Las pruebas de navegador se hicieron contra Microsoft Edge (Chromium) servido po
 
 ---
 
-**EngDraft 1.2** · HTML + CSS + JavaScript clásico · sin dependencias externas · funciona offline.
+**EngDraft 1.3** · HTML + CSS + JavaScript clásico · sin dependencias externas · funciona offline.
 
 **Autor:** Prof. Raymond Rosa Ávila.
