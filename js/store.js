@@ -38,10 +38,46 @@
     return x;
   }
 
-  var ROOF_STYLES = { flat: 1, gable: 1, arc: 1, spline: 1 };
+  var ROOF_STYLES = { flat: 1, gable: 1, hip: 1, arc: 1, spline: 1, custom: 1 };
+  var ROOF_RIDGES = { auto: 1, x: 1, y: 1 };
   var WALL_TEXTURES = { stucco: 1, brick: 1, wood: 1, stone: 1, smooth: 1 };
   var ROOF_TEXTURES = { tile: 1, shingle: 1, metal: 1, wood: 1, concrete: 1, smooth: 1 };
   var GROUND_TEXTURES = { grass: 1, paving: 1, gravel: 1, smooth: 1 };
+
+  // Perfil de techo personalizado: [{t:0..1, z:mm}], 2..24 puntos ordenados.
+  function normalizeRoofProfile(list) {
+    var raw = Array.isArray(list) ? list : [];
+    var out = raw.filter(function (p) {
+      return p && isFinite(Number(p.t)) && isFinite(Number(p.z));
+    }).slice(0, 24).map(function (p) {
+      return { t: Math.round(ED.Geo.clamp(Number(p.t), 0, 1) * 1000) / 1000, z: ED.Geo.clamp(Number(p.z), 0, 8000) };
+    });
+    out.sort(function (a, b) { return a.t - b.t; });
+    // Sin duplicados de t y con los extremos forzados.
+    var clean = [];
+    out.forEach(function (p) {
+      if (clean.length && Math.abs(clean[clean.length - 1].t - p.t) < 0.002) return;
+      clean.push(p);
+    });
+    if (clean.length < 2) return null;
+    if (clean[0].t > 0.001) clean.unshift({ t: 0, z: 0 });
+    else clean[0] = { t: 0, z: clean[0].z };
+    if (clean[clean.length - 1].t < 0.999) clean.push({ t: 1, z: 0 });
+    else clean[clean.length - 1] = { t: 1, z: clean[clean.length - 1].z };
+    // CONTRACT §15.1: máximo 24 puntos; al forzar extremos puede crecer uno o dos.
+    if (clean.length > 24) {
+      var inner = clean.slice(1, clean.length - 1);
+      var picked = [clean[0]];
+      var need = 22;
+      for (var k = 0; k < need; k++) {
+        var idx = Math.round(k * (inner.length - 1) / Math.max(1, need - 1));
+        picked.push(inner[Math.min(inner.length - 1, idx)]);
+      }
+      picked.push(clean[clean.length - 1]);
+      clean = picked;
+    }
+    return clean;
+  }
 
   function colorOr(value, fallback) {
     var s = String(value == null ? '' : value).trim();
@@ -108,8 +144,16 @@
     // Techo 3D, materiales y modo de renderizado.
     s.roof = (s.roof && typeof s.roof === 'object') ? s.roof : {};
     s.roof.style = ROOF_STYLES[s.roof.style] ? s.roof.style : 'flat';
+    s.roof.ridge = ROOF_RIDGES[s.roof.ridge] ? s.roof.ridge : 'auto';
     s.roof.height = gridNumber(s.roof.height, 1200, 200, 8000);
     s.roof.overhang = gridNumber(s.roof.overhang, 400, 0, 2500);
+    s.roof.profile = normalizeRoofProfile(s.roof.profile);
+    if (s.roof.style === 'custom' && !s.roof.profile) s.roof.style = 'gable';
+    if (s.roof.style === 'custom' && s.roof.profile) {
+      s.roof.profile.forEach(function (p) {
+        if (p.z > s.roof.height * 2.5) p.z = s.roof.height * 2.5;
+      });
+    }
     var mats = (s.materials && typeof s.materials === 'object') ? s.materials : {};
     var mWall = (mats.wall && typeof mats.wall === 'object') ? mats.wall : {};
     var mRoof = (mats.roof && typeof mats.roof === 'object') ? mats.roof : {};
@@ -169,7 +213,7 @@
       if (!Array.isArray(p[name])) p[name] = [];
       return p[name];
     }
-    arr('walls'); arr('rooms'); arr('items'); arr('texts'); arr('dims'); arr('sheets');
+    arr('walls'); arr('rooms'); arr('items'); arr('texts'); arr('dims'); arr('sheets'); arr('assets');
 
     p.walls = p.walls.filter(function (w) { return w && w.a && w.b; });
     p.walls.forEach(function (w) {
@@ -218,6 +262,51 @@
       i.w = Number(i.w) || 600;
       i.d = Number(i.d) || 600;
       i.h = Number(i.h) || 800;
+    });
+
+    // Objetos importados por el usuario (GLB/OBJ): se conservan en el proyecto.
+    p.assets = p.assets.filter(function (a) { return a && a.id && a.mesh; });
+    var assetIds = {};
+    p.assets.forEach(function (a) {
+      a.id = String(a.id);
+      assetIds[a.id] = true;
+      a.name = a.name || 'Objeto importado';
+      a.type = 'asset';
+      a.cat = 'mios';
+      a.layerId = 'furniture';
+      a.color = colorOr(a.color, '#cfd6dd');
+      a.source = a.source === 'obj' ? 'obj' : 'glb';
+      a.w = gridNumber(a.w, 1000, 100, 20000);
+      a.d = gridNumber(a.d, 1000, 100, 20000);
+      a.h = gridNumber(a.h, 1000, 100, 20000);
+      a.mesh = (Array.isArray(a.mesh) ? a.mesh : []).filter(function (f) {
+        return f && Array.isArray(f.points) && f.points.length >= 3 &&
+          f.points.every(function (p) { return p && isFinite(p.x) && isFinite(p.y) && isFinite(p.z); });
+      }).slice(0, 8000).map(function (f) {
+        return {
+          points: f.points.slice(0, 8).map(function (p) { return { x: Number(p.x), y: Number(p.y), z: Number(p.z) }; }),
+          color: colorOr(f.color, a.color)
+        };
+      });
+      if (!a.mesh.length) { a.mesh = []; }
+      a.plan = (Array.isArray(a.plan) ? a.plan : []).filter(function (p) { return p && isFinite(p.x) && isFinite(p.y); });
+      if (a.plan.length < 3) {
+        a.plan = [
+          { x: -a.w / 2, y: -a.d / 2 }, { x: a.w / 2, y: -a.d / 2 },
+          { x: a.w / 2, y: a.d / 2 }, { x: -a.w / 2, y: a.d / 2 }
+        ];
+      }
+      a.plan = a.plan.slice(0, 64).map(function (p) { return { x: Number(p.x), y: Number(p.y) }; });
+      a.boxes = [
+        { x: -a.w / 2, y: -a.d / 2, z: 0, w: a.w, d: a.d, h: a.h, color: a.color }
+      ];
+    });
+    // Elimina ids duplicados de assets (conserva el primero).
+    var seenAssets = {};
+    p.assets = p.assets.filter(function (a) {
+      if (seenAssets[a.id]) return false;
+      seenAssets[a.id] = true;
+      return true;
     });
 
     p.texts = p.texts.filter(function (t) { return t && typeof t.text === 'string'; });

@@ -7,13 +7,14 @@
  *   view.setStore(store)
  *   view.setOptions({ roof, furniture, labels, dimensions, ground, levels,
  *                     renderMode:'schematic'|'realistic', materials:{wall,roof,trim,ground},
- *                     roofStyle:'flat'|'gable'|'arc'|'spline', roofHeight, roofOverhang,
- *                     roofColor, roofTexture, shadows, textures, sunAngle })
+ *                     roofStyle:'flat'|'gable'|'hip'|'arc'|'spline'|'custom',
+ *                     roofHeight, roofOverhang, roofRidge:'auto'|'x'|'y',
+ *                     roofProfile:[{t,z}], roofColor, roofTexture, shadows, textures, sunAngle })
  *   view.setLevelFilter('all' | 'active' | levelId)
  *   view.setPreset('iso' | 'top' | 'front' | 'right')
  *   view.fit() / render() / resize()
  *   view.screenshot(scaleOpcional) -> dataURL PNG
- *   view.getRenderInfo() -> { mode, textures, faces, roofStyle, shadows, flying }
+ *   view.getRenderInfo() -> { mode, textures, faces, roofStyle, ridge, shadows, flying }
  *   view.startFlight({ duration }) / stopFlight() / isFlying()
  *   view.destroy()
  */
@@ -47,12 +48,12 @@
 
   // Presupuesto de mallas poligonales de biblioteca (def.mesh). Las caras de
   // malla se descartan al agotar el presupuesto sin afectar a las cajas.
-  var MESH_ITEM_FACE_MAX = 600;        // caras por ítem
+  var MESH_ITEM_FACE_MAX = 8000;       // caras por ítem (objetos importados hasta 8000)
   var MESH_SCENE_FACE_MAX = 40000;     // caras de malla por escena
   var MESH_FACE_POINTS_MAX = 64;       // puntos por cara (el contrato pide 3..8)
   var MESH_FOOTPRINT_SHADOW_MAX = 60;  // ítems con sombra de base (opcional)
 
-  var ROOF_STYLES = { flat: 1, gable: 1, arc: 1, spline: 1 };
+  var ROOF_STYLES = { flat: 1, gable: 1, hip: 1, arc: 1, spline: 1, custom: 1 };
   var WALL_TEXTURES = { stucco: 1, brick: 1, wood: 1, stone: 1, smooth: 1 };
   var ROOF_TEXTURES = { tile: 1, shingle: 1, metal: 1, wood: 1, concrete: 1, smooth: 1 };
   var GROUND_TEXTURES = { grass: 1, paving: 1, gravel: 1, smooth: 1 };
@@ -513,11 +514,13 @@
       ground: true,
       levels: 'all',
       wallsCut: false,
-      // Ampliación 1.2: techo, materiales, realismo.
+      // Ampliación 1.2: techo, materiales, realismo. Ampliación 1.4: cumbrera y perfil.
       // null = heredar de project.settings (roof/materials/render).
       roofStyle: null,
       roofHeight: null,
       roofOverhang: null,
+      roofRidge: null,
+      roofProfile: null,
       roofColor: null,
       roofTexture: null,
       renderMode: null,
@@ -740,10 +743,15 @@
       var lv = patch.levels;
       o.levels = (lv === 'active' || lv === 'all' || (typeof lv === 'string' && lv)) ? lv : 'all';
     }
-    // --- ampliación 1.2 ---
+    // --- ampliación 1.2 / 1.4 ---
     if ('roofStyle' in patch) o.roofStyle = ROOF_STYLES[patch.roofStyle] ? patch.roofStyle : null;
     if ('roofHeight' in patch) o.roofHeight = isFinite(Number(patch.roofHeight)) ? num(patch.roofHeight) : null;
     if ('roofOverhang' in patch) o.roofOverhang = isFinite(Number(patch.roofOverhang)) ? num(patch.roofOverhang) : null;
+    if ('roofRidge' in patch) {
+      o.roofRidge = (patch.roofRidge === 'x' || patch.roofRidge === 'y' || patch.roofRidge === 'auto')
+        ? patch.roofRidge : null;
+    }
+    if ('roofProfile' in patch) o.roofProfile = cloneRoofProfile(patch.roofProfile);
     if ('roofColor' in patch) o.roofColor = (typeof patch.roofColor === 'string' && patch.roofColor) ? patch.roofColor : null;
     if ('roofTexture' in patch) o.roofTexture = ROOF_TEXTURES[patch.roofTexture] ? patch.roofTexture : null;
     if ('renderMode' in patch) {
@@ -779,12 +787,88 @@
     return out;
   }
 
+  // Copia saneada del perfil de techo recibido por setOptions (la validación
+  // definitiva y el fallback a 'gable' se aplican al construir la escena).
+  function cloneRoofProfile(raw) {
+    if (!Array.isArray(raw)) return null;
+    var out = [];
+    for (var i = 0; i < raw.length && out.length < 24; i++) {
+      var p = raw[i];
+      if (!p || typeof p !== 'object') continue;
+      var t = Number(p.t), z = Number(p.z);
+      if (!isFinite(t) || !isFinite(z)) continue;
+      out.push({ t: clamp(t, 0, 1), z: clamp(z, 0, 8000) });
+    }
+    return out.length ? out : null;
+  }
+
+  // Validación definitiva del perfil (2..24 puntos, t ordenado y extremos 0/1).
+  function normalizeRoofProfile(raw) {
+    if (!Array.isArray(raw)) return null;
+    var pts = [];
+    for (var i = 0; i < raw.length && pts.length < 24; i++) {
+      var p = raw[i];
+      if (!p || typeof p !== 'object') continue;
+      var t = Number(p.t), z = Number(p.z);
+      if (!isFinite(t) || !isFinite(z)) continue;
+      pts.push({ t: clamp(t, 0, 1), z: clamp(z, 0, 8000) });
+    }
+    if (pts.length < 2) return null;
+    pts.sort(function (a, b) { return a.t - b.t; });
+    var ded = [];
+    for (var j = 0; j < pts.length; j++) {
+      if (ded.length && Math.abs(pts[j].t - ded[ded.length - 1].t) < 1e-4) {
+        ded[ded.length - 1] = pts[j];
+      } else {
+        ded.push(pts[j]);
+      }
+    }
+    if (ded.length < 2) return null;
+    if (ded[0].t > 1e-4) ded.unshift({ t: 0, z: ded[0].z });
+    var last = ded[ded.length - 1];
+    if (last.t < 1 - 1e-4) ded.push({ t: 1, z: last.z });
+    else last.t = 1;
+    ded[0].t = 0;
+    return ded.length >= 2 ? ded : null;
+  }
+
+  // Muestreo suave (Catmull-Rom) del perfil t/z: devuelve [{u:0..1, z:relativo}].
+  function sampleRoofProfile(def) {
+    if (!def || def.length < 2) return null;
+    var pts = new Array(def.length);
+    for (var i = 0; i < def.length; i++) pts[i] = { x: def[i].t, y: def[i].z };
+    var smooth = null;
+    var G = (ED && ED.Geo) || null;
+    if (G && typeof G.catmullRomPath === 'function') {
+      try { smooth = G.catmullRomPath(pts, 5); } catch (e) { smooth = null; }
+    }
+    if (!smooth || smooth.length < 2) smooth = pts;
+    var out = [];
+    for (var k = 0; k < smooth.length; k++) {
+      var s = smooth[k];
+      if (!s || !isFinite(s.x) || !isFinite(s.y)) continue;
+      var u = clamp(s.x, 0, 1);
+      var z = clamp(s.y, 0, 8000);
+      var prev = out[out.length - 1];
+      if (prev && u <= prev.u) u = Math.min(1, prev.u + 1e-4);
+      out.push({ u: u, z: z });
+      if (out.length > 160) break;
+    }
+    if (out.length < 2) return null;
+    out[0].u = 0;
+    out[out.length - 1].u = 1;
+    out[0].z = clamp(num(def[0].z), 0, 8000);
+    out[out.length - 1].z = clamp(num(def[def.length - 1].z), 0, 8000);
+    return out;
+  }
+
   View3D.prototype.getOptions = function () {
     var o = this.options;
     return {
       roof: o.roof, furniture: o.furniture, labels: o.labels, dimensions: o.dimensions,
       ground: o.ground, levels: o.levels, wallsCut: o.wallsCut,
       roofStyle: o.roofStyle, roofHeight: o.roofHeight, roofOverhang: o.roofOverhang,
+      roofRidge: o.roofRidge, roofProfile: o.roofProfile,
       roofColor: o.roofColor, roofTexture: o.roofTexture, renderMode: o.renderMode,
       materials: o.materials, shadows: o.shadows, textures: o.textures, sunAngle: o.sunAngle
     };
@@ -1048,6 +1132,8 @@
       textures: !!(cfg && cfg.textures),
       faces: faces,
       roofStyle: (cfg && cfg.roofStyle) || 'flat',
+      ridge: (cfg && cfg.roofRidge) || 'auto',
+      hasProfile: !!(cfg && cfg.roofProfile),
       shadows: !!(cfg && cfg.shadows),
       sunAngle: cfg ? cfg.sunAngle : 135,
       flying: this.isFlying()
@@ -1912,6 +1998,13 @@
     if (!isFinite(rh) || rh <= 0) rh = 1200;
     var ov = o.roofOverhang == null ? num(sRoof.overhang) : num(o.roofOverhang);
     if (!isFinite(ov)) ov = 400;
+    // Cumbrera y perfil de diseño (ampliación 1.4).
+    var ridgeRaw = o.roofRidge != null ? o.roofRidge : sRoof.ridge;
+    var ridge = (ridgeRaw === 'x' || ridgeRaw === 'y') ? ridgeRaw : 'auto';
+    var profileRaw = o.roofProfile != null ? o.roofProfile : sRoof.profile;
+    var roofProfile = normalizeRoofProfile(profileRaw);
+    // 'custom' sin perfil válido cae a 'gable' (estilo efectivo).
+    if (style === 'custom' && !roofProfile) style = 'gable';
 
     var roofColor = o.roofColor || roof.color || DEFAULT_MATERIALS.roof.color;
     var roofTexture = ROOF_TEXTURES[o.roofTexture] ? o.roofTexture : roof.texture;
@@ -1927,6 +2020,8 @@
       roofStyle: style,
       roofHeight: clamp(rh, 150, 8000),
       roofOverhang: clamp(ov, 0, 2500),
+      roofRidge: ridge,
+      roofProfile: roofProfile,
       materials: { wall: wall, roof: roof, trim: trim, ground: ground },
       wallColor: realistic ? wall.color : WALL_COLOR,
       trimColor: realistic ? trim.color : TRIM_COLOR,
@@ -2699,7 +2794,14 @@
       var x0 = rb.minX - ov, x1 = rb.maxX + ov, y0 = rb.minY - ov, y1 = rb.maxY + ov;
       var w = x1 - x0, d = y1 - y0;
       if (!(w > 200) || !(d > 200)) return;
-      var alongX = w >= d;
+      // Cumbrera: 'x' | 'y' | 'auto' (eje largo). Aplica a gable/hip/custom.
+      var ridge = cfg.roofRidge || 'auto';
+      var alongX;
+      if (style === 'gable' || style === 'custom') {
+        alongX = ridge === 'x' ? true : (ridge === 'y' ? false : w >= d);
+      } else {
+        alongX = w >= d;
+      }
       var roofCol = cfg.roofColor;
       var roofTex = cfg.roofTexture;
       var edge = EDGE_ROOF;
@@ -2740,16 +2842,39 @@
         return;
       }
 
-      // ---- perfiles: gable (2 aguas), arc (bóveda) y spline (coseno) ----
+      // ---- cuatro aguas (hip) / pirámide ----
+      if (style === 'hip') {
+        buildHipRoof({
+          baseZ: baseZ, rh: rh, ov: ov,
+          x0: x0, x1: x1, y0: y0, y1: y1, w: w, d: d,
+          ridge: ridge, roofCol: roofCol, roofTex: roofTex, edge: edge
+        });
+        return;
+      }
+
+      // ---- perfiles: gable (2 aguas), arc (bóveda), spline (coseno) y custom ----
       var steps = style === 'gable' ? 2 : (style === 'arc' ? 12 : 11);
       var profile = [];
-      for (i = 0; i <= steps; i++) {
-        var u = i / steps;
-        var z;
-        if (style === 'gable') z = baseZ + rh * (1 - Math.abs(2 * u - 1));
-        else if (style === 'arc') z = baseZ + rh * Math.sin(Math.PI * u);
-        else z = baseZ + rh * Math.pow(Math.sin(Math.PI * u), 1.55);
-        profile.push({ u: u, z: z });
+      if (style === 'custom') {
+        var customProf = sampleRoofProfile(cfg.roofProfile);
+        if (customProf) {
+          for (i = 0; i < customProf.length; i++) {
+            profile.push({ u: customProf[i].u, z: baseZ + customProf[i].z });
+          }
+        }
+        if (profile.length < 2) {
+          // Respaldo improbable (custom ya se validó al resolver la escena).
+          profile.push({ u: 0, z: baseZ }, { u: 0.5, z: baseZ + rh }, { u: 1, z: baseZ });
+        }
+      } else {
+        for (i = 0; i <= steps; i++) {
+          var u = i / steps;
+          var z;
+          if (style === 'gable') z = baseZ + rh * (1 - Math.abs(2 * u - 1));
+          else if (style === 'arc') z = baseZ + rh * Math.sin(Math.PI * u);
+          else z = baseZ + rh * Math.pow(Math.sin(Math.PI * u), 1.55);
+          profile.push({ u: u, z: z });
+        }
       }
       var longA = alongX ? x0 : y0;
       var longB = alongX ? x1 : y1;
@@ -2773,30 +2898,54 @@
         var outward = alongX ? { x: 0, y: -dz, z: du } : { x: -dz, y: 0, z: du };
         addFaceOriented(scene.roofFaces, quad, roofCol, { edge: edge, tex: roofTex }, outward);
       }
-      // Tapas frontales (hastiales en gable; tapas de bóveda en arc/spline).
+      // Tapas frontales (hastiales en gable; tapas de bóveda en arc/spline, y
+      // sección del perfil en custom).
       var capCol = style === 'gable' ? cfg.wallColor : tintColor(roofCol, 0.06);
       var capTex = style === 'gable' ? cfg.wallTexture : roofTex;
       for (var ci = 0; ci < 2; ci++) {
         var along2 = ci === 0 ? longA : longB;
         var ring = [];
         for (i = 0; i < profile.length; i++) ring.push(pt(profile[i].u, profile[i].z, along2));
+        // Perfil custom con extremos elevados: cerrar la sección hasta el alero.
+        if (style === 'custom') {
+          if (profile[profile.length - 1].z > baseZ + 1) ring.push(pt(1, baseZ, along2));
+          if (profile[0].z > baseZ + 1) ring.push(pt(0, baseZ, along2));
+        }
         var out2 = alongX
           ? { x: (ci === 0 ? -1 : 1), y: 0, z: 0 }
           : { x: 0, y: (ci === 0 ? -1 : 1), z: 0 };
         addFaceOriented(scene.roofFaces, ring, capCol, { edge: edge, tex: capTex }, out2);
       }
-      // Tabla de alero en los bordes largos (gable y spline, si hay vuelo).
+      // Faldón lateral de cierre si el perfil custom arranca por encima del alero.
+      if (style === 'custom') {
+        for (var vi = 0; vi < 2; vi++) {
+          var zEdge = vi === 0 ? profile[0].z : profile[profile.length - 1].z;
+          if (zEdge > baseZ + 1) {
+            var uV = vi === 0 ? 0 : 1;
+            var vq = [
+              pt(uV, baseZ, longA), pt(uV, baseZ, longB),
+              pt(uV, zEdge, longB), pt(uV, zEdge, longA)
+            ];
+            var outV = alongX
+              ? { x: 0, y: (vi === 0 ? -1 : 1), z: 0 }
+              : { x: (vi === 0 ? -1 : 1), y: 0, z: 0 };
+            addFaceOriented(scene.roofFaces, vq, tintColor(roofCol, -0.06), { edge: edge, tex: roofTex }, outV);
+          }
+        }
+      }
+      // Tabla de alero en los bordes largos (gable, spline y custom).
       if (ov > 80 && style !== 'arc') {
         var fh = clamp(Math.round(rh * 0.09), 70, 170);
         for (var fi = 0; fi < 2; fi++) {
           var uEdge = fi === 0 ? 0 : 1;
-          var e0 = pt(uEdge, baseZ, longA);
-          var e1 = pt(uEdge, baseZ, longB);
+          var zE = fi === 0 ? profile[0].z : profile[profile.length - 1].z;
+          var e0 = pt(uEdge, zE, longA);
+          var e1 = pt(uEdge, zE, longB);
           var fq = [
-            { x: e0.x, y: e0.y, z: baseZ - fh },
-            { x: e1.x, y: e1.y, z: baseZ - fh },
-            { x: e1.x, y: e1.y, z: baseZ },
-            { x: e0.x, y: e0.y, z: baseZ }
+            { x: e0.x, y: e0.y, z: zE - fh },
+            { x: e1.x, y: e1.y, z: zE - fh },
+            { x: e1.x, y: e1.y, z: zE },
+            { x: e0.x, y: e0.y, z: zE }
           ];
           var out3 = alongX
             ? { x: 0, y: (fi === 0 ? -1 : 1), z: 0 }
@@ -2804,12 +2953,117 @@
           addFaceOriented(scene.roofFaces, fq, cfg.trimColor, { edge: edge }, out3);
         }
       }
-      peakZ = baseZ + rh;
+      // Altura máxima real del perfil (para cotas de la escena y sombra).
+      peakZ = baseZ;
+      for (i = 0; i < profile.length; i++) {
+        if (profile[i].z > peakZ) peakZ = profile[i].z;
+      }
       bump(x0, y0, baseZ); bump(x1, y0, baseZ);
       bump(x1, y1, baseZ); bump(x0, y1, baseZ);
       bump(x0, y1, peakZ); bump(x1, y0, peakZ);
       if (cfg.realistic && cfg.shadows) {
         shadow([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], peakZ * 0.86);
+      }
+    }
+
+    // Cuatro aguas (hip): cuatro faldones sobre el rectángulo de la planta;
+    // cumbrera en el eje largo (o roofRidge 'x'|'y'); si el largo ≈ ancho
+    // degenera a pirámide. Alero, color/textura de techo y sombra.
+    function buildHipRoof(p) {
+      var ridge = p.ridge || 'auto';
+      var baseZ = p.baseZ, rh = p.rh, ov = p.ov;
+      var x0 = p.x0, x1 = p.x1, y0 = p.y0, y1 = p.y1, w = p.w, d = p.d;
+      var roofCol = p.roofCol, roofTex = p.roofTex, edge = p.edge;
+      var ridgeAlongX = ridge === 'x' ? true : (ridge === 'y' ? false : w >= d);
+      var L = ridgeAlongX ? w : d;
+      var S = ridgeAlongX ? d : w;
+      var rl = Math.max(0, (L - S) / 2);   // media cumbrera en planta
+      var peakZ2 = baseZ + rh;
+      var cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      var up = 0.35;
+      var rOpts = { edge: edge, tex: roofTex };
+      if (rl > 1) {
+        if (ridgeAlongX) {
+          var rx0 = cx - rl, rx1 = cx + rl, ymid = cy;
+          addFaceOriented(scene.roofFaces, [
+            { x: x0, y: y0, z: baseZ }, { x: x1, y: y0, z: baseZ },
+            { x: rx1, y: ymid, z: peakZ2 }, { x: rx0, y: ymid, z: peakZ2 }
+          ], roofCol, rOpts, { x: 0, y: -1, z: up });
+          addFaceOriented(scene.roofFaces, [
+            { x: x1, y: y1, z: baseZ }, { x: x0, y: y1, z: baseZ },
+            { x: rx0, y: ymid, z: peakZ2 }, { x: rx1, y: ymid, z: peakZ2 }
+          ], roofCol, rOpts, { x: 0, y: 1, z: up });
+          addFaceOriented(scene.roofFaces, [
+            { x: x0, y: y0, z: baseZ }, { x: x0, y: y1, z: baseZ },
+            { x: rx0, y: ymid, z: peakZ2 }
+          ], roofCol, rOpts, { x: -1, y: 0, z: up });
+          addFaceOriented(scene.roofFaces, [
+            { x: x1, y: y1, z: baseZ }, { x: x1, y: y0, z: baseZ },
+            { x: rx1, y: ymid, z: peakZ2 }
+          ], roofCol, rOpts, { x: 1, y: 0, z: up });
+          bump(rx0, ymid, peakZ2); bump(rx1, ymid, peakZ2);
+        } else {
+          var ry0 = cy - rl, ry1 = cy + rl, xmid = cx;
+          addFaceOriented(scene.roofFaces, [
+            { x: x0, y: y0, z: baseZ }, { x: x0, y: y1, z: baseZ },
+            { x: xmid, y: ry1, z: peakZ2 }, { x: xmid, y: ry0, z: peakZ2 }
+          ], roofCol, rOpts, { x: -1, y: 0, z: up });
+          addFaceOriented(scene.roofFaces, [
+            { x: x1, y: y1, z: baseZ }, { x: x1, y: y0, z: baseZ },
+            { x: xmid, y: ry0, z: peakZ2 }, { x: xmid, y: ry1, z: peakZ2 }
+          ], roofCol, rOpts, { x: 1, y: 0, z: up });
+          addFaceOriented(scene.roofFaces, [
+            { x: x0, y: y0, z: baseZ }, { x: x1, y: y0, z: baseZ },
+            { x: xmid, y: ry0, z: peakZ2 }
+          ], roofCol, rOpts, { x: 0, y: -1, z: up });
+          addFaceOriented(scene.roofFaces, [
+            { x: x1, y: y1, z: baseZ }, { x: x0, y: y1, z: baseZ },
+            { x: xmid, y: ry1, z: peakZ2 }
+          ], roofCol, rOpts, { x: 0, y: 1, z: up });
+          bump(xmid, ry0, peakZ2); bump(xmid, ry1, peakZ2);
+        }
+      } else {
+        // Pirámide (planta cuadrada).
+        addFaceOriented(scene.roofFaces, [
+          { x: x0, y: y0, z: baseZ }, { x: x1, y: y0, z: baseZ }, { x: cx, y: cy, z: peakZ2 }
+        ], roofCol, rOpts, { x: 0, y: -1, z: up });
+        addFaceOriented(scene.roofFaces, [
+          { x: x1, y: y0, z: baseZ }, { x: x1, y: y1, z: baseZ }, { x: cx, y: cy, z: peakZ2 }
+        ], roofCol, rOpts, { x: 1, y: 0, z: up });
+        addFaceOriented(scene.roofFaces, [
+          { x: x1, y: y1, z: baseZ }, { x: x0, y: y1, z: baseZ }, { x: cx, y: cy, z: peakZ2 }
+        ], roofCol, rOpts, { x: 0, y: 1, z: up });
+        addFaceOriented(scene.roofFaces, [
+          { x: x0, y: y1, z: baseZ }, { x: x0, y: y0, z: baseZ }, { x: cx, y: cy, z: peakZ2 }
+        ], roofCol, rOpts, { x: -1, y: 0, z: up });
+        bump(cx, cy, peakZ2);
+      }
+      bump(x0, y0, baseZ); bump(x1, y0, baseZ);
+      bump(x1, y1, baseZ); bump(x0, y1, baseZ);
+      bump(cx, cy, peakZ2);
+      // Alero: tabla en los cuatro bordes.
+      if (ov > 80) {
+        var fh2 = clamp(Math.round(rh * 0.09), 70, 170);
+        var zf = baseZ - fh2;
+        addFaceOriented(scene.roofFaces, [
+          { x: x0, y: y0, z: zf }, { x: x1, y: y0, z: zf },
+          { x: x1, y: y0, z: baseZ }, { x: x0, y: y0, z: baseZ }
+        ], cfg.trimColor, { edge: edge }, { x: 0, y: -1, z: 0 });
+        addFaceOriented(scene.roofFaces, [
+          { x: x1, y: y1, z: zf }, { x: x0, y: y1, z: zf },
+          { x: x0, y: y1, z: baseZ }, { x: x1, y: y1, z: baseZ }
+        ], cfg.trimColor, { edge: edge }, { x: 0, y: 1, z: 0 });
+        addFaceOriented(scene.roofFaces, [
+          { x: x0, y: y1, z: zf }, { x: x0, y: y0, z: zf },
+          { x: x0, y: y0, z: baseZ }, { x: x0, y: y1, z: baseZ }
+        ], cfg.trimColor, { edge: edge }, { x: -1, y: 0, z: 0 });
+        addFaceOriented(scene.roofFaces, [
+          { x: x1, y: y0, z: zf }, { x: x1, y: y1, z: zf },
+          { x: x1, y: y1, z: baseZ }, { x: x1, y: y0, z: baseZ }
+        ], cfg.trimColor, { edge: edge }, { x: 1, y: 0, z: 0 });
+      }
+      if (cfg.realistic && cfg.shadows) {
+        shadow([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], peakZ2 * 0.86);
       }
     }
 

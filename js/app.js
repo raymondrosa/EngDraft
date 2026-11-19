@@ -5,6 +5,11 @@
   var App = {
     booted: false,
     view: '2d',
+    viewMode: 'plan',
+    viewsData: null,
+    viewsZoom: 1,
+    viewsPan: { x: 0, y: 0 },
+    sectionPosPct: 50,
     tab: 'props',
     activeTool: 'select',
     lastFurnitureId: null,
@@ -440,6 +445,7 @@
 
     App.store = new ED.Store(project);
     ED.store = App.store;
+    registerProjectAssets(project);
 
     injectShell();
     bindStatic();
@@ -459,6 +465,8 @@
     renderLibrary();
     updateZoomStatus();
     sync3DQuickControls();
+    syncCanvasToggles();
+    initLanguage();
 
     setTimeout(function () {
       App.editor._resize();
@@ -498,7 +506,7 @@
         floorHeight: 2800, northAngle: 0, autoDim: true,
         gridMajor: 4, gridOriginX: 0, gridOriginY: 0, snapStep: 0,
         gridAdaptive: true, gridStyle: 'lines', showAxes: true,
-        roof: { style: 'flat', height: 1200, overhang: 400 },
+        roof: { style: 'flat', height: 1200, overhang: 400, ridge: 'auto', profile: null },
         materials: {
           wall: { color: '#f3eee2', texture: 'stucco' },
           roof: { color: '#b49a7c', texture: 'tile' },
@@ -523,6 +531,26 @@
   }
 
   // ================================================================== shell
+  var VIEW_MODES = [
+    { id: 'plan', label: 'Planta', abbr: 'P' },
+    { id: 'front', label: 'Frontal', abbr: 'F' },
+    { id: 'right', label: 'Lateral der.', abbr: 'LD' },
+    { id: 'left', label: 'Lateral izq.', abbr: 'LI' },
+    { id: 'sectionX', label: 'Sección transversal', abbr: 'ST' },
+    { id: 'sectionY', label: 'Sección longitudinal', abbr: 'SL' }
+  ];
+
+  var TOGGLE_ICONS = {
+    grid: '<path d="M3 3h12v12H3zM3 7.5h12M3 12h12M7.5 3v12M12 3v12" stroke-width="1.2"/>',
+    snapping: '<circle cx="9" cy="9" r="3" stroke-width="1.3"/><path d="M9 1.5v3M9 13.5v3M1.5 9h3M13.5 9h3" stroke-width="1.3"/>',
+    ortho: '<path d="M3 15V4h11" stroke-width="1.4" stroke-linecap="round"/><path d="M3 10h5V4" stroke-width="1.2" opacity=".55"/>'
+  };
+
+  function viewModeInfo(id) {
+    for (var i = 0; i < VIEW_MODES.length; i++) if (VIEW_MODES[i].id === id) return VIEW_MODES[i];
+    return VIEW_MODES[0];
+  }
+
   function injectShell() {
     var list = $('#toolList');
     if (!list) return;
@@ -543,13 +571,52 @@
       { sep: true },
       { id: 'erase', label: 'Borrar', key: 'E', icon: 'erase' }
     ];
-    list.innerHTML = tools.map(function (t) {
+    var toolsHtml = tools.map(function (t) {
       if (t.sep) return '<div class="tool-sep"></div>';
       var full = t.title || t.label;
       return '<button class="tool-btn' + (t.id === 'select' ? ' active' : '') + '" data-tool="' + t.id + '" title="' + esc(full) + ' (' + t.key + ')">' +
         icon(t.icon) + '<small>' + esc(t.label) + '</small><span class="key">' + t.key + '</span></button>';
-    }).join('') + '<div class="rail-foot"><button class="tool-btn" data-tool="fit" title="Ajustar vista (Shift+F)">' +
-      icon('fit') + '<small>Ajustar</small><span class="key">F</span></button></div>';
+    }).join('');
+
+    var toggleNames = { grid: 'Rejilla', snapping: 'Snap', ortho: 'Orto' };
+    var toggleKeys = { grid: 'G', snapping: 'S', ortho: 'O' };
+    var toggleHtml = ['grid', 'snapping', 'ortho'].map(function (k) {
+      return '<button class="rail-toggle' + (App.editor && App.editor.snap[k] ? ' on' : '') + '" data-toggle="' + k + '" title="' +
+        toggleNames[k] + ' (' + toggleKeys[k] + ')">' +
+        '<svg viewBox="0 0 18 18" fill="none" aria-hidden="true">' + TOGGLE_ICONS[k] + '</svg>' +
+        '<span>' + toggleNames[k] + '</span></button>';
+    }).join('');
+
+    var viewButtons = VIEW_MODES.map(function (v) {
+      return '<button class="rail-view-btn' + (v.id === App.viewMode ? ' active' : '') + '" data-view-mode="' + v.id + '" title="' + esc(v.label) + '">' +
+        '<b class="rail-view-abbr">' + v.abbr + '</b><span>' + esc(v.label) + '</span></button>';
+    }).join('');
+
+    list.innerHTML =
+      '<div class="rail-section"><div class="rail-section-title">Herramientas</div>' + toolsHtml + '</div>' +
+      '<div class="rail-section"><div class="rail-section-title">Dibujo</div>' +
+      '<div class="rail-toggle-row">' + toggleHtml + '</div>' +
+      '<button id="btnGridSetup" class="grid-chip rail-grid-chip" type="button" title="Configurar rejilla (Shift+G)">' +
+      '<svg viewBox="0 0 18 18" width="14" height="14" fill="none" aria-hidden="true"><path d="M3 3h12v12H3zM3 7.5h12M3 12h12M7.5 3v12M12 3v12" stroke="currentColor" stroke-width="1.2"/></svg>' +
+      '<b id="gridChipLabel">25 cm</b>' +
+      '<svg class="grid-chip-caret" viewBox="0 0 12 12" width="10" height="10" fill="none" aria-hidden="true"><path d="M3 4.5 6 7.5l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
+      '</button></div>' +
+      '<div class="rail-section"><div class="rail-section-title">Vista</div><div class="rail-action-row">' +
+      '<button class="rail-action" id="btnFit2d" title="Ajustar a la vista (Shift+F)">' + icon('fit', 15) + '<span>Ajustar</span></button>' +
+      '<button class="rail-action" id="zoomIn" title="Acercar"><b>+</b></button>' +
+      '<button class="rail-action" id="zoomOut" title="Alejar"><b>−</b></button>' +
+      '</div></div>' +
+      '<div class="rail-section"><div class="rail-section-title">Vistas</div><div class="rail-view-grid">' + viewButtons + '</div></div>';
+    var head = $('.rail-head');
+    if (head) {
+      var oldSys = head.querySelector('.rail-head-tools');
+      if (oldSys) oldSys.remove();
+      head.insertAdjacentHTML('beforeend',
+        '<div class="rail-head-tools">' +
+        '<button id="btnUnitsRail" class="rail-chip" type="button" title="Sistema de unidades (métrico / imperial)"><span>m · m²</span></button>' +
+        '<button id="langToggle" class="rail-chip" type="button" title="Idioma / Language"><span class="lang-opt active">ES</span><span class="lang-sep">/</span><span class="lang-opt">EN</span></button>' +
+        '</div>');
+    }
   }
 
   function bindStatic() {
@@ -562,10 +629,10 @@
     $('#btnExportDxf').addEventListener('click', showDXFModal);
     $('#btnHelp').addEventListener('click', showHelp);
     $('#btnHelpStatus').addEventListener('click', showHelp);
-    $('#btnUnits').addEventListener('click', toggleUnits);
+    if ($('#btnUnitsRail')) $('#btnUnitsRail').addEventListener('click', toggleUnits);
+    if ($('#langToggle')) $('#langToggle').addEventListener('click', toggleLanguage);
     $('#projectNameBtn').addEventListener('click', showProjectInfo);
     if ($('#btnGridSetup')) $('#btnGridSetup').addEventListener('click', function (e) { e.preventDefault(); showGridDialog(); });
-    if ($('#btnGridStatus')) $('#btnGridStatus').addEventListener('click', function () { showGridDialog(); });
     if ($('#btnFontScale')) $('#btnFontScale').addEventListener('click', function (e) { e.stopPropagation(); toggleFontMenu(); });
     document.addEventListener('click', function (e) {
       if (!App.fontMenuOpen) return;
@@ -599,22 +666,50 @@
     $$('#inspectorTabs button').forEach(function (b) {
       b.addEventListener('click', function () { setInspectorTab(b.getAttribute('data-tab')); });
     });
-    $$('#canvasToggles button[data-toggle]').forEach(function (b) {
-      b.addEventListener('click', function () { toggleSnap(b.getAttribute('data-toggle')); });
-    });
-    $('#btnFit2d').addEventListener('click', function () { App.editor.fitToContent(); updateZoomStatus(); });
-    $('#zoomIn').addEventListener('click', function () { App.editor.zoomBy(1.25); updateZoomStatus(); });
-    $('#zoomOut').addEventListener('click', function () { App.editor.zoomBy(0.8); updateZoomStatus(); });
+    if ($('#btnFit2d')) $('#btnFit2d').addEventListener('click', function () { fitActiveView(); });
+    if ($('#zoomIn')) $('#zoomIn').addEventListener('click', function () { zoomActiveView(1.25); });
+    if ($('#zoomOut')) $('#zoomOut').addEventListener('click', function () { zoomActiveView(0.8); });
+    // Canvas de vistas generadas (alzados y secciones): zoom con rueda y paneo con arrastre.
+    var viewsCanvas = $('#viewsCanvas');
+    if (viewsCanvas) {
+      viewsCanvas.addEventListener('wheel', function (e) {
+        if (App.viewMode === 'plan') return;
+        e.preventDefault();
+        zoomActiveView(e.deltaY < 0 ? 1.12 : 0.9);
+      }, { passive: false });
+      var vDrag = null;
+      viewsCanvas.addEventListener('pointerdown', function (e) {
+        if (App.viewMode === 'plan') return;
+        vDrag = { x: e.clientX, y: e.clientY, panX: App.viewsPan.x, panY: App.viewsPan.y };
+        try { viewsCanvas.setPointerCapture(e.pointerId); } catch (err) { /* tolerar */ }
+        viewsCanvas.style.cursor = 'grabbing';
+      });
+      viewsCanvas.addEventListener('pointermove', function (e) {
+        if (!vDrag) return;
+        App.viewsPan.x = vDrag.panX + (e.clientX - vDrag.x);
+        App.viewsPan.y = vDrag.panY + (e.clientY - vDrag.y);
+        renderViews();
+      });
+      var endVDrag = function () { vDrag = null; viewsCanvas.style.cursor = 'grab'; };
+      viewsCanvas.addEventListener('pointerup', endVDrag);
+      viewsCanvas.addEventListener('pointercancel', endVDrag);
+      viewsCanvas.addEventListener('pointerleave', function () { if (vDrag) endVDrag(); });
+      viewsCanvas.style.cursor = 'grab';
+    }
     $('#fileInput').addEventListener('change', function (e) {
       if (e.target.files && e.target.files[0]) openFile(e.target.files[0]);
       e.target.value = '';
     });
 
     $('#toolrail').addEventListener('click', function (e) {
+      var vm = e.target.closest('[data-view-mode]');
+      if (vm) { setViewMode(vm.getAttribute('data-view-mode')); return; }
+      var toggleBtn = e.target.closest('[data-toggle]');
+      if (toggleBtn) { toggleSnap(toggleBtn.getAttribute('data-toggle')); return; }
       var btn = e.target.closest('[data-tool]');
       if (!btn) return;
       var tool = btn.getAttribute('data-tool');
-      if (tool === 'fit') { App.editor.fitToContent(); updateZoomStatus(); return; }
+      if (tool === 'fit') { fitActiveView(); return; }
       chooseTool(tool);
     });
     $('#levelTabs').addEventListener('click', function (e) {
@@ -629,6 +724,7 @@
       }
     });
     $('#stageActions').addEventListener('click', onStageAction);
+    $('#stageActions').addEventListener('input', onStageInput);
     $('#sheetGallery').addEventListener('click', function (e) {
       var add = e.target.closest('[data-add-sheet]');
       if (add) { addSheet(); return; }
@@ -649,6 +745,7 @@
       }
     });
     $('#panelLibrary').addEventListener('click', function (e) {
+      if (e.target.closest('[data-lib-action="import"]')) { showImportModal(); return; }
       var chip = e.target.closest('[data-cat]');
       if (chip) {
         App.libCat = chip.getAttribute('data-cat');
@@ -686,6 +783,7 @@
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(function () {
         if (App.view === 'sheets') scheduleSheetPreviews(80);
+        if (App.view === '2d' && App.viewMode !== 'plan') renderViews();
       }, 180);
     });
   }
@@ -745,9 +843,11 @@
         applyGridToEditor();
         applyScene3D();
         sync3DQuickControls();
+        registerProjectAssets(App.store.project);
         if (App.tab === 'scene' && !isInspectorInputFocused()) renderScenePanel();
         if (App.view === '3d') schedule3D();
         if (App.view === 'sheets') scheduleSheetPreviews();
+        if (App.view === '2d' && App.viewMode !== 'plan') renderViews();
         if (!isInspectorInputFocused() && !(App.editor && App.editor.drag)) {
           refreshProps();
           if (App.tab === 'layers') refreshLayers();
@@ -759,6 +859,7 @@
         refreshLevelTabs();
         updateZoomStatus();
         App.editor.render();
+        if (App.view === '2d' && App.viewMode !== 'plan') renderViews();
         refreshProps();
         if (App.view === '3d') schedule3D();
       } else if (evt.type === 'saved') {
@@ -798,12 +899,15 @@
     var lvl = App.store.activeLevelObj();
     $('#statusLevel').textContent = lvl ? lvl.name : 'Nivel';
     updateUnitsUI();
+    localize();
   }
 
   function updateUnitsUI() {
-    var btn = $('#btnUnits');
+    var btn = $('#btnUnitsRail') || $('#btnUnits');
     if (btn) {
-      btn.textContent = unitsBadge();
+      var span = btn.querySelector('span');
+      if (span) span.textContent = unitsBadge();
+      else btn.textContent = unitsBadge();
       btn.title = unitSys() === 'ft'
         ? 'Sistema imperial (ft/in). Clic para volver al sistema métrico.'
         : 'Sistema métrico (m/mm). Clic para cambiar al sistema imperial.';
@@ -822,6 +926,7 @@
     updateUnitsUI();
     refreshProps();
     App.editor.render();
+    if (App.viewMode !== 'plan') renderViews();
     if (App.view === '3d') schedule3D();
     if (App.view === 'sheets') scheduleSheetPreviews(120);
     toast(next === 'ft' ? 'Sistema imperial activado (pies/pulgadas).' : 'Sistema métrico activado (metros).', 'success', 2800);
@@ -861,14 +966,20 @@
   }
 
   function updateZoomStatus() {
+    var el = $('#statusZoom');
+    if (!el) return;
+    if (App.viewMode !== 'plan') {
+      el.textContent = 'Zoom ' + Math.round((App.viewsZoom || 1) * 100) + '%';
+      return;
+    }
     if (!App.editor) return;
     var z = App.editor.view.zoom;
-    $('#statusZoom').textContent = 'Zoom ' + Math.round(z * 1000) + '%';
+    el.textContent = 'Zoom ' + Math.round(z * 1000) + '%';
   }
 
   function syncCanvasToggles() {
     if (!App.editor) return;
-    $$('#canvasToggles [data-toggle]').forEach(function (b) {
+    $$('#toolList [data-toggle]').forEach(function (b) {
       var k = b.getAttribute('data-toggle');
       b.classList.toggle('on', !!App.editor.snap[k]);
     });
@@ -926,7 +1037,8 @@
   }
 
   // ============================================================ escena 3D
-  var ROOF_STYLES = { flat: 'Plano', gable: 'A dos aguas', arc: 'Arco', spline: 'Spline' };
+  var ROOF_STYLES = { flat: 'Plano', gable: 'A dos aguas', hip: 'Cuatro aguas (poliforme)', arc: 'Arco', spline: 'Spline', custom: 'Mi diseño' };
+  var ROOF_RIDGES = { auto: 1, x: 1, y: 1 };
   var MATERIAL_LABELS = { wall: 'Paredes', roof: 'Techo', ground: 'Suelo' };
   var SCENE_TEXTURES = {
     wall: [['stucco', 'Estuco'], ['brick', 'Ladrillo'], ['wood', 'Madera'], ['stone', 'Piedra'], ['smooth', 'Liso']],
@@ -941,8 +1053,10 @@
     var r = s.render || {};
     return {
       roofStyle: ROOF_STYLES[roof.style] ? roof.style : 'flat',
+      ridge: ROOF_RIDGES[roof.ridge] ? roof.ridge : 'auto',
       roofHeight: n(roof.height, 1200),
       roofOverhang: n(roof.overhang, 400),
+      roofProfile: Array.isArray(roof.profile) ? roof.profile : null,
       materials: {
         wall: { color: (mats.wall && mats.wall.color) || '#f3eee2', texture: (mats.wall && mats.wall.texture) || 'stucco' },
         roof: { color: (mats.roof && mats.roof.color) || '#b49a7c', texture: (mats.roof && mats.roof.texture) || 'tile' },
@@ -964,6 +1078,8 @@
     var opts = {
       roof: !!App.options3d.roof,
       roofStyle: sc.roofStyle,
+      roofRidge: sc.ridge,
+      roofProfile: sc.roofProfile,
       roofHeight: sc.roofHeight,
       roofOverhang: sc.roofOverhang,
       roofColor: sc.materials.roof.color,
@@ -1075,7 +1191,12 @@
     var style = ROOF_STYLES[value] ? value : null;
     if (!style) {
       apply3DOptions({ roof: false });
-      toast('Techo oculto. Elige Plano, A dos aguas, Arco o Spline para mostrarlo.', 'info', 2800);
+      toast('Techo oculto. Elige un estilo para mostrarlo.', 'info', 2800);
+      sync3DQuickControls();
+      return;
+    }
+    if (style === 'custom') {
+      openRoofDesigner();
       sync3DQuickControls();
       return;
     }
@@ -1145,6 +1266,11 @@
       Object.keys(ROOF_STYLES).map(function (k) {
         return '<option value="' + k + '"' + (sc.roofStyle === k ? ' selected' : '') + '>' + ROOF_STYLES[k] + '</option>';
       }).join('') + '</select></div>' +
+      '<div class="scene-actions"><button class="btn btn-ghost btn-sm" data-scene-action="roofDesign">' + icon('palette', 14) + ' Diseñar techo</button></div>' +
+      '<div class="field"><label>Orientación de cumbrera</label><select class="select" data-scene-field="roofRidge">' +
+      [['auto', 'Automática (eje largo)'], ['x', 'Horizontal (X)'], ['y', 'Vertical (Y)']].map(function (pair) {
+        return '<option value="' + pair[0] + '"' + (sceneSettings().ridge === pair[0] ? ' selected' : '') + '>' + pair[1] + '</option>';
+      }).join('') + '</select></div>' +
       '<div class="field-grid">' +
       field('Altura / flecha', '<div class="input-row"><input class="input" type="number" min="0.2" step="0.1" data-scene-field="roofHeight" value="' + unitLenInput(sc.roofHeight) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
       field('Alero', '<div class="input-row"><input class="input" type="number" min="0" step="0.1" data-scene-field="roofOverhang" value="' + unitLenInput(sc.roofOverhang) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
@@ -1178,6 +1304,7 @@
       '</div><div class="scene-note">La cámara recorre la maqueta en bucle. Un clic sobre la vista 3D detiene el vuelo.</div></div>';
 
     panel.innerHTML = html;
+    localize();
   }
 
   function onSceneChange(e) {
@@ -1207,11 +1334,23 @@
       return;
     }
     if (fieldName === 'roofStyle') {
+      if (t.value === 'custom') {
+        openRoofDesigner();
+        renderScenePanel();
+        return;
+      }
       App.store.act('Tipo de techo', function () {
         App.store.project.settings.roof.style = ROOF_STYLES[t.value] ? t.value : 'flat';
       });
       App.options3d.roof = true;
       applyScene3D(); schedule3D(); updateStageActions(); renderScenePanel();
+      return;
+    }
+    if (fieldName === 'roofRidge') {
+      App.store.act('Orientación del techo', function () {
+        App.store.project.settings.roof.ridge = ROOF_RIDGES[t.value] ? t.value : 'auto';
+      });
+      applyScene3D(); schedule3D();
       return;
     }
     if (fieldName === 'roofOn') {
@@ -1283,6 +1422,656 @@
       if (view) { try { if (view.fit) view.fit(); view.render(); } catch (err) { /* ignore */ } }
     } else if (action === 'capture') capture3D();
     else if (action === 'resetScene') resetSceneSettings();
+    else if (action === 'roofDesign') openRoofDesigner();
+  }
+
+  // ==================================================== diseñador de techos
+  function profileForStyle(style, height) {
+    var h = Math.max(200, Number(height) || 1200);
+    var pts = [], i, t;
+    if (style === 'flat') return [{ t: 0, z: 0 }, { t: 1, z: 0 }];
+    if (style === 'gable' || style === 'hip') return [{ t: 0, z: 0 }, { t: 0.5, z: h }, { t: 1, z: 0 }];
+    if (style === 'arc') {
+      for (i = 0; i <= 14; i++) { t = i / 14; pts.push({ t: t, z: Math.round(h * Math.sin(Math.PI * t)) }); }
+      return pts;
+    }
+    for (i = 0; i <= 14; i++) { t = i / 14; pts.push({ t: t, z: Math.round(h * Math.pow(Math.sin(Math.PI * t), 1.45)) }); }
+    return pts;
+  }
+
+  function sampleProfile(profile, samples) {
+    if (!profile || profile.length < 2) return [];
+    var pts = profile.map(function (p) { return { x: p.t, y: p.z }; });
+    var path = ED.Geo.catmullRomPath(pts, samples || 8);
+    return path.filter(function (p) { return p.x >= -0.001 && p.x <= 1.001; });
+  }
+
+  function openRoofDesigner() {
+    if (!App.store) return;
+    var sc = sceneSettings();
+    var draft = {
+      style: sc.roofStyle,
+      height: sc.roofHeight,
+      overhang: sc.roofOverhang,
+      ridge: sc.ridge,
+      profile: (sc.roofProfile && sc.roofProfile.length >= 2)
+        ? sc.roofProfile.map(function (p) { return { t: p.t, z: p.z }; })
+        : profileForStyle(sc.roofStyle === 'custom' ? 'arc' : sc.roofStyle, sc.roofHeight)
+    };
+    var presetList = [['flat', 'Plano'], ['gable', 'A dos aguas'], ['hip', 'Cuatro aguas (poliforme)'], ['arc', 'Arco'], ['spline', 'Spline'], ['custom', 'Mi diseño']];
+    App._roofDraft = draft;
+    var body = '<div class="form-grid">' +
+      '<div class="field full"><label>Tipo de techo</label><div class="chip-row" id="roofPresets">' +
+      presetList.map(function (pair) {
+        return '<button type="button" class="chip' + (draft.style === pair[0] ? ' active' : '') + '" data-roof-preset="' + pair[0] + '">' + pair[1] + '</button>';
+      }).join('') + '</div></div>' +
+      '<div class="field full"><label>Perfil del techo</label>' +
+      '<canvas class="roof-designer" id="roofDesignerCanvas" width="580" height="230"></canvas>' +
+      '<div class="roof-legend">Arrastra los puntos para diseñar el perfil · doble clic añade un punto · clic derecho quita el punto. Con los presets el perfil es una referencia; elige <strong>Mi diseño</strong> para editar y guardar tu forma.</div></div>' +
+      '<div class="field-grid">' +
+      field('Altura / flecha', '<div class="input-row"><input class="input" type="number" min="0.2" step="0.1" id="roofDraftHeight" value="' + unitLenInput(draft.height) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
+      field('Alero', '<div class="input-row"><input class="input" type="number" min="0" step="0.1" id="roofDraftOverhang" value="' + unitLenInput(draft.overhang) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
+      '</div>' +
+      '<div class="field"><label>Orientación de la cumbrera</label><select class="select" id="roofDraftRidge">' +
+      [['auto', 'Automática (eje largo)'], ['x', 'Horizontal (X)'], ['y', 'Vertical (Y)']].map(function (pair) {
+        return '<option value="' + pair[0] + '"' + (draft.ridge === pair[0] ? ' selected' : '') + '>' + pair[1] + '</option>';
+      }).join('') + '</select></div>' +
+      '<div class="field-hint">El perfil se barre a lo largo de la cumbrera en el 3D. Los extremos del perfil quedan en los aleros.</div></div>';
+    var footer = '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="roofApply">Aplicar techo</button>';
+    var modal = openModal({ title: 'Diseñar techo', subtitle: 'Plano, a dos aguas, cuatro aguas, arco, spline o tu propio perfil', body: body, footer: footer, wide: true, noAutoFocus: true });
+    var root = modal.root;
+    var canvas = $('#roofDesignerCanvas', root);
+    var ctx = canvas ? canvas.getContext('2d') : null;
+    var drag = null;
+    var maxZ = Math.max(draft.height, 1000);
+
+    function profileToDraw() {
+      if (draft.style === 'custom') return draft.profile;
+      return profileForStyle(draft.style, draft.height);
+    }
+    function mapPoint(p, w, h, m) {
+      return { x: m + p.t * (w - m * 2), y: h - m - (p.z / Math.max(1, maxZ)) * (h - m * 2) };
+    }
+    function draw() {
+      if (!ctx) return;
+      var w = canvas.width, h = canvas.height, m = 26;
+      maxZ = Math.max(draft.height, 1000) * 1.1;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#f8f6f0';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(36,49,61,0.16)';
+      ctx.lineWidth = 1;
+      var i, j, x, y;
+      for (i = 0; i <= 8; i++) { x = m + (i / 8) * (w - m * 2); ctx.beginPath(); ctx.moveTo(x, m); ctx.lineTo(x, h - m); ctx.stroke(); }
+      for (j = 0; j <= 4; j++) { y = m + (j / 4) * (h - m * 2); ctx.beginPath(); ctx.moveTo(m, y); ctx.lineTo(w - m, y); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(36,49,61,0.55)';
+      ctx.beginPath(); ctx.moveTo(m, h - m + 0.5); ctx.lineTo(w - m, h - m + 0.5); ctx.stroke();
+      var pts = sampleProfile(profileToDraw(), 10).map(function (p) { return mapPoint({ t: p.x, z: p.y }, w, h, m); });
+      if (pts.length < 2) return;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (var k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+      ctx.strokeStyle = '#b5651d';
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.lineTo(pts[pts.length - 1].x, h - m);
+      ctx.lineTo(pts[0].x, h - m);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(245,166,35,0.12)';
+      ctx.fill();
+      if (draft.style === 'custom') {
+        draft.profile.forEach(function (p) {
+          var sp = mapPoint(p, w, h, m);
+          ctx.beginPath(); ctx.arc(sp.x, sp.y, 5.5, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+          ctx.strokeStyle = '#b5651d'; ctx.lineWidth = 2; ctx.stroke();
+        });
+      } else {
+        ctx.fillStyle = 'rgba(36,49,61,0.55)';
+        ctx.font = '600 11px "Segoe UI", system-ui, sans-serif';
+        ctx.fillText('Perfil de referencia · elige "Mi diseño" para editarlo', m, h - 8);
+      }
+    }
+    function canvasPoint(e) {
+      var r = canvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - r.left) * (canvas.width / Math.max(1, r.width)),
+        y: (e.clientY - r.top) * (canvas.height / Math.max(1, r.height))
+      };
+    }
+    function toProfile(sp) {
+      var w = canvas.width, h = canvas.height, m = 26;
+      return {
+        t: ED.Geo.clamp((sp.x - m) / (w - m * 2), 0, 1),
+        z: Math.round(ED.Geo.clamp((h - m - sp.y) / (h - m * 2), 0, 1) * maxZ)
+      };
+    }
+    function nearestIndex(sp, tol) {
+      var best = -1, bestD = tol || 16;
+      draft.profile.forEach(function (p, idx) {
+        var dp = mapPoint(p, canvas.width, canvas.height, 26);
+        var d = Math.sqrt(Math.pow(dp.x - sp.x, 2) + Math.pow(dp.y - sp.y, 2));
+        if (d < bestD) { bestD = d; best = idx; }
+      });
+      return best;
+    }
+    if (canvas) {
+      canvas.addEventListener('pointerdown', function (e) {
+        if (draft.style !== 'custom') return;
+        var idx = nearestIndex(canvasPoint(e), 16);
+        if (idx >= 0) {
+          drag = idx;
+          try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* tolerar */ }
+          e.preventDefault();
+        }
+      });
+      canvas.addEventListener('pointermove', function (e) {
+        if (drag == null) return;
+        var np = toProfile(canvasPoint(e));
+        var lo = drag > 0 ? draft.profile[drag - 1].t + 0.01 : 0;
+        var hi = drag < draft.profile.length - 1 ? draft.profile[drag + 1].t - 0.01 : 1;
+        np.t = ED.Geo.clamp(np.t, lo, hi);
+        draft.profile[drag] = np;
+        draw();
+        e.preventDefault();
+      });
+      var endDrag = function () { drag = null; };
+      canvas.addEventListener('pointerup', endDrag);
+      canvas.addEventListener('pointercancel', endDrag);
+      canvas.addEventListener('dblclick', function (e) {
+        if (draft.style !== 'custom' || draft.profile.length >= 24) return;
+        draft.profile.push(toProfile(canvasPoint(e)));
+        draft.profile.sort(function (a, b) { return a.t - b.t; });
+        draw();
+        e.preventDefault();
+      });
+      canvas.addEventListener('contextmenu', function (e) {
+        if (draft.style !== 'custom') return;
+        e.preventDefault();
+        var idx = nearestIndex(canvasPoint(e), 16);
+        if (idx > 0 && idx < draft.profile.length - 1) {
+          draft.profile.splice(idx, 1);
+          draw();
+        }
+      });
+    }
+    $$('#roofPresets .chip', root).forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        var style = chip.getAttribute('data-roof-preset');
+        draft.style = style;
+        if (style !== 'custom') draft.profile = profileForStyle(style, draft.height);
+        $$('#roofPresets .chip', root).forEach(function (c) { c.classList.toggle('active', c === chip); });
+        draw();
+      });
+    });
+    var heightInput = $('#roofDraftHeight', root);
+    var overhangInput = $('#roofDraftOverhang', root);
+    if (heightInput) heightInput.addEventListener('input', function () {
+      var mm = parseLenInput(heightInput.value);
+      if (isFinite(mm) && mm > 0) {
+        draft.height = ED.Geo.clamp(mm, 200, 8000);
+        if (draft.style !== 'custom') draft.profile = profileForStyle(draft.style, draft.height);
+        draw();
+      }
+    });
+    if (overhangInput) overhangInput.addEventListener('input', function () {
+      var mm = parseLenInput(overhangInput.value);
+      if (isFinite(mm)) draft.overhang = ED.Geo.clamp(mm, 0, 2500);
+    });
+    var ridgeSel = $('#roofDraftRidge', root);
+    if (ridgeSel) ridgeSel.addEventListener('change', function () { draft.ridge = ridgeSel.value; });
+    draw();
+    setTimeout(draw, 60);
+    $('#roofApply', root).addEventListener('click', function () {
+      var style = ROOF_STYLES[draft.style] ? draft.style : 'flat';
+      var clean = draft.profile.map(function (p) {
+        return { t: ED.Geo.round(p.t, 3), z: Math.round(ED.Geo.clamp(p.z, 0, 8000)) };
+      });
+      clean.sort(function (a, b) { return a.t - b.t; });
+      if (style === 'custom' && clean.length < 2) { toast('Añade al menos dos puntos al perfil.', 'warn'); return; }
+      App.store.act('Diseñar techo', function () {
+        var r = App.store.project.settings.roof;
+        r.style = style;
+        r.height = ED.Geo.clamp(draft.height, 200, 8000);
+        r.overhang = ED.Geo.clamp(draft.overhang, 0, 2500);
+        r.ridge = ROOF_RIDGES[draft.ridge] ? draft.ridge : 'auto';
+        r.profile = clean;
+      });
+      App.options3d.roof = true;
+      applyScene3D();
+      schedule3D();
+      updateStageActions();
+      renderScenePanel();
+      sync3DQuickControls();
+      modal.close();
+      toast('Techo aplicado: ' + ROOF_STYLES[style] + '.', 'success', 2600);
+    });
+  }
+
+  // ============================================== importar objetos externos
+  function convexHull(points) {
+    if (!points || points.length < 3) return points || [];
+    var pts = points.slice().sort(function (a, b) { return a.x === b.x ? a.y - b.y : a.x - b.x; });
+    function cross(o, a, b) { return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x); }
+    var lower = [];
+    pts.forEach(function (p) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+      lower.push(p);
+    });
+    var upper = [];
+    for (var i = pts.length - 1; i >= 0; i--) {
+      var p = pts[i];
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+      upper.push(p);
+    }
+    upper.pop();
+    lower.pop();
+    var hull = lower.concat(upper);
+    return hull.length >= 3 ? hull : pts;
+  }
+
+  function registerProjectAssets(project) {
+    if (!ED.Library || typeof ED.Library.registerCustom !== 'function') return;
+    if (!project) return;
+    (project.assets || []).forEach(function (a) {
+      ED.Library.registerCustom({
+        id: a.id, name: a.name, cat: 'mios', tags: 'importado ' + (a.source || ''),
+        w: a.w, d: a.d, h: a.h, color: a.color,
+        plan: a.plan, boxes: a.boxes, mesh: a.mesh
+      });
+    });
+  }
+
+  var pendingImport = null;
+
+  function showImportModal() {
+    if (!ED.Importer || typeof ED.Importer.parse !== 'function') { toast('Módulo de importación no disponible.', 'error'); return; }
+    pendingImport = null;
+    var body = '<div class="form-grid">' +
+      '<div class="field full"><label>Archivo 3D del mueble o accesorio</label>' +
+      '<label class="import-drop" id="importDrop"><input type="file" id="importFile" accept=".glb,.gltf,.obj" hidden>' +
+      icon('cube', 26) + '<b>Elegir archivo .glb o .obj</b><span>o arrástralo aquí</span></label>' +
+      '<div class="import-format-hint"><strong>Formato recomendado: GLB</strong> (glTF binario): un único archivo, estándar web, con materiales y colores. También se acepta <strong>OBJ</strong> (sin texturas). Evita FBX/3DS/STL: no se importan en esta versión.</div></div>' +
+      '<div class="field full"><label>Nombre del objeto</label><input class="input" id="importName" placeholder="Mi mueble"></div>' +
+      '<div class="field-grid">' +
+      field('Ancho', '<div class="input-row"><input class="input" type="number" min="0.1" step="0.05" id="importW" value="1.2"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
+      field('Fondo', '<div class="input-row"><input class="input" type="number" min="0.1" step="0.05" id="importD" value="0.6"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
+      '</div>' +
+      '<div class="field"><label>Alto</label><div class="input-row"><input class="input" type="number" min="0.1" step="0.05" id="importH" value="0.9"><span class="input-unit">' + unitLenLabel() + '</span></div></div>' +
+      '<div class="field full"><div class="import-stats" id="importStats"></div><div class="import-preview" id="importPreview"><canvas id="importPreviewCanvas" width="520" height="170"></canvas></div></div>' +
+      '</div>';
+    var footer = '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="importAdd" disabled>Importar objeto</button>';
+    var modal = openModal({ title: 'Importar objeto o mueble', subtitle: 'Añade tus propios modelos 3D a la biblioteca del proyecto', body: body, footer: footer, wide: true, noAutoFocus: true });
+    var root = modal.root;
+    var fileInput = $('#importFile', root);
+    var nameInput = $('#importName', root);
+    var stats = $('#importStats', root);
+    var addBtn = $('#importAdd', root);
+    var previewCanvas = $('#importPreviewCanvas', root);
+
+    function setStats(html) { if (stats) stats.innerHTML = html; }
+    function sizeVal(mm) { return unitSys() === 'ft' ? (mm / 304.8).toFixed(2) : (mm / 1000).toFixed(2); }
+    function drawPlanPreview(mesh) {
+      if (!previewCanvas) return;
+      var ctx = previewCanvas.getContext('2d');
+      if (!ctx) return;
+      var w = previewCanvas.width, h = previewCanvas.height;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#f8f6f0';
+      ctx.fillRect(0, 0, w, h);
+      if (!mesh || !mesh.length) return;
+      var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      mesh.forEach(function (f) {
+        f.points.forEach(function (p) {
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        });
+      });
+      var span = Math.max(maxX - minX, maxY - minY, 1);
+      var s = (Math.min(w, h) - 34) / span;
+      function mp(p) { return { x: w / 2 + (p.x - (minX + maxX) / 2) * s, y: h / 2 - (p.y - (minY + maxY) / 2) * s }; }
+      mesh.forEach(function (f) {
+        if (f.points.length < 3) return;
+        ctx.beginPath();
+        var p0 = mp(f.points[0]);
+        ctx.moveTo(p0.x, p0.y);
+        for (var i = 1; i < f.points.length; i++) { var pp = mp(f.points[i]); ctx.lineTo(pp.x, pp.y); }
+        ctx.closePath();
+        ctx.fillStyle = f.color || '#cfd6dd';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(36,49,61,0.18)';
+        ctx.stroke();
+      });
+    }
+    function selectFile(file) {
+      if (!file) return;
+      setStats('Leyendo archivo…');
+      ED.Importer.parse(file).then(function (parsed) {
+        pendingImport = parsed;
+        if (nameInput && (!nameInput.value || nameInput.value === 'Hecho en casa')) nameInput.value = parsed.name || 'Mi objeto';
+        var span = parsed.bounds;
+        var wmm = (span.maxX - span.minX) || 1000;
+        var dmm = (span.maxY - span.minY) || 800;
+        var hmm = (span.maxZ - span.minZ) || 900;
+        if ($('#importW', root)) $('#importW', root).value = sizeVal(wmm);
+        if ($('#importD', root)) $('#importD', root).value = sizeVal(dmm);
+        if ($('#importH', root)) $('#importH', root).value = sizeVal(hmm);
+        setStats('<span class="badge-soft">' + String(parsed.format || '').toUpperCase() + '</span> ' +
+          '<span class="badge-soft">' + parsed.triangleCount + ' triángulos</span> ' +
+          '<span class="badge-soft">' + sizeVal(wmm) + ' × ' + sizeVal(dmm) + ' × ' + sizeVal(hmm) + ' ' + unitLenLabel() + '</span>');
+        drawPlanPreview(parsed.mesh);
+        if (addBtn) addBtn.disabled = false;
+      }).catch(function (err) {
+        pendingImport = null;
+        setStats('<span class="badge-soft" style="color:#f87171">Error: ' + esc(err && err.message ? err.message : 'no se pudo leer el archivo') + '</span>');
+        if (addBtn) addBtn.disabled = true;
+      });
+    }
+    if (fileInput) fileInput.addEventListener('change', function () {
+      if (fileInput.files && fileInput.files[0]) selectFile(fileInput.files[0]);
+    });
+    var dropLabel = $('#importDrop', root);
+    if (dropLabel) {
+      dropLabel.addEventListener('dragover', function (e) { e.preventDefault(); dropLabel.classList.add('over'); });
+      dropLabel.addEventListener('dragleave', function () { dropLabel.classList.remove('over'); });
+      dropLabel.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropLabel.classList.remove('over');
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) selectFile(e.dataTransfer.files[0]);
+      });
+    }
+    if (addBtn) addBtn.addEventListener('click', function () {
+      if (!pendingImport) return;
+      var name = (nameInput && nameInput.value.trim()) || pendingImport.name || 'Objeto importado';
+      var wmm = ED.Geo.clamp(parseLenInput(($('#importW', root) || {}).value) || 1200, 100, 20000);
+      var dmm = ED.Geo.clamp(parseLenInput(($('#importD', root) || {}).value) || 800, 100, 20000);
+      var hmm = ED.Geo.clamp(parseLenInput(($('#importH', root) || {}).value) || 900, 100, 20000);
+      var b = pendingImport.bounds;
+      var sx = wmm / Math.max(1, b.maxX - b.minX);
+      var sy = dmm / Math.max(1, b.maxY - b.minY);
+      var sz = hmm / Math.max(1, b.maxZ - b.minZ);
+      var cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+      var counts = {}, bestColor = '#cfd6dd', bestCount = 0;
+      var footprint = [];
+      var mesh = pendingImport.mesh.map(function (f) {
+        var c = f.color || '#cfd6dd';
+        counts[c] = (counts[c] || 0) + 1;
+        if (counts[c] > bestCount) { bestCount = counts[c]; bestColor = c; }
+        return {
+          points: f.points.map(function (p) {
+            var nx = (p.x - cx) * sx;
+            var ny = (p.y - cy) * sy;
+            var nz = (p.z - b.minZ) * sz;
+            if (Math.abs(nx) <= wmm * 0.6 && Math.abs(ny) <= dmm * 0.6) footprint.push({ x: nx, y: ny });
+            return { x: Math.round(nx * 10) / 10, y: Math.round(ny * 10) / 10, z: Math.round(nz * 10) / 10 };
+          }),
+          color: c
+        };
+      });
+      var hull = convexHull(footprint);
+      if (!hull || hull.length < 3) {
+        hull = [{ x: -wmm / 2, y: -dmm / 2 }, { x: wmm / 2, y: -dmm / 2 }, { x: wmm / 2, y: dmm / 2 }, { x: -wmm / 2, y: dmm / 2 }];
+      }
+      hull = hull.map(function (p) { return { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 }; }).slice(0, 64);
+      var asset = {
+        id: 'asset_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5),
+        name: name, w: Math.round(wmm), d: Math.round(dmm), h: Math.round(hmm),
+        color: bestColor, source: pendingImport.format === 'obj' ? 'obj' : 'glb',
+        plan: hull,
+        boxes: [{ x: -wmm / 2, y: -dmm / 2, z: 0, w: wmm, d: dmm, h: hmm, color: bestColor }],
+        mesh: mesh.slice(0, 8000)
+      };
+      App.store.act('Importar objeto', function () {
+        if (!Array.isArray(App.store.project.assets)) App.store.project.assets = [];
+        App.store.project.assets.push(asset);
+      });
+      registerProjectAssets(App.store.project);
+      modal.close();
+      App.libCat = 'mios';
+      setInspectorTab('library');
+      renderLibrary();
+      toast('Objeto «' + name + '» importado. Está en Biblioteca → Mis objetos.', 'success', 4200);
+    });
+  }
+
+  // ================================================================ idioma
+  function localize() {
+    if (ED.I18n && typeof ED.I18n.apply === 'function') ED.I18n.apply(document);
+  }
+
+  function initLanguage() {
+    if (!ED.I18n) { updateLangToggle(); return; }
+    var stored = null;
+    try { stored = localStorage.getItem('engdraft.lang'); } catch (e) { stored = null; }
+    if (typeof ED.I18n.setLang === 'function') ED.I18n.setLang(stored === 'en' ? 'en' : (ED.I18n.current === 'en' ? 'en' : 'es'));
+    updateLangToggle();
+    localize();
+  }
+
+  // ============================================================ vistas 2D
+  function projectPlanBounds() {
+    var pts = [];
+    var p = App.store ? App.store.project : null;
+    if (!p) return { minX: -5000, minY: -5000, maxX: 5000, maxY: 5000, w: 10000, h: 10000 };
+    (p.walls || []).forEach(function (w) {
+      if (!w || !w.a || !w.b) return;
+      var poly = ED.Geo.wallPolygon(w, true);
+      for (var i = 0; i < poly.length; i++) pts.push(poly[i]);
+    });
+    (p.rooms || []).forEach(function (r) {
+      (r.polygon || []).forEach(function (pt) { pts.push(pt); });
+    });
+    (p.items || []).forEach(function (it) {
+      var hw = (Number(it.w) || 600) / 2, hd = (Number(it.d) || 600) / 2;
+      pts.push({ x: it.x - hw, y: it.y - hd }, { x: it.x + hw, y: it.y + hd });
+    });
+    if (!pts.length) return { minX: -5000, minY: -5000, maxX: 5000, maxY: 5000, w: 10000, h: 10000 };
+    return ED.Geo.bounds(pts);
+  }
+
+  function viewsOpts() {
+    var b = projectPlanBounds();
+    var opts = { type: App.viewMode, levelId: 'all' };
+    if (App.viewMode === 'sectionX') opts.sectionPos = b.minX + b.w * (App.sectionPosPct / 100);
+    else if (App.viewMode === 'sectionY') opts.sectionPos = b.minY + b.h * (App.sectionPosPct / 100);
+    return opts;
+  }
+
+  function setViewMode(mode) {
+    var valid = false;
+    for (var i = 0; i < VIEW_MODES.length; i++) if (VIEW_MODES[i].id === mode) valid = true;
+    var next = valid ? mode : 'plan';
+    App.viewMode = next;
+    $$('#toolList [data-view-mode]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-view-mode') === next);
+    });
+    var planCanvas = $('#planCanvas');
+    var viewsCanvas = $('#viewsCanvas');
+    var chip = $('#viewModeChip');
+    if (next === 'plan') {
+      if (viewsCanvas) viewsCanvas.hidden = true;
+      if (planCanvas) planCanvas.hidden = false;
+      if (chip) chip.hidden = true;
+      if (App.view === '2d' && App.editor) {
+        setTimeout(function () {
+          if (App.viewMode !== 'plan') return;
+          App.editor._resize();
+          App.editor.fitToContent();
+          App.editor.render();
+          updateZoomStatus();
+        }, 30);
+      }
+    } else {
+      if (planCanvas) planCanvas.hidden = true;
+      if (viewsCanvas) viewsCanvas.hidden = false;
+      if (chip) {
+        chip.hidden = false;
+        chip.textContent = viewModeInfo(next).label;
+      }
+      App.viewsZoom = 1;
+      App.viewsPan = { x: 0, y: 0 };
+      setTimeout(renderViews, 20);
+    }
+    updateStageActions();
+    if (ED.I18n) ED.I18n.apply(document);
+  }
+
+  function drawViewData(ctx, data, cssW, cssH) {
+    var b = data.bounds || { minX: 0, minY: 0, maxX: 10000, maxY: 8000, w: 10000, h: 8000 };
+    var margin = 44;
+    var zoom = Math.min((cssW - margin * 2) / Math.max(1, b.w), (cssH - margin * 2) / Math.max(1, b.h)) * App.viewsZoom;
+    if (!isFinite(zoom) || zoom <= 0) zoom = 0.05;
+    var cx = (b.minX + b.maxX) / 2;
+    var cy = (b.minY + b.maxY) / 2;
+    function tx(p) {
+      return {
+        x: cssW / 2 + (p.x - cx) * zoom + App.viewsPan.x,
+        y: cssH / 2 - (p.y - cy) * zoom + App.viewsPan.y
+      };
+    }
+    ctx.fillStyle = '#f8f6f0';
+    ctx.fillRect(0, 0, cssW, cssH);
+    var prims = data.primitives || [];
+    prims.forEach(function (pr) {
+      if (!pr || !pr.points || !pr.points.length) return;
+      if (pr.kind === 'text') {
+        var tp = tx(pr.points[0]);
+        var size = Math.max(8, (Number(pr.size) || 240) * zoom);
+        ctx.save();
+        ctx.fillStyle = pr.fill || '#33414d';
+        ctx.font = (pr.weight ? pr.weight + ' ' : '600 ') + Math.round(size) + 'px "Segoe UI", system-ui, sans-serif';
+        ctx.textAlign = pr.align || 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(pr.text || ''), tp.x, tp.y);
+        ctx.restore();
+        return;
+      }
+      ctx.beginPath();
+      var p0 = tx(pr.points[0]);
+      ctx.moveTo(p0.x, p0.y);
+      for (var i = 1; i < pr.points.length; i++) {
+        var pp = tx(pr.points[i]);
+        ctx.lineTo(pp.x, pp.y);
+      }
+      if (pr.closed) ctx.closePath();
+      if (pr.fill) {
+        ctx.fillStyle = pr.fill;
+        ctx.fill();
+      }
+      if (pr.stroke !== null && pr.stroke !== false) {
+        ctx.strokeStyle = pr.stroke || '#26323c';
+        ctx.lineWidth = Math.max(0.6, (Number(pr.width) || 1) * Math.min(1.5, zoom * 40));
+        ctx.stroke();
+      }
+    });
+    // Marco y rótulo de la vista
+    ctx.save();
+    ctx.strokeStyle = 'rgba(36,49,61,0.22)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, cssW - 1, cssH - 1);
+    ctx.fillStyle = 'rgba(30,42,53,0.72)';
+    ctx.font = '600 12px "Segoe UI", system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(String(data.title || viewModeInfo(App.viewMode).label), 14, cssH - 12);
+    ctx.restore();
+  }
+
+  function renderViews() {
+    var canvas = $('#viewsCanvas');
+    if (!canvas || App.viewMode === 'plan') return;
+    if (!ED.Views || typeof ED.Views.build !== 'function') {
+      var c0 = canvas.getContext('2d');
+      if (c0) {
+        canvas.width = Math.max(2, canvas.clientWidth || 600);
+        canvas.height = Math.max(2, canvas.clientHeight || 400);
+        c0.fillStyle = '#f8f6f0';
+        c0.fillRect(0, 0, canvas.width, canvas.height);
+        c0.fillStyle = '#8a3b31';
+        c0.font = '15px "Segoe UI", sans-serif';
+        c0.fillText('Módulo de vistas no disponible.', 24, 40);
+      }
+      return;
+    }
+    var parent = canvas.parentElement || canvas;
+    var cssW = parent.clientWidth || 900;
+    var cssH = parent.clientHeight || 600;
+    if (!cssW || !cssH) return;
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var data = null;
+    try { data = ED.Views.build(App.store.project, viewsOpts()); } catch (e) { console.error('[EngDraft vistas]', e); }
+    if (!data) return;
+    App.viewsData = data;
+    drawViewData(ctx, data, cssW, cssH);
+    updateZoomStatus();
+  }
+
+  function fitActiveView() {
+    if (App.viewMode !== 'plan') {
+      App.viewsZoom = 1;
+      App.viewsPan = { x: 0, y: 0 };
+      renderViews();
+      return;
+    }
+    if (App.editor) {
+      App.editor.fitToContent();
+      updateZoomStatus();
+    }
+  }
+
+  function zoomActiveView(factor) {
+    if (App.viewMode === 'plan') {
+      if (App.editor) {
+        App.editor.zoomBy(factor);
+        updateZoomStatus();
+      }
+      return;
+    }
+    App.viewsZoom = ED.Geo.clamp((App.viewsZoom || 1) * factor, 0.2, 8);
+    renderViews();
+  }
+
+  function onStageInput(e) {
+    if (e.target && e.target.id === 'sectionPos') {
+      App.sectionPosPct = Number(e.target.value) || 50;
+      renderViews();
+    }
+  }
+
+  function toggleLanguage() {
+    if (!ED.I18n) { toast('Módulo de idioma no disponible.', 'warn'); return; }
+    var next = ED.I18n.current === 'en' ? 'es' : 'en';
+    ED.I18n.setLang(next);
+    refreshHeader();
+    refreshLevelTabs();
+    refreshProps();
+    refreshLayers();
+    renderLibrary();
+    if (App.tab === 'scene') renderScenePanel();
+    updateStageActions();
+    syncCanvasToggles();
+    updateZoomStatus();
+    updateUnitsUI();
+    if ($('#viewModeChip') && App.viewMode !== 'plan') $('#viewModeChip').textContent = viewModeInfo(App.viewMode).label;
+    if (ED.I18n.apply) ED.I18n.apply(document);
+    updateLangToggle();
+    toast(next === 'en' ? 'Language: English' : 'Idioma: Español', 'info', 2200);
+  }
+
+  function updateLangToggle() {
+    var btn = $('#langToggle');
+    if (!btn) return;
+    var lang = (ED.I18n && ED.I18n.current) || 'es';
+    $$('.lang-opt', btn).forEach(function (b, i) {
+      b.classList.toggle('active', (i === 0 && lang === 'es') || (i === 1 && lang === 'en'));
+    });
   }
 
   // ================================================================== vistas
@@ -1303,9 +2092,12 @@
       if (sec) sec.classList.toggle('active', v === view);
     });
     updateStageActions();
+    var modeChip = $('#viewModeChip');
+    if (modeChip) modeChip.hidden = !(view === '2d' && App.viewMode !== 'plan');
     if (view === '2d') {
       setTimeout(function () {
         if (App.view !== '2d') return;
+        if (App.viewMode !== 'plan') { renderViews(); return; }
         App.editor._resize();
         App.editor.render();
         updateZoomStatus();
@@ -1569,10 +2361,21 @@
     if (!wrap) return;
     var html = '';
     if (App.view === '2d') {
-      html = '<button class="stage-action" data-stage-action="detect-rooms">' + icon('sparkle', 14) + 'Detectar ambientes</button>' +
-        '<button class="stage-action" data-stage-action="auto-dims">' + icon('measure', 14) + 'Cotas generales</button>' +
-        '<button class="stage-action" data-stage-action="grid">' + icon('grid', 14) + 'Rejilla</button>' +
-        '<button class="stage-action" data-stage-action="fit">' + icon('fit', 14) + 'Ajustar</button>';
+      if (App.viewMode !== 'plan') {
+        var isSection = App.viewMode === 'sectionX' || App.viewMode === 'sectionY';
+        html = '<span class="stage-note">Vista generada · solo lectura</span>' +
+          (isSection
+            ? '<label class="stage-range">Posición <input type="range" id="sectionPos" min="5" max="95" step="1" value="' + App.sectionPosPct + '"></label>'
+            : '') +
+          '<button class="stage-action" data-stage-action="fit-view">' + icon('fit', 14) + 'Ajustar</button>' +
+          '<button class="stage-action" data-stage-action="view-plan">' + icon('wall', 14) + 'Volver a planta</button>';
+      } else {
+        html = '<button class="stage-action" data-stage-action="detect-rooms">' + icon('sparkle', 14) + 'Detectar ambientes</button>' +
+          '<button class="stage-action" data-stage-action="auto-dims">' + icon('measure', 14) + 'Cotas generales</button>' +
+          '<button class="stage-action" data-stage-action="grid">' + icon('grid', 14) + 'Rejilla</button>' +
+          '<button class="stage-action" data-stage-action="roof-design">' + icon('roof', 14) + 'Diseñar techo</button>' +
+          '<button class="stage-action" data-stage-action="fit">' + icon('fit', 14) + 'Ajustar</button>';
+      }
     } else if (App.view === '3d') {
       html = '<div class="stage-action-group">' +
         ['iso', 'top', 'front', 'right'].map(function (p) {
@@ -1589,6 +2392,7 @@
         '<button class="stage-action" data-stage-action="export-pdf">' + icon('pdf', 14) + 'Exportar PDF</button>';
     }
     wrap.innerHTML = html;
+    localize();
   }
 
   function stageToggle(key, label, ic) {
@@ -1631,13 +2435,16 @@
     if (action === 'realistic') { toggleRealistic(); return; }
     if (action === 'flight') { setFlight(!App.flight); return; }
     if (action === 'scene') { applyInspectorState('open'); setInspectorTab('scene'); return; }
+    if (action === 'fit-view') { fitActiveView(); return; }
+    if (action === 'view-plan') { setViewMode('plan'); return; }
+    if (action === 'roof-design') { openRoofDesigner(); return; }
     if (action === 'detect-rooms') {
       var count = App.editor.detectRooms();
       if (count) { toast(count + ' ambiente' + (count === 1 ? '' : 's') + ' detectado' + (count === 1 ? '' : 's') + '.', 'success', 3000); refreshProps(); }
       else toast('No se encontraron recintos nuevos. Cierra los muros y vuelve a intentar.', 'warn', 3400);
     } else if (action === 'auto-dims') addAutoDims();
     else if (action === 'grid') showGridDialog();
-    else if (action === 'fit') { App.editor.fitToContent(); updateZoomStatus(); }
+    else if (action === 'fit') { fitActiveView(); }
     else if (action === 'fit3d') { if (App.view3d && App.view3d.fit) App.view3d.fit(); if (App.view3d) App.view3d.render(); }
     else if (action === 'capture3d') capture3D();
     else if (action === 'new-sheet') addSheet();
@@ -1826,6 +2633,7 @@
     if (selected.length === 1) renderEntityProps(selected[0]);
     else if (selected.length > 1) renderMultiProps(selected);
     else renderProjectSummary();
+    localize();
   }
 
   function renderProjectSummary() {
@@ -2341,8 +3149,10 @@
         return '<button class="cat-chip' + (App.libCat === c.id ? ' active' : '') + '" data-cat="' + esc(c.id) + '">' + esc(c.name) + '</button>';
       }).join('') + '</div>' +
       '<div class="library-grid" id="libGrid"></div>' +
+      '<div class="prop-actions"><button class="btn btn-ghost btn-sm" data-lib-action="import">' + icon('cube', 13) + 'Importar objeto (.glb / .obj)</button></div>' +
       '<div class="lib-hint"><strong>Cómo colocar:</strong> elige un mueble, mueve el cursor sobre el plano y haz clic. Pulsa <strong>R</strong> para rotar 90° y <strong>Esc</strong> para salir.</div>';
     renderLibraryGrid();
+    localize();
   }
 
   function renderLibraryGrid() {
@@ -2451,6 +3261,7 @@
       }).join('') + '</div>' +
       '<div class="lib-hint" style="margin-top:9px">Las capas ocultas no se dibujan ni se pueden seleccionar. Las capas bloqueadas permanecen visibles pero protegidas.</div>' +
       '<div class="prop-actions"><button class="btn btn-ghost btn-sm" data-layer-act="showall">Mostrar todas</button></div></div>';
+    localize();
   }
 
   function onLayerClick(e) {
@@ -2910,16 +3721,20 @@
       '<div class="help-copy"><p><strong>Flujo recomendado.</strong> Dibuja el perímetro con la herramienta Muro, inserta puertas y ventanas sobre los muros, y pulsa <strong>Detectar ambientes</strong> para etiquetar los recintos. Amuebla desde la biblioteca y comprueba el resultado en 3D.</p>' +
       '<p><strong>Láminas y PDF.</strong> En la vista Láminas puedes escoger tamaño, orientación, escala y uno de los cuatro cajetines. El PDF se genera vectorial, con el plano nítido a cualquier zoom.</p>' +
       '<p><strong>DWG/DXF.</strong> El navegador no escribe el formato binario propietario DWG; EngDraft exporta DXF R12, el formato de intercambio de AutoCAD. Abre el DXF en AutoCAD y usa <em>Guardar como → DWG</em> si necesitas ese formato.</p>' +
-      '<p><strong>Unidades.</strong> El botón del sistema de unidades en la barra de estado alterna entre métrico (m · m²) e imperial (ft · ft²). También puedes cambiarlo en Datos del proyecto. Las cotas, áreas, propiedades y láminas se actualizan.</p>' +
-      '<p><strong>Rejilla a medida.</strong> Con <em>Shift+G</em> o el botón <strong>Rejilla</strong> del lienzo abres el cuadro de rejilla: separación de líneas, línea maestra, origen y un paso de ajuste independiente. Un paso fino (por ejemplo 5 cm o 1") permite dibujar muros y huecos con dimensiones exactas sin perder la referencia visual.</p>' +
+      '<p><strong>Unidades.</strong> El selector del sistema de unidades está en el menú izquierdo (sección superior, junto a <em>ES/EN</em>) y alterna entre métrico (m · m²) e imperial (ft · ft²). También puedes cambiarlo en Datos del proyecto. Las cotas, áreas, propiedades y láminas se actualizan.</p>' +
+      '<p><strong>Rejilla a medida.</strong> Con <em>Shift+G</em> o el botón <strong>Rejilla</strong> del menú izquierdo abres el cuadro de rejilla: separación de líneas, línea maestra, origen y un paso de ajuste independiente. Un paso fino (por ejemplo 5 cm o 1") permite dibujar muros y huecos con dimensiones exactas sin perder la referencia visual.</p>' +
       '<p><strong>Tamaño de letra.</strong> El botón <em>Aa</em> de la barra de estado cambia el tamaño del texto entre Normal, Grande y Muy grande; la preferencia queda guardada en este navegador.</p>' +
       '<p><strong>Muros curvos.</strong> Con las herramientas <em>Muro en arco</em> (C) y <em>Muro spline</em> (K) dibujas muros curvos: en el arco, el tercer clic define la curvatura; en la spline, cada clic añade un punto y Enter o doble clic termina. Selecciona un muro curvo para ajustar su flecha, invertir el arco o quitar la curva desde Propiedades. Los muros curvos no admiten puertas ni ventanas en esta versión.</p>' +
-      '<p><strong>Escena 3D.</strong> En la pestaña <em>Escena</em> del panel de ajustes eliges el modo de renderizado (esquemático o realista), el tipo de techo (plano, a dos aguas, arco o spline), su altura y alero, los colores y texturas de paredes, techo y suelo, y el ángulo del sol. Arriba a la izquierda de la vista 3D tienes además los selectores rápidos <strong>Techo</strong> y <strong>Modo</strong>, y el botón <strong>Colores y texturas</strong> que abre directamente los materiales. El botón <em>Vuelo dron</em> inicia una animación de cámara alrededor de la maqueta; un clic en la vista la detiene.</p>' +
+      '<p><strong>Escena 3D.</strong> En la pestaña <em>Escena</em> del panel de ajustes eliges el modo de renderizado (esquemático o realista), el tipo de techo (plano, a dos aguas, <strong>cuatro aguas</strong>, arco, spline o <strong>Mi diseño</strong>), su altura y alero, los colores y texturas de paredes, techo y suelo, y el ángulo del sol. Arriba a la izquierda de la vista 3D tienes además los selectores rápidos <strong>Techo</strong> y <strong>Modo</strong>, y el botón <strong>Colores y texturas</strong> que abre directamente los materiales. El botón <em>Vuelo dron</em> inicia una animación de cámara alrededor de la maqueta; un clic en la vista la detiene.</p>' +
+      '<p><strong>Diseñar techo.</strong> Desde <em>Escena → Diseñar techo</em>, desde el botón <strong>Diseñar techo</strong> de la vista 2D o eligiendo <em>Mi diseño</em> en el selector rápido, se abre un lienzo donde arrastras los puntos del perfil (doble clic añade un punto, clic derecho lo quita). Puedes partir de los presets Plano, A dos aguas, Cuatro aguas, Arco o Spline y ajustar altura, alero y orientación de la cumbrera.</p>' +
+      '<p><strong>Vistas y secciones.</strong> En el menú izquierdo, la sección <em>Vistas</em> muestra la planta o genera el <strong>frontal</strong>, los <strong>laterales derecho e izquierdo</strong> y las <strong>secciones transversal y longitudinal</strong> del proyecto en el área 2D, en modo lectura. En las secciones puedes mover la posición del corte con el control <em>Posición</em>; los botones Ajustar y el zoom funcionan también sobre la vista generada, y <em>Volver a planta</em> regresa al editor.</p>' +
+      '<p><strong>Idioma.</strong> El botón <em>ES / EN</em> del menú izquierdo cambia toda la interfaz entre español e inglés; la preferencia se recuerda en este navegador. El planos, el manual y los datos del proyecto no se traducen.</p>' +
+      '<p><strong>Importar objetos.</strong> En <em>Biblioteca</em> pulsa <strong>Importar objeto (.glb / .obj)</strong>. El formato recomendado es <strong>GLB</strong> (glTF 2.0 binario): un solo archivo, estándar web y con materiales; OBJ también se acepta. Indica nombre y dimensiones reales y el objeto se añade a <em>Mis objetos</em> para colocarlo, verlo en 3D y exportarlo. FBX, 3DS y STL no se admiten.</p>' +
       '<p><strong>Puertas y ventanas.</strong> Selecciona un muro y edita sus aberturas: ancho, alto, posición, antepecho, sentido de apertura y bisagra. Los botones Girar hoja e Invertir bisagra cambian el dibujo en 2D y 3D.</p>' +
       '<p><strong>Privacidad.</strong> Todo se dibuja y se guarda en tu equipo. La aplicación funciona sin conexión y no envía datos a ningún servidor.</p>' +
       '<p><strong>Manual completo.</strong> El manual de uso incluye tutorial paso a paso, buenas prácticas, ejercicios, preguntas frecuentes y checklist de entrega: <a href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">abrir manual en PDF</a>.</p>' +
       '<p><strong>Autor:</strong> ' + AUTHOR + '.</p>' +
-      '<p><span class="badge-soft">ENGDRAFT 1.3</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .engdraft para conservar copias.</p></div>';
+      '<p><span class="badge-soft">ENGDRAFT 1.4</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .engdraft para conservar copias.</p></div>';
     openModal({
       title: 'Ayuda y atajos', subtitle: 'Todo lo necesario para empezar', body: body,
       footer: '<a class="btn btn-ghost" href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">Manual PDF</a>' +
@@ -3079,6 +3894,15 @@
   App.getGridSettings = gridSettings;
   App.applyGrid = applyGridToEditor;
   App.refresh = function () { refreshHeader(); refreshProps(); refreshLayers(); refreshLevelTabs(); };
+  App.setViewMode = setViewMode;
+  App.getViewMode = function () { return App.viewMode; };
+  App.renderViews = renderViews;
+  App.openRoofDesigner = openRoofDesigner;
+  App.showImportModal = showImportModal;
+  App.toggleLanguage = toggleLanguage;
+  App.registerProjectAssets = registerProjectAssets;
+  App.viewsOpts = viewsOpts;
+  App.getViewsData = function () { return App.viewsData; };
 
   // ================================================================== arranque
   if (document.readyState === 'loading') {

@@ -203,9 +203,9 @@
     return out;
   }
 
-  // Rueda: banda de rodadura + flancos + llanta clara y buje.
+  // Rueda: banda de rodadura + flancos + llanta clara y radios.
   function MWheel(cx, cy, cz, r, halfW, tire, rim, seg) {
-    seg = seg || 10;
+    seg = seg || 14;
     var out = [], i, j;
     out = out.concat(MTubeSeg({ x: cx, y: cy - halfW, z: cz }, { x: cx, y: cy + halfW, z: cz }, r, r, tire, seg, {}));
     var inner = r * 0.62;
@@ -224,10 +224,26 @@
       out.push(MFace([oL[i], oL[j], iL[j], iL[i]], tire, {}));
       out.push(MFace([oR[i], oR[j], iR[j], iR[i]], tire, {}));
     }
-    out = out.concat(MFanY(cx, cy - halfW - 1, cz, inner, rim, seg));
-    out = out.concat(MFanY(cx, cy + halfW + 1, cz, inner, rim, seg));
-    out = out.concat(MFanY(cx, cy - halfW - 2, cz, inner * 0.34, '#8e99a6', seg));
-    out = out.concat(MFanY(cx, cy + halfW + 2, cz, inner * 0.34, '#8e99a6', seg));
+    var yL = cy - halfW - 1, yR = cy + halfW + 1;
+    out = out.concat(MFanY(cx, yL, cz, inner, rim, seg));
+    out = out.concat(MFanY(cx, yR, cz, inner, rim, seg));
+    // Radios de la llanta (detalle sobre el disco claro).
+    var spokes = 5, r0 = inner * 0.22, r1 = inner * 0.94, hs = 0.22;
+    for (i = 0; i < spokes; i++) {
+      var a0 = Math.PI * 2 * i / spokes, a1 = a0 + hs;
+      out.push(MFace([
+        { x: cx + Math.cos(a0) * r0, y: yL - 2, z: cz + Math.sin(a0) * r0 },
+        { x: cx + Math.cos(a1) * r0, y: yL - 2, z: cz + Math.sin(a1) * r0 },
+        { x: cx + Math.cos(a1) * r1, y: yL - 2, z: cz + Math.sin(a1) * r1 },
+        { x: cx + Math.cos(a0) * r1, y: yL - 2, z: cz + Math.sin(a0) * r1 }
+      ], '#7e8894', {}));
+      out.push(MFace([
+        { x: cx + Math.cos(a0) * r0, y: yR + 2, z: cz + Math.sin(a0) * r0 },
+        { x: cx + Math.cos(a1) * r0, y: yR + 2, z: cz + Math.sin(a1) * r0 },
+        { x: cx + Math.cos(a1) * r1, y: yR + 2, z: cz + Math.sin(a1) * r1 },
+        { x: cx + Math.cos(a0) * r1, y: yR + 2, z: cz + Math.sin(a0) * r1 }
+      ], '#7e8894', {}));
+    }
     return MOrient(out, { x: cx, y: cy, z: cz });
   }
 
@@ -364,120 +380,310 @@
     return mesh;
   }
 
-  // --- automóvil moderno: carrocería con arcos de rueda, cabina de cristal,
-  //     faros/pilotos, parrilla, faldones, espejos y 4 ruedas (frente hacia -X) ---
-  function buildCarMesh() {
-    var body = [], glass = '#46586a', paint = '#9db2c3', paintDark = '#7e97aa';
-    var trim = '#2f3a45', light = '#efe8cd';
-    function q(a, b, c, d, color, opts) { body.push(MFace([a, b, c, d], color, opts)); }
+  // --- vehículos: sedán (car), SUV (suv) y pickup (pickup) ---
+  // Carrocería con laterales suavizados y pasos de rueda circulares, cabina de
+  // cristal tintado, paragolpes, capó con líneas, techo panorámico (car/suv),
+  // faros/pilotos con detalle y 4 ruedas con llanta y radios. Frente hacia -X.
+  var VEH = {
+    car: {
+      L: 2150, NB: 810, NT: 790, Z0: 220, BELT: 950, ROOF: 1470,
+      wheelR: 330, wheelHW: 105, wheelY: 735, axleF: -1380, axleR: 1380, archR: 430,
+      cowlX: -820, zCowl: 1015, roofF: -300, roofR: 640, roofHW: 680,
+      deckX: 1080, deckZ: 1015, rear: 'trunk', pano: true, rails: false,
+      paint: '#9db2c3', paintDark: '#7e97aa', glass: '#37434f', trim: '#2f3a45'
+    },
+    suv: {
+      L: 2400, NB: 870, NT: 845, Z0: 300, BELT: 1080, ROOF: 1760,
+      wheelR: 380, wheelHW: 120, wheelY: 770, axleF: -1480, axleR: 1480, archR: 500,
+      cowlX: -880, zCowl: 1180, roofF: -320, roofR: 900, roofHW: 720,
+      deckX: 1380, deckZ: 1140, rear: 'trunk', pano: true, rails: true,
+      paint: '#9fb4c4', paintDark: '#8098ab', glass: '#37434f', trim: '#2f3a45'
+    },
+    pickup: {
+      L: 2700, NB: 900, NT: 875, Z0: 320, BELT: 1120, ROOF: 1820,
+      wheelR: 385, wheelHW: 125, wheelY: 795, axleF: -1650, axleR: 1650, archR: 500,
+      cowlX: -920, zCowl: 1210, roofF: -380, roofR: 520, roofHW: 720,
+      deckX: 800, deckZ: 1210, rear: 'bed', pano: false, rails: false, bedX0: 860,
+      paint: '#a5b7c6', paintDark: '#8499aa', glass: '#37434f', trim: '#2f3a45'
+    }
+  };
 
-    var NB = 810, NT = 790;   // semiancho en el faldón y en la línea de cintura
-    var Z0 = 220, BELT = 950; // piso de carrocería y cintura
-    var i;
+  function buildVehicleMesh(kind) {
+    var c = VEH[kind] || VEH.car;
+    var L = c.L, NB = c.NB, NT = c.NT, Z0 = c.Z0, BELT = c.BELT, ROOF = c.ROOF;
+    var paint = c.paint, paintDark = c.paintDark, glass = c.glass, trim = c.trim;
+    var light = '#fdf3cf', amber = '#e8a95b', red = '#c1453c';
+    var body = [], extra = [], axles = [c.axleF, c.axleR];
+    function q(a, b, cc, d, color, opts) { body.push(MFace([a, b, cc, d], color, opts)); }
+    var i, k;
+    var zAedge = 2 * c.wheelR + 40 - c.archR;
+    function zArch(dx) {
+      return (2 * c.wheelR + 40) + Math.sqrt(Math.max(0, c.archR * c.archR - dx * dx)) - c.archR;
+    }
+    function zBottom(x) {
+      var z = Z0;
+      for (var a = 0; a < 2; a++) {
+        var dx = x - axles[a], ad = Math.abs(dx);
+        if (ad <= c.archR) z = Math.max(z, zArch(dx));
+        else if (ad < c.archR + 90) {
+          var t = (ad - c.archR) / 90;
+          z = Math.max(z, zAedge * (1 - t) + Z0 * t);
+        }
+      }
+      return z;
+    }
+
     // Bajos.
-    q({ x: -2130, y: -NB, z: Z0 }, { x: 2130, y: -NB, z: Z0 },
-      { x: 2130, y: NB, z: Z0 }, { x: -2130, y: NB, z: Z0 }, trim);
-    // Laterales con caída hacia el techo y huecos de rueda escalonados.
-    var xs = [-2150, -1810, -1700, -1060, -960, 950, 1060, 1600, 1800, 2150];
-    var zb = [220, 220, 665, 665, 220, 220, 665, 665, 220, 220];
-    for (i = 0; i < xs.length - 1; i++) {
-      q({ x: xs[i], y: NB, z: zb[i] }, { x: xs[i + 1], y: NB, z: zb[i + 1] },
-        { x: xs[i + 1], y: NT, z: BELT }, { x: xs[i], y: NT, z: BELT }, paint);
-      q({ x: xs[i], y: -NB, z: zb[i] }, { x: xs[i + 1], y: -NB, z: zb[i + 1] },
-        { x: xs[i + 1], y: -NT, z: BELT }, { x: xs[i], y: -NT, z: BELT }, paint);
+    q({ x: -L + 20, y: -NB, z: Z0 }, { x: L - 20, y: -NB, z: Z0 },
+      { x: L - 20, y: NB, z: Z0 }, { x: -L + 20, y: NB, z: Z0 }, trim);
+    // Laterales con caída y pasos de rueda redondeados.
+    var xs = [-L, -L + 180, L - 180, L];
+    for (k = 0; k < 2; k++) {
+      xs.push(axles[k] - c.archR - 90, axles[k] + c.archR + 90);
+      for (i = 0; i <= 12; i++) xs.push(axles[k] + c.archR * (-1 + 2 * i / 12));
+    }
+    xs.sort(function (a, b) { return a - b; });
+    var X = [-L];
+    for (i = 1; i < xs.length; i++) {
+      if (xs[i] - X[X.length - 1] > 45 && xs[i] < L - 40) X.push(xs[i]);
+    }
+    X.push(L);
+    for (i = 0; i < X.length - 1; i++) {
+      var x0 = X[i], x1 = X[i + 1], z0 = zBottom(x0), z1b = zBottom(x1);
+      q({ x: x0, y: NB, z: z0 }, { x: x1, y: NB, z: z1b },
+        { x: x1, y: NT, z: BELT }, { x: x0, y: NT, z: BELT }, paint);
+      q({ x: x0, y: -NB, z: z0 }, { x: x1, y: -NB, z: z1b },
+        { x: x1, y: -NT, z: BELT }, { x: x0, y: -NT, z: BELT }, paint);
     }
     // Frente y zaga.
-    q({ x: -2150, y: -NB, z: Z0 }, { x: -2150, y: NB, z: Z0 },
-      { x: -2150, y: NT, z: BELT }, { x: -2150, y: -NT, z: BELT }, paint);
-    q({ x: 2150, y: -NB, z: Z0 }, { x: 2150, y: NB, z: Z0 },
-      { x: 2150, y: NT, z: BELT }, { x: 2150, y: -NT, z: BELT }, paint);
-    // Capó y tapa del maletero con ligera inclinación.
-    q({ x: -2150, y: -NT, z: BELT }, { x: -2150, y: NT, z: BELT },
-      { x: -820, y: NT, z: 1015 }, { x: -820, y: -NT, z: 1015 }, paint);
-    q({ x: 1080, y: -NT, z: 1015 }, { x: 1080, y: NT, z: 1015 },
-      { x: 2150, y: NT, z: BELT }, { x: 2150, y: -NT, z: BELT }, paint);
-    // Parabrisas, techo y luneta trasera.
-    q({ x: -820, y: -NT, z: 1015 }, { x: -820, y: NT, z: 1015 },
-      { x: -300, y: 680, z: 1470 }, { x: -300, y: -680, z: 1470 }, glass);
-    q({ x: -300, y: -680, z: 1470 }, { x: -300, y: 680, z: 1470 },
-      { x: 640, y: 680, z: 1470 }, { x: 640, y: -680, z: 1470 }, paint);
-    q({ x: 640, y: -680, z: 1470 }, { x: 640, y: 680, z: 1470 },
-      { x: 1080, y: NT, z: 1015 }, { x: 1080, y: -NT, z: 1015 }, glass);
-    // Cristales laterales, pilares A/B/C.
-    var ys = NT, yt = 680;
-    q({ x: -820, y: ys, z: BELT }, { x: 120, y: ys, z: BELT },
-      { x: 120, y: yt, z: 1470 }, { x: -300, y: yt, z: 1470 }, glass);
-    q({ x: 180, y: ys, z: BELT }, { x: 1080, y: ys, z: BELT },
-      { x: 640, y: yt, z: 1470 }, { x: 180, y: yt, z: 1470 }, glass);
-    q({ x: 120, y: ys + 2, z: BELT }, { x: 180, y: ys + 2, z: BELT },
-      { x: 180, y: yt + 2, z: 1470 }, { x: 120, y: yt + 2, z: 1470 }, paintDark);
-    q({ x: -820, y: -ys, z: BELT }, { x: 120, y: -ys, z: BELT },
-      { x: 120, y: -yt, z: 1470 }, { x: -300, y: -yt, z: 1470 }, glass);
-    q({ x: 180, y: -ys, z: BELT }, { x: 1080, y: -ys, z: BELT },
-      { x: 640, y: -yt, z: 1470 }, { x: 180, y: -yt, z: 1470 }, glass);
-    q({ x: 120, y: -ys - 2, z: BELT }, { x: 180, y: -ys - 2, z: BELT },
-      { x: 180, y: -yt - 2, z: 1470 }, { x: 120, y: -yt - 2, z: 1470 }, paintDark);
-    // Pilares A y C (triángulos de chapa entre parabrisas/luneta y cristal lateral).
-    body.push(MFace([{ x: -820, y: ys, z: BELT }, { x: -820, y: ys, z: 1015 }, { x: -300, y: yt, z: 1470 }], paint));
-    body.push(MFace([{ x: 1080, y: ys, z: 1015 }, { x: 1080, y: ys, z: BELT }, { x: 640, y: yt, z: 1470 }], paint));
-    body.push(MFace([{ x: -820, y: -ys, z: BELT }, { x: -820, y: -ys, z: 1015 }, { x: -300, y: -yt, z: 1470 }], paint));
-    body.push(MFace([{ x: 1080, y: -ys, z: 1015 }, { x: 1080, y: -ys, z: BELT }, { x: 640, y: -yt, z: 1470 }], paint));
-    // Espejos retrovisores.
-    q({ x: -770, y: NT - 4, z: 1030 }, { x: -660, y: NT - 4, z: 1030 },
-      { x: -660, y: 880, z: 1075 }, { x: -770, y: 880, z: 1075 }, paint, { twoSided: true });
-    q({ x: -770, y: -NT + 4, z: 1030 }, { x: -660, y: -NT + 4, z: 1030 },
-      { x: -660, y: -880, z: 1075 }, { x: -770, y: -880, z: 1075 }, paint, { twoSided: true });
-    // Cejas de los pasos de rueda y faldones laterales.
-    var arch = [[-1810, -1700], [-1700, -1060], [-1060, -960], [1060, 1600], [1600, 1800]];
-    var ab = [[220, 665], [665, 665], [665, 220], [665, 665], [665, 220]];
-    for (i = 0; i < arch.length; i++) {
-      var a0 = arch[i][0], a1 = arch[i][1], b0 = ab[i][0], b1 = ab[i][1];
-      q({ x: a0, y: NB + 5, z: b0 - 30 }, { x: a1, y: NB + 5, z: b1 - 30 },
-        { x: a1, y: NB + 5, z: b1 + 34 }, { x: a0, y: NB + 5, z: b0 + 34 }, trim);
-      q({ x: a0, y: -NB - 5, z: b0 - 30 }, { x: a1, y: -NB - 5, z: b1 - 30 },
-        { x: a1, y: -NB - 5, z: b1 + 34 }, { x: a0, y: -NB - 5, z: b0 + 34 }, trim);
+    q({ x: -L, y: -NB, z: Z0 }, { x: -L, y: NB, z: Z0 },
+      { x: -L, y: NT, z: BELT }, { x: -L, y: -NT, z: BELT }, paint);
+    q({ x: L, y: -NB, z: Z0 }, { x: L, y: NB, z: Z0 },
+      { x: L, y: NT, z: BELT }, { x: L, y: -NT, z: BELT }, paint);
+    // Capó (con dos líneas de carácter) y tapa del maletero.
+    q({ x: -L, y: -NT, z: BELT }, { x: -L, y: NT, z: BELT },
+      { x: c.cowlX, y: NT, z: c.zCowl }, { x: c.cowlX, y: -NT, z: c.zCowl }, paint);
+    for (k = -1; k <= 1; k += 2) {
+      q({ x: -L + 60, y: k * NT / 3 - 3, z: BELT + 4 }, { x: -L + 60, y: k * NT / 3 + 3, z: BELT + 4 },
+        { x: c.cowlX - 40, y: k * NT / 3 + 3, z: c.zCowl + 4 }, { x: c.cowlX - 40, y: k * NT / 3 - 3, z: c.zCowl + 4 }, paintDark);
     }
-    q({ x: -950, y: NB + 5, z: Z0 }, { x: 950, y: NB + 5, z: Z0 },
-      { x: 950, y: NB + 5, z: Z0 + 130 }, { x: -950, y: NB + 5, z: Z0 + 130 }, trim);
-    q({ x: -950, y: -NB - 5, z: Z0 }, { x: 950, y: -NB - 5, z: Z0 },
-      { x: 950, y: -NB - 5, z: Z0 + 130 }, { x: -950, y: -NB - 5, z: Z0 + 130 }, trim);
+    if (c.rear === 'trunk') {
+      q({ x: c.deckX, y: -NT, z: c.deckZ }, { x: c.deckX, y: NT, z: c.deckZ },
+        { x: L, y: NT, z: BELT }, { x: L, y: -NT, z: BELT }, paint);
+    }
+    // Parabrisas, techo, techo panorámico, barras y luneta.
+    q({ x: c.cowlX, y: -NT, z: c.zCowl }, { x: c.cowlX, y: NT, z: c.zCowl },
+      { x: c.roofF, y: c.roofHW, z: ROOF }, { x: c.roofF, y: -c.roofHW, z: ROOF }, glass);
+    q({ x: c.roofF, y: -c.roofHW, z: ROOF }, { x: c.roofF, y: c.roofHW, z: ROOF },
+      { x: c.roofR, y: c.roofHW, z: ROOF }, { x: c.roofR, y: -c.roofHW, z: ROOF }, paint);
+    q({ x: c.roofR, y: -c.roofHW, z: ROOF }, { x: c.roofR, y: c.roofHW, z: ROOF },
+      { x: c.deckX, y: NT, z: c.deckZ }, { x: c.deckX, y: -NT, z: c.deckZ }, glass);
+    if (c.pano) {
+      q({ x: c.roofF + 90, y: -(c.roofHW - 95), z: ROOF + 2 }, { x: c.roofF + 90, y: c.roofHW - 95, z: ROOF + 2 },
+        { x: c.roofR - 90, y: c.roofHW - 95, z: ROOF + 2 }, { x: c.roofR - 90, y: -(c.roofHW - 95), z: ROOF + 2 }, '#4c5d6b');
+    }
+    if (c.rails) {
+      q({ x: c.roofF + 60, y: c.roofHW - 50, z: ROOF + 1 }, { x: c.roofF + 60, y: c.roofHW - 12, z: ROOF + 1 },
+        { x: c.roofR - 60, y: c.roofHW - 12, z: ROOF + 1 }, { x: c.roofR - 60, y: c.roofHW - 50, z: ROOF + 1 }, paintDark);
+      q({ x: c.roofF + 60, y: -c.roofHW + 12, z: ROOF + 1 }, { x: c.roofF + 60, y: -c.roofHW + 50, z: ROOF + 1 },
+        { x: c.roofR - 60, y: -c.roofHW + 50, z: ROOF + 1 }, { x: c.roofR - 60, y: -c.roofHW + 12, z: ROOF + 1 }, paintDark);
+    }
+    // Cabina: cristales laterales tintados, pilares A/B/C.
+    var ys = NT, yt = c.roofHW, b0 = Math.round((c.cowlX + c.deckX) / 2) - 10, b1 = b0 + 60;
+    q({ x: c.cowlX, y: ys, z: BELT }, { x: b0, y: ys, z: BELT },
+      { x: b0, y: yt, z: ROOF }, { x: c.roofF, y: yt, z: ROOF }, glass);
+    q({ x: b1, y: ys, z: BELT }, { x: c.deckX, y: ys, z: BELT },
+      { x: c.roofR, y: yt, z: ROOF }, { x: b1, y: yt, z: ROOF }, glass);
+    q({ x: b0, y: ys + 2, z: BELT }, { x: b1, y: ys + 2, z: BELT },
+      { x: b1, y: yt + 2, z: ROOF }, { x: b0, y: yt + 2, z: ROOF }, paintDark);
+    q({ x: c.cowlX, y: -ys, z: BELT }, { x: b0, y: -ys, z: BELT },
+      { x: b0, y: -yt, z: ROOF }, { x: c.roofF, y: -yt, z: ROOF }, glass);
+    q({ x: b1, y: -ys, z: BELT }, { x: c.deckX, y: -ys, z: BELT },
+      { x: c.roofR, y: -yt, z: ROOF }, { x: b1, y: -yt, z: ROOF }, glass);
+    q({ x: b0, y: -ys - 2, z: BELT }, { x: b1, y: -ys - 2, z: BELT },
+      { x: b1, y: -yt - 2, z: ROOF }, { x: b0, y: -yt - 2, z: ROOF }, paintDark);
+    body.push(MFace([{ x: c.cowlX, y: ys, z: BELT }, { x: c.cowlX, y: ys, z: c.zCowl }, { x: c.roofF, y: yt, z: ROOF }], paint));
+    body.push(MFace([{ x: c.deckX, y: ys, z: c.deckZ }, { x: c.deckX, y: ys, z: BELT }, { x: c.roofR, y: yt, z: ROOF }], paint));
+    body.push(MFace([{ x: c.cowlX, y: -ys, z: BELT }, { x: c.cowlX, y: -ys, z: c.zCowl }, { x: c.roofF, y: -yt, z: ROOF }], paint));
+    body.push(MFace([{ x: c.deckX, y: -ys, z: c.deckZ }, { x: c.deckX, y: -ys, z: BELT }, { x: c.roofR, y: -yt, z: ROOF }], paint));
+    // Espejos retrovisores y manillas de puerta.
+    var mx0 = c.cowlX + 40, mx1 = c.cowlX + 160, mz0 = c.zCowl + 15, mz1 = c.zCowl + 65;
+    q({ x: mx0, y: NT - 4, z: mz0 }, { x: mx1, y: NT - 4, z: mz0 },
+      { x: mx1, y: NT + 95, z: mz1 }, { x: mx0, y: NT + 95, z: mz1 }, paint, { twoSided: true });
+    q({ x: mx0, y: -NT + 4, z: mz0 }, { x: mx1, y: -NT + 4, z: mz0 },
+      { x: mx1, y: -NT - 95, z: mz1 }, { x: mx0, y: -NT - 95, z: mz1 }, paint, { twoSided: true });
+    var hxs = [-L * 0.06, L * 0.28];
+    for (i = 0; i < 2; i++) {
+      q({ x: hxs[i], y: NT + 3, z: BELT - 120 }, { x: hxs[i] + 150, y: NT + 3, z: BELT - 120 },
+        { x: hxs[i] + 150, y: NT + 3, z: BELT - 80 }, { x: hxs[i], y: NT + 3, z: BELT - 80 }, '#8d9aa6');
+      q({ x: hxs[i], y: -NT - 3, z: BELT - 120 }, { x: hxs[i] + 150, y: -NT - 3, z: BELT - 120 },
+        { x: hxs[i] + 150, y: -NT - 3, z: BELT - 80 }, { x: hxs[i], y: -NT - 3, z: BELT - 80 }, '#8d9aa6');
+    }
+    // Cejas de los pasos de rueda siguiendo el arco.
+    for (k = 0; k < 2; k++) {
+      var ax = axles[k];
+      for (i = 0; i < 8; i++) {
+        var dx0 = -c.archR + 2 * c.archR * (i / 8);
+        var dx1 = -c.archR + 2 * c.archR * ((i + 1) / 8);
+        var za = zArch(dx0), zbb = zArch(dx1);
+        q({ x: ax + dx0, y: NB + 5, z: za - 26 }, { x: ax + dx1, y: NB + 5, z: zbb - 26 },
+          { x: ax + dx1, y: NB + 5, z: zbb + 32 }, { x: ax + dx0, y: NB + 5, z: za + 32 }, trim);
+        q({ x: ax + dx0, y: -NB - 5, z: za - 26 }, { x: ax + dx1, y: -NB - 5, z: zbb - 26 },
+          { x: ax + dx1, y: -NB - 5, z: zbb + 32 }, { x: ax + dx0, y: -NB - 5, z: za + 32 }, trim);
+      }
+    }
+    // Faldones entre pasos y bajo los paragolpes.
+    var sk0 = c.axleF + c.archR + 40, sk1 = c.axleR - c.archR - 40;
+    q({ x: sk0, y: NB + 5, z: Z0 }, { x: sk1, y: NB + 5, z: Z0 },
+      { x: sk1, y: NB + 5, z: Z0 + 130 }, { x: sk0, y: NB + 5, z: Z0 + 130 }, trim);
+    q({ x: sk0, y: -NB - 5, z: Z0 }, { x: sk1, y: -NB - 5, z: Z0 },
+      { x: sk1, y: -NB - 5, z: Z0 + 130 }, { x: sk0, y: -NB - 5, z: Z0 + 130 }, trim);
     // Líneas de puerta.
-    var seams = [-150, 560];
-    for (i = 0; i < seams.length; i++) {
-      q({ x: seams[i], y: NB + 1, z: Z0 + 60 }, { x: seams[i] + 8, y: NB + 1, z: Z0 + 60 },
+    var seams = [-L * 0.07, L * 0.26];
+    for (i = 0; i < 2; i++) {
+      q({ x: seams[i], y: NB + 1, z: Z0 + 80 }, { x: seams[i] + 8, y: NB + 1, z: Z0 + 80 },
         { x: seams[i] + 8, y: NT + 1, z: BELT }, { x: seams[i], y: NT + 1, z: BELT }, '#5d6f7f');
-      q({ x: seams[i], y: -NB - 1, z: Z0 + 60 }, { x: seams[i] + 8, y: -NB - 1, z: Z0 + 60 },
+      q({ x: seams[i], y: -NB - 1, z: Z0 + 80 }, { x: seams[i] + 8, y: -NB - 1, z: Z0 + 80 },
         { x: seams[i] + 8, y: -NT - 1, z: BELT }, { x: seams[i], y: -NT - 1, z: BELT }, '#5d6f7f');
     }
-    // Parrilla, faros, paragolpes y toma de aire delantera.
-    q({ x: -2152, y: -470, z: 620 }, { x: -2152, y: 470, z: 620 },
-      { x: -2152, y: 470, z: 780 }, { x: -2152, y: -470, z: 780 }, trim);
-    q({ x: -2152, y: 530, z: 790 }, { x: -2152, y: 780, z: 790 },
-      { x: -2152, y: 780, z: 905 }, { x: -2152, y: 530, z: 905 }, light);
-    q({ x: -2152, y: -530, z: 790 }, { x: -2152, y: -780, z: 790 },
-      { x: -2152, y: -780, z: 905 }, { x: -2152, y: -530, z: 905 }, light);
-    q({ x: -2152, y: -NB, z: Z0 }, { x: -2152, y: NB, z: Z0 },
-      { x: -2152, y: NB, z: 585 }, { x: -2152, y: -NB, z: 585 }, paintDark);
-    q({ x: -2152, y: -520, z: 315 }, { x: -2152, y: 520, z: 315 },
-      { x: -2152, y: 520, z: 470 }, { x: -2152, y: -520, z: 470 }, trim);
-    // Pilotos, paragolpes trasero y matrícula.
-    q({ x: 2152, y: 530, z: 745 }, { x: 2152, y: 780, z: 745 },
-      { x: 2152, y: 780, z: 880 }, { x: 2152, y: 530, z: 880 }, '#b3483f');
-    q({ x: 2152, y: -530, z: 745 }, { x: 2152, y: -780, z: 745 },
-      { x: 2152, y: -780, z: 880 }, { x: 2152, y: -530, z: 880 }, '#b3483f');
-    q({ x: 2152, y: -NB, z: Z0 }, { x: 2152, y: NB, z: Z0 },
-      { x: 2152, y: NB, z: 585 }, { x: 2152, y: -NB, z: 585 }, paintDark);
-    q({ x: 2152, y: -180, z: 610 }, { x: 2152, y: 180, z: 610 },
-      { x: 2152, y: 180, z: 730 }, { x: 2152, y: -180, z: 730 }, '#e8e4d8');
-    MOrient(body, { x: 0, y: 0, z: 780 });
+    // Paragolpes (fascia central + esquinas envolventes).
+    var bz1 = Z0 + 190;
+    q({ x: -L - 3, y: -NB + 30, z: Z0 }, { x: -L - 3, y: NB - 30, z: Z0 },
+      { x: -L - 3, y: NB - 30, z: bz1 }, { x: -L - 3, y: -NB + 30, z: bz1 }, trim);
+    q({ x: -L - 3, y: NB - 30, z: Z0 }, { x: -L + 240, y: NB + 5, z: Z0 },
+      { x: -L + 240, y: NB + 5, z: bz1 }, { x: -L - 3, y: NB - 30, z: bz1 }, trim);
+    q({ x: -L - 3, y: -NB + 30, z: Z0 }, { x: -L + 240, y: -NB - 5, z: Z0 },
+      { x: -L + 240, y: -NB - 5, z: bz1 }, { x: -L - 3, y: -NB + 30, z: bz1 }, trim);
+    q({ x: L + 3, y: -NB + 30, z: Z0 }, { x: L + 3, y: NB - 30, z: Z0 },
+      { x: L + 3, y: NB - 30, z: bz1 }, { x: L + 3, y: -NB + 30, z: bz1 }, trim);
+    q({ x: L + 3, y: NB - 30, z: Z0 }, { x: L - 240, y: NB + 5, z: Z0 },
+      { x: L - 240, y: NB + 5, z: bz1 }, { x: L + 3, y: NB - 30, z: bz1 }, trim);
+    q({ x: L + 3, y: -NB + 30, z: Z0 }, { x: L - 240, y: -NB - 5, z: Z0 },
+      { x: L - 240, y: -NB - 5, z: bz1 }, { x: L + 3, y: -NB + 30, z: bz1 }, trim);
+    // Parrilla con barras, faros con detalle y toma de aire.
+    var gz0 = Z0 + (BELT - Z0) * 0.44, gz1 = Z0 + (BELT - Z0) * 0.74;
+    q({ x: -L - 4, y: -NB * 0.56, z: gz0 }, { x: -L - 4, y: NB * 0.56, z: gz0 },
+      { x: -L - 4, y: NB * 0.56, z: gz1 }, { x: -L - 4, y: -NB * 0.56, z: gz1 }, '#2a333c');
+    for (i = 0; i < 3; i++) {
+      var gz = gz0 + (gz1 - gz0) * (0.18 + 0.32 * i);
+      q({ x: -L - 5, y: -NB * 0.52, z: gz }, { x: -L - 5, y: NB * 0.52, z: gz },
+        { x: -L - 5, y: NB * 0.52, z: gz + 26 }, { x: -L - 5, y: -NB * 0.52, z: gz + 26 }, '#b9c4cc');
+    }
+    var hz0 = Z0 + (BELT - Z0) * 0.74, hz1 = Z0 + (BELT - Z0) * 0.95;
+    q({ x: -L - 4, y: NB * 0.58, z: hz0 }, { x: -L - 4, y: NB * 0.95, z: hz0 },
+      { x: -L - 4, y: NB * 0.95, z: hz1 }, { x: -L - 4, y: NB * 0.58, z: hz1 }, '#39434c');
+    q({ x: -L - 5, y: NB * 0.62, z: hz0 + 12 }, { x: -L - 5, y: NB * 0.93, z: hz0 + 12 },
+      { x: -L - 5, y: NB * 0.93, z: hz1 - 12 }, { x: -L - 5, y: NB * 0.62, z: hz1 - 12 }, light);
+    q({ x: -L - 4, y: -NB * 0.95, z: hz0 }, { x: -L - 4, y: -NB * 0.58, z: hz0 },
+      { x: -L - 4, y: -NB * 0.58, z: hz1 }, { x: -L - 4, y: -NB * 0.95, z: hz1 }, '#39434c');
+    q({ x: -L - 5, y: -NB * 0.93, z: hz0 + 12 }, { x: -L - 5, y: -NB * 0.62, z: hz0 + 12 },
+      { x: -L - 5, y: -NB * 0.62, z: hz1 - 12 }, { x: -L - 5, y: -NB * 0.93, z: hz1 - 12 }, light);
+    q({ x: -L - 4, y: NB * 0.60, z: gz0 - 70 }, { x: -L - 4, y: NB * 0.95, z: gz0 - 70 },
+      { x: -L - 4, y: NB * 0.95, z: gz0 - 30 }, { x: -L - 4, y: NB * 0.60, z: gz0 - 30 }, amber);
+    q({ x: -L - 4, y: -NB * 0.95, z: gz0 - 70 }, { x: -L - 4, y: -NB * 0.60, z: gz0 - 70 },
+      { x: -L - 4, y: -NB * 0.60, z: gz0 - 30 }, { x: -L - 4, y: -NB * 0.95, z: gz0 - 30 }, amber);
+    // Pilotos con detalle y matrícula.
+    var tz0 = BELT - 210, tz1 = BELT - 60;
+    q({ x: L + 4, y: NB * 0.50, z: tz0 }, { x: L + 4, y: NB * 0.95, z: tz0 },
+      { x: L + 4, y: NB * 0.95, z: tz1 }, { x: L + 4, y: NB * 0.50, z: tz1 }, '#39434c');
+    q({ x: L + 5, y: NB * 0.54, z: tz0 + 14 }, { x: L + 5, y: NB * 0.92, z: tz0 + 14 },
+      { x: L + 5, y: NB * 0.92, z: tz1 - 14 }, { x: L + 5, y: NB * 0.54, z: tz1 - 14 }, red);
+    q({ x: L + 4, y: -NB * 0.95, z: tz0 }, { x: L + 4, y: -NB * 0.50, z: tz0 },
+      { x: L + 4, y: -NB * 0.50, z: tz1 }, { x: L + 4, y: -NB * 0.95, z: tz1 }, '#39434c');
+    q({ x: L + 5, y: -NB * 0.92, z: tz0 + 14 }, { x: L + 5, y: -NB * 0.54, z: tz0 + 14 },
+      { x: L + 5, y: -NB * 0.54, z: tz1 - 14 }, { x: L + 5, y: -NB * 0.92, z: tz1 - 14 }, red);
+    q({ x: L + 4, y: -NB * 0.22, z: tz0 - 40 }, { x: L + 4, y: NB * 0.22, z: tz0 - 40 },
+      { x: L + 4, y: NB * 0.22, z: tz0 + 90 }, { x: L + 4, y: -NB * 0.22, z: tz0 + 90 }, '#e8e4d8');
+    // Caja de la pickup: piso, paredes interiores y tapas de las paredes.
+    if (c.rear === 'bed') {
+      q({ x: c.deckX, y: -NT, z: BELT }, { x: c.deckX, y: NT, z: BELT },
+        { x: c.deckX, y: NT, z: c.deckZ }, { x: c.deckX, y: -NT, z: c.deckZ }, paint);
+      var bedZ = BELT - 150, bw = NT - 45;
+      extra.push(MFace([{ x: c.bedX0, y: -bw, z: bedZ }, { x: L - 40, y: -bw, z: bedZ },
+        { x: L - 40, y: bw, z: bedZ }, { x: c.bedX0, y: bw, z: bedZ }], '#9aa6b0', { twoSided: true }));
+      extra.push(MFace([{ x: c.bedX0, y: bw, z: bedZ }, { x: L - 40, y: bw, z: bedZ },
+        { x: L - 40, y: bw, z: BELT }, { x: c.bedX0, y: bw, z: BELT }], paintDark, { twoSided: true }));
+      extra.push(MFace([{ x: c.bedX0, y: -bw, z: bedZ }, { x: L - 40, y: -bw, z: bedZ },
+        { x: L - 40, y: -bw, z: BELT }, { x: c.bedX0, y: -bw, z: BELT }], paintDark, { twoSided: true }));
+      extra.push(MFace([{ x: c.bedX0, y: -bw, z: bedZ }, { x: c.bedX0, y: bw, z: bedZ },
+        { x: c.bedX0, y: bw, z: BELT }, { x: c.bedX0, y: -bw, z: BELT }], paintDark, { twoSided: true }));
+      q({ x: c.bedX0, y: bw, z: BELT }, { x: L - 40, y: bw, z: BELT },
+        { x: L - 40, y: NT, z: BELT }, { x: c.bedX0, y: NT, z: BELT }, paintDark);
+      q({ x: c.bedX0, y: -NT, z: BELT }, { x: L - 40, y: -NT, z: BELT },
+        { x: L - 40, y: -bw, z: BELT }, { x: c.bedX0, y: -bw, z: BELT }, paintDark);
+    }
+    // Pozos de rueda oscuros (evitan ver a través de los pasos).
+    for (k = 0; k < 2; k++) {
+      var ax2 = axles[k], wy = c.wheelY - c.wheelHW - 10, wz = zArch(0) + 40;
+      extra.push(MFace([{ x: ax2 - c.archR - 40, y: wy, z: Z0 }, { x: ax2 + c.archR + 40, y: wy, z: Z0 },
+        { x: ax2 + c.archR + 40, y: wy, z: wz }, { x: ax2 - c.archR - 40, y: wy, z: wz }], '#232a31', { twoSided: true }));
+      extra.push(MFace([{ x: ax2 - c.archR - 40, y: -wy, z: Z0 }, { x: ax2 + c.archR + 40, y: -wy, z: Z0 },
+        { x: ax2 + c.archR + 40, y: -wy, z: wz }, { x: ax2 - c.archR - 40, y: -wy, z: wz }], '#232a31', { twoSided: true }));
+    }
 
-    var mesh = body;
-    mesh = mesh.concat(MWheel(-1380, -735, 330, 325, 105, '#2f3a45', '#c9d1d8', 10));
-    mesh = mesh.concat(MWheel(-1380, 735, 330, 325, 105, '#2f3a45', '#c9d1d8', 10));
-    mesh = mesh.concat(MWheel(1380, -735, 330, 325, 105, '#2f3a45', '#c9d1d8', 10));
-    mesh = mesh.concat(MWheel(1380, 735, 330, 325, 105, '#2f3a45', '#c9d1d8', 10));
+    MOrient(body, { x: 0, y: 0, z: BELT * 0.75 });
+    var mesh = body.concat(extra);
+    mesh = mesh.concat(MWheel(c.axleF, -c.wheelY, c.wheelR + 5, c.wheelR, c.wheelHW, '#2b333b', '#c9d1d8', 14));
+    mesh = mesh.concat(MWheel(c.axleF, c.wheelY, c.wheelR + 5, c.wheelR, c.wheelHW, '#2b333b', '#c9d1d8', 14));
+    mesh = mesh.concat(MWheel(c.axleR, -c.wheelY, c.wheelR + 5, c.wheelR, c.wheelHW, '#2b333b', '#c9d1d8', 14));
+    mesh = mesh.concat(MWheel(c.axleR, c.wheelY, c.wheelR + 5, c.wheelR, c.wheelHW, '#2b333b', '#c9d1d8', 14));
     return mesh;
   }
+
+  function buildCarMesh() { return buildVehicleMesh('car'); }
+
+  // --- iluminación: farola, lámpara de jardín, poste y colgante ---
+  // Luz emisiva simulada con colores muy claros en lentes y bombillas.
+  var LAMP_LIGHT = '#fdf3c4', LAMP_GLOW = '#fff7dc', LAMP_GLASS = '#e8dfc4';
+
+  function buildStreetLampMesh() {
+    var m = [], i;
+    m = m.concat(MTubeZ(0, 0, 0, 110, 230, 205, '#5b6771', 8, { caps: true }));
+    m = m.concat(MTubeZ(0, 0, 110, 1150, 150, 120, '#5b6771', 8, {}));
+    m = m.concat(MTubeZ(0, 0, 1150, 2160, 120, 85, '#5b6771', 8, {}));
+    var arm = [
+      { x: 0, y: 0, z: 2160 }, { x: 90, y: 0, z: 2240 }, { x: 200, y: 0, z: 2280 },
+      { x: 300, y: 0, z: 2280 }
+    ];
+    for (i = 0; i < arm.length - 1; i++) {
+      m = m.concat(MTubeSeg(arm[i], arm[i + 1], 60 - i * 10, 50 - i * 10, '#5b6771', 8, {}));
+    }
+    m = m.concat(MTubeSeg({ x: 300, y: 0, z: 2280 }, { x: 300, y: 0, z: 2165 }, 45, 130, '#4f5b66', 10, {}));
+    m.push(MDiscZ(300, 0, 2166, 122, LAMP_LIGHT, 8));
+    m = m.concat(MBlob(300, 0, 2215, 52, 52, 55, LAMP_GLOW, 5, 2, {}));
+    return m;
+  }
+
+  function buildGardenLampMesh() {
+    var m = [];
+    m = m.concat(MTubeZ(0, 0, 0, 370, 55, 34, '#5b6771', 8, { caps: true }));
+    m = m.concat(MBlob(0, 0, 430, 122, 122, 112, LAMP_GLOW, 6, 3, { colors: [LAMP_GLOW, LAMP_LIGHT] }));
+    m = m.concat(MTubeZ(0, 0, 540, 600, 105, 12, '#4f5b66', 8, { caps: true }));
+    return m;
+  }
+
+  function buildPostLampMesh() {
+    var m = [];
+    m = m.concat(MTubeZ(0, 0, 0, 180, 205, 175, '#5b6771', 8, { caps: true }));
+    m = m.concat(MTubeZ(0, 0, 180, 2400, 62, 46, '#5b6771', 8, {}));
+    m = m.concat(MTubeZ(0, 0, 2400, 2760, 148, 128, LAMP_LIGHT, 6, {}));
+    m.push(MFace(MRingXY(0, 0, 2401, 145, 145, 6, 0), LAMP_GLOW));
+    m.push(MFace(MRingXY(0, 0, 2759, 126, 126, 6, 0), '#4f5b66'));
+    m = m.concat(MTubeZ(0, 0, 2760, 2940, 185, 12, '#4f5b66', 8, { caps: true }));
+    m = m.concat(MBlob(0, 0, 2945, 34, 34, 32, '#4f5b66', 5, 2, {}));
+    return m;
+  }
+
+  function buildPendantLampMesh() {
+    var m = [];
+    m = m.concat(MTubeZ(0, 0, 340, 400, 20, 18, '#5b6771', 6, {}));
+    m.push(MDiscZ(0, 0, 400, 62, '#4f5b66', 8));
+    m = m.concat(MTubeSeg({ x: 0, y: 0, z: 340 }, { x: 0, y: 0, z: 232 }, 42, 150, LAMP_GLASS, 10, {}));
+    m.push(MDiscZ(0, 0, 233, 128, LAMP_GLOW, 8));
+    m = m.concat(MBlob(0, 0, 212, 54, 54, 58, LAMP_GLOW, 5, 2, {}));
+    return m;
+  }
+
 
   // ------------------------------------------------------------------ muebles
   function sofa(id, name, seats) {
@@ -931,6 +1137,55 @@
   ], 'carro auto vehiculo garaje');
   carDef.mesh = buildCarMesh();
 
+  var suvDef = add('suv', 'Camioneta SUV', 'exterior', 4800, 1950, 1800, '#8fa6b8', [
+    R(-2400, -975, 4800, 1950, 300, '#9fb4c4'),
+    R(-1500, -860, 2800, 1720, 240, '#b8c9d5'),
+    R(-1150, -700, 860, 1400, 150, '#cbd8e2'),
+    R(1150, -700, 500, 1400, 90, '#cbd8e2'),
+    C(-1450, -975, 275, '#5b6875'), C(1450, -975, 275, '#5b6875'),
+    C(-1450, 975, 275, '#5b6875'), C(1450, 975, 275, '#5b6875'),
+    L(-2400, -760, -2050, -760, '#fdf3cf', 4), L(-2400, 760, -2050, 760, '#fdf3cf', 4),
+    L(-1500, -560, 1300, -560, '#8a949c', 2), L(-1500, 560, 1300, 560, '#8a949c', 2)
+  ], [
+    B(-2400, -975, 300, 4800, 1950, 780, '#8fa6b8'),
+    B(-1500, -860, 1080, 2800, 1720, 680, '#a8bccb'),
+    B(-1470, -800, 1760, 2800, 80, 40, '#c9d1d8'),
+    B(-1470, 720, 1760, 2800, 80, 40, '#c9d1d8'),
+    B(-1610, -975, 0, 320, 300, 660, '#3a4450'),
+    B(-1610, 675, 0, 320, 300, 660, '#3a4450'),
+    B(1290, -975, 0, 320, 300, 660, '#3a4450'),
+    B(1290, 675, 0, 320, 300, 660, '#3a4450'),
+    B(-2400, -360, 470, 120, 720, 260, '#4a555f')
+  ], 'camioneta suv todoterreno vehiculo auto 4x4');
+  suvDef.mesh = buildVehicleMesh('suv');
+
+  var pickupDef = add('pickup', 'Pickup con caja', 'exterior', 5400, 2000, 1850, '#9fb4c4', [
+    R(-2700, -1000, 5400, 2000, 300, '#a5b7c6'),
+    R(-1150, -880, 1750, 1760, 240, '#b8c9d5'),
+    R(-850, -700, 780, 1400, 150, '#cbd8e2'),
+    R(500, -700, 260, 1400, 80, '#cbd8e2'),
+    R(880, -1000, 1750, 2000, 120, '#b8c9d5'),
+    R(940, -940, 1630, 1880, 80, '#9aa6b0'),
+    L(2620, -1000, 2620, 1000, '#7e97aa', 2),
+    C(-1650, -1000, 285, '#5b6875'), C(1650, -1000, 285, '#5b6875'),
+    C(-1650, 1000, 285, '#5b6875'), C(1650, 1000, 285, '#5b6875'),
+    L(-2700, -760, -2320, -760, '#fdf3cf', 4), L(-2700, 760, -2320, 760, '#fdf3cf', 4)
+  ], [
+    B(-2700, -1000, 320, 5400, 2000, 800, '#8fa6b8'),
+    B(-1150, -880, 1120, 1750, 1760, 700, '#a8bccb'),
+    B(-900, -760, 1320, 1250, 1520, 120, '#cbd8e2'),
+    B(880, -1000, 900, 1800, 2000, 120, '#9aa6b0'),
+    B(880, -1000, 1020, 1800, 180, 100, '#9fb4c4'),
+    B(880, 820, 1020, 1800, 180, 100, '#9fb4c4'),
+    B(2620, -1000, 900, 80, 2000, 300, '#9fb4c4'),
+    B(-1810, -1000, 0, 320, 320, 760, '#3a4450'),
+    B(-1810, 680, 0, 320, 320, 760, '#3a4450'),
+    B(1490, -1000, 0, 320, 320, 760, '#3a4450'),
+    B(1490, 680, 0, 320, 320, 760, '#3a4450'),
+    B(-2700, -380, 500, 120, 760, 260, '#4a555f')
+  ], 'pickup camioneta caja carga vehiculo auto');
+  pickupDef.mesh = buildVehicleMesh('pickup');
+
   add('outdoorTable', 'Mesa exterior', 'exterior', 1200, 1200, 750, '#b6a184', [
     C(0, 0, 600, '#ddd0bb', '#a08a6e'),
     C(0, 0, 540, '#e8ddc9'),
@@ -1358,6 +1613,110 @@
   curvedLane('drivewayCurve', 'Entrada en curva', 4500, 4500, 20, -2250, -2250, 4400, 1400,
     '#c7c4bc', '#e6e2d8', null, 'entrada acceso curva cochera concreto giro garaje');
 
+  // ------------------------------------------------------------------ iluminación
+  // Luz emisiva simulada con lentes y bombillas en colores muy claros.
+  var streetDef = add('streetLamp', 'Farola de calle', 'iluminacion', 900, 450, 2400, '#4f5b66', [
+    C(0, 0, 200, '#4f5b66', '#3a4450'),
+    C(0, 0, 60, '#fdf3c4', '#8a949c'),
+    L(0, 0, 300, 0, '#4f5b66', 4),
+    C(300, 0, 130, '#fdf3c4', '#8a949c'),
+    C(300, 0, 70, '#fff7dc', '#8a949c'),
+    P([{ x: 180, y: -35 }, { x: 430, y: -150 }, { x: 430, y: 150 }, { x: 180, y: 35 }],
+      'rgba(253,243,196,0.35)', 'rgba(0,0,0,0)')
+  ], [
+    B(-200, -200, 0, 400, 400, 110, '#5b6771'),
+    B(-45, -45, 110, 90, 90, 2050, '#5b6771'),
+    B(0, -30, 2120, 330, 60, 70, '#5b6771'),
+    B(170, -130, 2140, 260, 260, 140, '#4f5b66'),
+    B(190, -110, 2130, 220, 220, 40, '#fdf3c4')
+  ], 'farola calle alumbrado luz publica lampara poste');
+  streetDef.mesh = buildStreetLampMesh();
+
+  var gardenDef = add('gardenLamp', 'Lámpara de jardín', 'iluminacion', 280, 280, 600, '#5b6771', [
+    C(0, 0, 135, '#e8dfc4', '#8a949c'),
+    C(0, 0, 95, '#fdf3c4', '#8a949c'),
+    C(0, 0, 40, '#fff7dc', '#8a949c'),
+    C(0, 0, 18, '#5b6771', '#3a4450')
+  ], [
+    B(-45, -45, 0, 90, 90, 380, '#5b6771'),
+    B(-125, -125, 350, 250, 250, 250, '#fdf3c4'),
+    B(-100, -100, 590, 200, 200, 10, '#4f5b66')
+  ], 'lampara jardin baliza luz exterior suelo');
+  gardenDef.mesh = buildGardenLampMesh();
+
+  var postDef = add('postLamp', 'Poste con luminaria', 'iluminacion', 500, 500, 3000, '#4f5b66', [
+    R(-160, -160, 320, 320, 16, '#4f5b66', '#3a4450'),
+    R(-120, -120, 240, 240, 12, '#fdf3c4', '#8a949c'),
+    C(0, 0, 52, '#5b6771', '#3a4450'),
+    C(0, 0, 120, '#4f5b66', '#3a4450')
+  ], [
+    B(-200, -200, 0, 400, 400, 180, '#5b6771'),
+    B(-50, -50, 180, 100, 100, 2220, '#5b6771'),
+    B(-150, -150, 2400, 300, 300, 360, '#fdf3c4'),
+    B(-190, -190, 2760, 380, 380, 180, '#4f5b66'),
+    B(-40, -40, 2940, 80, 80, 40, '#4f5b66')
+  ], 'poste luminaria farol luz alumbrado parque');
+  postDef.mesh = buildPostLampMesh();
+
+  var pendantDef = add('pendantLamp', 'Lámpara colgante', 'iluminacion', 300, 300, 400, '#e8dfc4', [
+    C(0, 0, 150, '#e8dfc4', '#8a949c'),
+    C(0, 0, 105, '#fdf3c4', '#8a949c'),
+    C(0, 0, 42, '#5b6771', '#3a4450'),
+    C(0, 0, 18, '#4f5b66', '#3a4450')
+  ], [
+    B(-20, -20, 340, 40, 40, 60, '#5b6771'),
+    B(-150, -150, 230, 300, 300, 110, '#e8dfc4'),
+    B(-55, -55, 170, 110, 110, 70, '#fdf3c4')
+  ], 'lampara colgante techo suspension luz interior');
+  pendantDef.mesh = buildPendantLampMesh();
+
+  // ------------------------------------------------------------------ objetos personalizados
+  // registerCustom(def): añade o actualiza un objeto importado en la categoría 'mios'.
+  var CUSTOM_CAT = 'mios';
+
+  function normalizeCustom(def) {
+    if (!def || typeof def !== 'object') return null;
+    var id = typeof def.id === 'string' ? def.id.replace(/[^\w\-]/g, '').slice(0, 64) : '';
+    if (!id) return null;
+    var w = Number(def.w), d = Number(def.d), h = Number(def.h);
+    if (!isFinite(w) || w <= 0) w = 1000;
+    if (!isFinite(d) || d <= 0) d = 1000;
+    if (!isFinite(h) || h <= 0) h = 1000;
+    var color = (typeof def.color === 'string' && def.color) ? def.color : '#9aa8b6';
+    var plan = Array.isArray(def.plan) ? def.plan.filter(function (s) { return s && typeof s.t === 'string'; }) : [];
+    if (!plan.length) plan = [R(-w / 2, -d / 2, w, d, 20, color, '#52606d')];
+    var boxes = Array.isArray(def.boxes) ? def.boxes.filter(function (b) {
+      return b && isFinite(b.x) && isFinite(b.y) && isFinite(b.z) && b.w > 0 && b.d > 0 && b.h > 0;
+    }) : [];
+    if (!boxes.length) boxes = [B(-w / 2, -d / 2, 0, w, d, h, color)];
+    var out = {
+      id: id,
+      name: (typeof def.name === 'string' && def.name.trim()) ? def.name.trim().slice(0, 80) : id,
+      cat: CUSTOM_CAT,
+      tags: (((typeof def.tags === 'string') ? def.tags : '') + ' importado personalizado mios').trim(),
+      w: w, d: d, h: h, color: color,
+      plan: plan, boxes: boxes
+    };
+    var mesh = Array.isArray(def.mesh) ? def.mesh.filter(function (f) {
+      return f && Array.isArray(f.points) && f.points.length >= 3 && f.points.length <= 8;
+    }) : null;
+    if (mesh && mesh.length) out.mesh = mesh.slice(0, 8000);
+    if (typeof def.source === 'string' && def.source) out.source = def.source;
+    return out;
+  }
+
+  function registerCustom(def) {
+    var item = normalizeCustom(def);
+    if (!item) return null;
+    var exists = Object.prototype.hasOwnProperty.call(items, item.id);
+    items[item.id] = item;
+    if (!exists) order.push(item.id);
+    var hasMios = false;
+    for (var i = 0; i < categories.length; i++) if (categories[i].id === CUSTOM_CAT) hasMios = true;
+    if (!hasMios) categories.push({ id: CUSTOM_CAT, name: 'Mis objetos', icon: 'cube' });
+    return item;
+  }
+
   var categories = [
     { id: 'todos', name: 'Todos', icon: 'grid' },
     { id: 'muebles', name: 'Muebles', icon: 'sofa' },
@@ -1365,9 +1724,11 @@
     { id: 'bano', name: 'Baño', icon: 'bath' },
     { id: 'dormitorio', name: 'Dormitorio', icon: 'bed' },
     { id: 'exterior', name: 'Exterior', icon: 'tree' },
+    { id: 'iluminacion', name: 'Iluminación', icon: 'sun' },
     { id: 'plantas', name: 'Plantas', icon: 'tree' },
     { id: 'jardines', name: 'Jardines', icon: 'garden' },
-    { id: 'vias', name: 'Vías y accesos', icon: 'road' }
+    { id: 'vias', name: 'Vías y accesos', icon: 'road' },
+    { id: 'mios', name: 'Mis objetos', icon: 'cube' }
   ];
 
   var Library = {
@@ -1389,7 +1750,8 @@
         if (!q) return true;
         return (d.name + ' ' + d.tags + ' ' + d.id).toLowerCase().indexOf(q) >= 0;
       });
-    }
+    },
+    registerCustom: registerCustom
   };
 
   ED.Library = Library;
