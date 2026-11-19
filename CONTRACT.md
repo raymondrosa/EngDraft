@@ -549,7 +549,7 @@ def.mesh = [
 - Coordenadas locales idénticas a `boxes`: centro del objeto en (0,0), Y = norte, z desde el piso del nivel; en milímetros.
 - El ítem escala la malla con el mismo criterio que las cajas (`item.w/d/h` frente a `def.w/d/h`) y aplica rotación/posición del ítem.
 - `View3D` debe transformar los puntos y añadir cada polígono como cara iluminada (`addFace`), respetando `twoSided`, `edge` y, si existe, `tex`.
-- Presupuesto: máximo ~600 caras de malla por ítem y ~40 000 por escena (descarta el resto sin romper).
+- Presupuesto: máximo ~600 caras por ítem de biblioteca y hasta 8000 caras por objeto importado (`project.assets`), con ~40 000 caras de malla por escena (descarta el resto sin romper).
 - `library.js` puede generar mallas con bucles/funciones auxiliares (esferas, cilindros, conos, hojas curvas) en tiempo de carga; no se serializan en el proyecto.
 - Las mallas son visuales: los tests de integridad siguen exigiendo `plan` y `boxes` válidos.
 
@@ -562,3 +562,113 @@ def.mesh = [
 - Los cambios se reflejan al instante y se sincronizan con la pestaña Escena (misma fuente: `project.settings.roof/materials/render` + `options3d.roof`).
 - En la pestaña Escena, cambiar el tipo de techo activa "Mostrar techo" y la sección Materiales queda identificada (`#sceneMaterials`) para el acceso rápido.
 - El control rápido debe ser legible sobre el fondo claro del 3D y no tapar el indicador norte ni el canvas.
+
+---
+
+## 15. Ampliación 1.4 — techos de diseño, vistas y secciones, i18n, importación de objetos y barra lateral limpia
+
+### 15.1 Techos de diseño (modelo)
+
+`project.settings.roof`:
+
+```js
+{
+  style: 'flat'|'gable'|'hip'|'arc'|'spline'|'custom',
+  ridge: 'auto'|'x'|'y',        // orientación de la cumbrera (gable/hip/custom)
+  height: 1200,                 // mm, altura de referencia / flecha
+  overhang: 400,                // mm
+  profile: [ {t:0..1, z:mm}, … ] // solo style='custom': perfil del techo
+}
+```
+
+- `hip` = cuatro aguas (poliforme): cuatro faldones sobre el rectángulo de la planta, cumbrera en el eje largo (o el indicado por `ridge`); en plantas cuadradas degenera a pirámide.
+- `custom` = barrido del `profile` a lo largo de la cumbrera: `t` normalizado a lo ancho (extremos t=0 y t=1), `z` mm sobre el alero; muestreo suave (Catmull-Rom) entre puntos.
+- Saneado en `store.normalizeProject`: style/ridge en lista blanca; `profile` 2..24 puntos finitos ordenados por t, z 0..8000; si `style='custom'` sin perfil válido → `'gable'`.
+- `View3D` debe renderizar `hip` y `custom` con color/textura de techo, alero y sombras; `getRenderInfo().roofStyle` devuelve el estilo efectivo.
+- UI: modal **Diseñar techo** con lienzo interactivo (arrastrar puntos del perfil), presets Plano / A dos aguas / Cuatro aguas / Arco / Spline / Mi diseño, y botones Cancelar/Aplicar. Se abre desde el selector rápido de la vista 3D y desde Escena → Techo.
+
+### 15.2 Vistas y secciones (nuevo módulo `js/views.js`, equipo-planos)
+
+```js
+ED.Views.TYPES = [
+  { id:'front',    name:'Frontal' },
+  { id:'right',    name:'Lateral derecho' },
+  { id:'left',     name:'Lateral izquierdo' },
+  { id:'sectionX', name:'Sección transversal' },
+  { id:'sectionY', name:'Sección longitudinal' }
+];
+ED.Views.build(project, opts) -> {
+  type, title,
+  bounds: { minX, minY, maxX, maxY, w, h },
+  primitives: [ { kind:'poly'|'line'|'text', points:[{x,y}], fill, stroke, width, closed, text, size, align } ],
+  meta: { scale }
+}
+opts = { type, levelId|'all', sectionPos (mm), scale }
+ED.Views.render(canvas, project, opts) -> dibuja la vista ajustada al canvas (Canvas 2D; debe funcionar con canvas falso en Node)
+```
+
+- **Frontal:** proyección sobre X-Z mirando desde el sur (Y−); X a la derecha.
+- **Lateral derecho:** mirando desde +X hacia −X; **lateral izquierdo:** desde −X hacia +X; ejes horizontales Y (invertido/rotado según vista).
+- **Secciones:** `sectionX` = corte vertical en x=`sectionPos` (transversal); `sectionY` = corte en y=`sectionPos` (longitudinal). Por defecto `sectionPos` = centro de la caja del proyecto. Dibujar muros cortados con relleno/hatch, geometría visible detrás con líneas tenues, losa/terreno, techo (todos los estilos) y etiquetas de nivel/cota.
+- Soportar muros rectos y curvos, aberturas (puerta, ventana, garaje, paso), niveles, y techo flat/gable/hip/arc/spline/custom. Si algo no se puede representar se omite sin lanzar.
+- Coordenadas de salida en mm con Y hacia arriba; `build` es puro datos y `render` usa la misma primitiva. Sin dependencias ni DOM.
+
+### 15.3 Idioma ES/EN (nuevo módulo `js/i18n.js`, ui-typography)
+
+```js
+ED.I18n = {
+  current: 'es',
+  setLang('es'|'en'),          // persiste en localStorage 'engdraft.lang'
+  t(textoEspañol|clave, …),    // devuelve traducción o el original
+  apply(root),                 // traduce nodos de texto y atributos title/placeholder/aria-label
+  dict: { en: {…} }
+};
+```
+
+- Traducción por coincidencia exacta de los textos de la interfaz, con patrones para cadenas con números (p. ej. “Zoom 46%”, “3 ambientes”). `apply()` se puede invocar tras cada render; opcionalmente MutationObserver para contenido dinámico (toasts, modales).
+- Cobertura: index.html (topbar, vistas, menú, pestañas, estado), app.js (herramientas, propiedades, escena, láminas, modales principales, ayuda, toasts), biblioteca (categorías y nombres de objetos), etiquetas de vistas y mensajes de estado.
+- El PDF/manual y los mensajes internos de validación pueden quedar en español en esta versión.
+- Botón `#langToggle` en la barra lateral (lo inserta el Lead) con “ES / EN”; el Lead añade `<script src="js/i18n.js">` y llama a `apply()` en los renders principales.
+
+### 15.4 Importación de muebles/objetos (nuevo módulo `js/importer.js`, equipo-3d-mesh)
+
+```js
+ED.Importer.parse(file, opts) -> Promise<{
+  name, format: 'obj'|'glb'|'gltf',
+  mesh: [ { points:[{x,y,z}], color } ],   // triángulos
+  bounds: { minX,minY,minZ,maxX,maxY,maxZ },
+  triangleCount
+}>
+```
+
+- **OBJ** (texto, .obj): vértices `v` y caras `f` (triángulos o polígonos → triangulados); se ignoran normales/UV/materiales.
+- **GLB** (glTF 2.0 binario): chunk JSON + BIN, primitivas con POSITION e índices UNSIGNED_BYTE/SHORT/INT, FLOAT, aplicación de matrices de nodos; color de `pbrMetallicRoughness.baseColorFactor` o neutro `#cfd6dd`.
+- **.gltf** con buffers embebidos (`data:` base64) opcional.
+- Validación: máximo 8000 triángulos (si excede, decimado simple avisando), coordenadas finitas, errores claros en español cuando el formato no sea compatible.
+- La UI (Lead) pide nombre y dimensiones reales (ancho, fondo, alto), normaliza la malla a ese tamaño, calcula un contorno de planta (convex hull de la huella) y un color medio, y crea el objeto en `project.assets`.
+- **Formato recomendado al usuario:** GLB (glTF binario) por ser un único archivo estándar web con materiales; OBJ como alternativa aceptable; FBX/3DS/STL no se soportan.
+
+### 15.5 `project.assets` y biblioteca de objetos importados
+
+```js
+project.assets = [
+  { id:'asset_x', name, w, d, h, color, plan:[…], boxes:[…], mesh:[…], source:'glb'|'obj' }
+];
+```
+
+- `store.normalizeProject` valida y sanea assets (ids únicos, w/d/h 100..20000 mm, mesh ≤8000 caras, plan ≥3 puntos) y los conserva en export/import y autoguardado.
+- `ED.Library.registerCustom(def)` añade el objeto a `items`, `order` y a la categoría `mios` (“Mis objetos”); `ED.Library.categories` incluye `{ id:'mios', name:'Mis objetos' }`.
+- Al cargar un proyecto, el Lead registra `project.assets` para que planta, 3D, láminas y DXF resuelvan el `libId`.
+- UI Biblioteca: botón **Importar objeto** con selector de archivo `.glb/.obj`, campos de nombre y dimensiones, y nota sobre el formato recomendado.
+
+### 15.6 Barra lateral limpia (canvas despejado)
+
+- Se eliminan del lienzo `.canvas-toggles` y `.zoom-controls`; el canvas 2D queda sin overlays.
+- El rail izquierdo incorpora secciones:
+  * **Dibujo:** toggles Rejilla/Snap/Orto + chip de rejilla (abre Configurar rejilla).
+  * **Vista:** Ajustar, Zoom +, Zoom −.
+  * **Vistas:** Planta, Frontal, Lateral izq., Lateral der., Sección transversal, Sección longitudinal.
+  * **Sistema:** selector de unidades (m/ft) y selector de idioma (ES/EN).
+- Los toggles se sincronizan con `editor.snap`; unidades con `project.settings.units`; idioma con `ED.I18n`.
+- La barra de estado conserva coordenadas, zoom y nivel, pero pierde los botones de unidades/toggles (se mueven al rail); `#btnUnits` desaparece.
+- En modo vista (≠ Planta) se oculta el canvas del plano y se muestra `#viewsCanvas` con la vista generada; Ajustar/Zoom operan sobre la vista activa.
