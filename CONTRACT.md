@@ -54,7 +54,14 @@ project = {
   },
   settings: {
     units: "m",                       // "m" (métrico) | "ft" (imperial); solo presentación, datos en mm
-    grid: 250,                        // separación de rejilla en mm
+    grid: 250,                        // mm, separación de la rejilla menor
+    gridMajor: 4,                     // entero 2..50, líneas maestras cada N líneas menores
+    gridOriginX: 0,                   // mm, desfase del origen de la rejilla en X
+    gridOriginY: 0,                   // mm, desfase del origen de la rejilla en Y
+    snapStep: 0,                      // mm, paso de ajuste al dibujar; 0 = heredar grid
+    gridAdaptive: true,               // al alejar el zoom agrupa líneas para no saturar
+    gridStyle: "lines",               // "lines" | "dots"
+    showAxes: true,                   // dibuja los ejes del origen de la rejilla
     wallThickness: 150,               // mm, valor por defecto para muros nuevos
     wallHeight: 2700,                 // mm
     floorHeight: 2800,                // mm entre niveles
@@ -139,6 +146,11 @@ project = {
 
 Objetos opcionales adicionales futuros deben ignorarse sin romper. Cada objeto de `walls`,
 `rooms`, `items`, `texts` y `dims` tiene `level`; filtrar por nivel cuando aplique.
+
+`Store.normalizeProject` sanea las claves de rejilla: `grid` se limita a 5..100000 mm,
+`gridMajor` se redondea y limita a 2..50, `gridOriginX/Y` a ±1e7 mm, `snapStep` a 0..100000 mm
+(0 = heredar `grid`), `gridStyle` cae a `"lines"` si no es `"dots"`, y `gridAdaptive`/`showAxes`
+solo se desactivan con el valor `false`. Ningún valor puede quedar en `NaN`.
 
 ---
 
@@ -272,7 +284,15 @@ new ED.Editor2D(canvas, store, {
 editor.setTool("select"|"pan"|"wall"|"door"|"window"|"furniture"|"room"|"text"|"dim"|"erase")
 editor.setFurniture(libId)
 editor.setLevel(levelId)
-editor.setSnap({ grid:true, snapping:true, ortho:false, gridSize:250 })
+editor.setSnap({ grid:true, snapping:true, ortho:false,
+                 gridSize:250,                 // mm, rejilla menor
+                 gridMajor:4,                  // líneas maestras cada N menores
+                 gridOriginX:0, gridOriginY:0, // mm; también acepta gridOrigin:{x,y}
+                 snapStep:0,                   // mm; 0 = igual a gridSize
+                 gridStyle:"lines"|"dots", gridAdaptive:true, showAxes:true })
+editor.getGridInfo() -> { size, major, step, effectiveSize,
+                          origin:{x,y}, style, adaptive, axes }
+editor.snapPoint(worldPt, { noObject, noGrid }) -> { point, type, snapped }
 editor.setFurnitureRotation(deg)
 editor.render()
 editor.fitToContent()
@@ -281,6 +301,12 @@ editor.detectRooms() -> number   // crea rooms en regiones cerradas
 editor.getCursor()
 editor.cancel()
 ```
+
+El ajuste a rejilla usa `p = round((v - origen) / paso) * paso + origen`, tanto en
+`snapPoint()` como al arrastrar objetos en `_dragMove()`; los snaps a objetos (extremos,
+medios, jambas, vértices, centros) siguen teniendo prioridad sobre la rejilla. `effectiveSize`
+es la separación realmente dibujada, que puede doblarse cuando `gridAdaptive` está activo y el
+zoom aleja demasiado las líneas.
 
 ---
 
@@ -372,10 +398,25 @@ Debe abrir en AutoCAD/LibreCAD. La UI lo etiqueta "DWG/DXF (AutoCAD)".
 - Tipografía técnica: `"Bahnschrift", "Consolas", monospace` para cifras.
 - Radios 6–10 px, sombras suaves, microanimaciones 120–180 ms. Sin emojis en la UI.
 - Iconos SVG de trazo (1.5 px), no librerías externas.
+- **Tamaño de letra de la interfaz:** la escala tipográfica se define con los tokens CSS
+  `--fs-10` … `--fs-20`. El atributo `data-font` del elemento `<html>` admite
+  `normal` (sin atributo o `"normal"`), `grande` (+1 px por token) y `xl` (+2 px por token).
+  Lo gestiona el control **Aa** de la barra de estado y la preferencia se guarda en
+  `localStorage` con la clave `engdraft.ui.font`.
+- **Modal "Rejilla y ajuste":** se abre con `Shift+G`, con el botón **Rejilla** del lienzo o
+  con el chip de rejilla de la barra de estado. Edita `project.settings` (separación, maestra,
+  origen, paso de ajuste, estilo, adaptativa y ejes) con vista previa en vivo, aplica el cambio
+  con `editor.setSnap()` y pasa por el historial (`Ctrl+Z` lo deshace).
+- **Parámetros de URL de apoyo** (solo para verificación automática, no para el usuario final):
+  `?font=normal|grande|xl` fija el tamaño de letra del arranque sin persistirlo y
+  `?dialog=grid` abre el modal de rejilla al iniciar (también `?dialog=help`).
 
 ## 11. Pruebas
 
 - `node --check` en cada archivo.
+- Pruebas de humo con Node: `node tests/test-core.js` (geometría, biblioteca, plantillas,
+  store y rejilla), `node tests/test-grid.js` (motor de rejilla del editor 2D),
+  `node tests/test-sheets.js` (láminas y PDF) y `node tests/test-view3d.js` (renderizador 3D).
 - Node disponible en:
   `C:\Users\Raymond\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe`
 - Python disponible en:

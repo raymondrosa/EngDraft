@@ -26,6 +26,8 @@ Todos los datos se dibujan y se guardan en tu equipo. No se envía nada a ningú
 
 ### Plano 2D
 - Muros encadenados con espesor y altura editables, uniones automáticas y snapping a extremos, medios, vértices y rejilla.
+- **Rejilla configurable**: separación de líneas, línea maestra, origen desplazado y un **paso de ajuste independiente** para dibujar con dimensiones exactas (por ejemplo rejilla de 25 cm y ajuste fino de 5 cm). Estilos de líneas o puntos, rejilla adaptativa al zoom y ejes del origen. Se abre con `Shift+G`, con el botón **Rejilla** del lienzo o desde la barra de estado; la configuración se guarda en el proyecto y se puede deshacer con `Ctrl+Z`.
+- **Letra más legible**: escala tipográfica de la interfaz y control **Aa** en la barra de estado con tres tamaños (Normal, Grande y Muy grande). La preferencia queda recordada en este navegador.
 - Puertas y ventanas insertadas sobre el muro, con abanico, jambas, vidrio y antepecho. Puedes **girar la hoja, invertir la bisagra** y editar ancho, alto, posición y antepecho.
 - **Sistema métrico o imperial** conmutable desde la barra de estado o Datos del proyecto: m / m² o ft / ft² en cotas, áreas, propiedades, láminas y 3D.
 - Ambientes con nombre, acabado, color y **área calculada**; detección automática de recintos cerrados.
@@ -33,6 +35,12 @@ Todos los datos se dibujan y se guardan en tu equipo. No se envía nada a ningú
 - Cotas manuales y cotas generales automáticas, textos, norte, rejilla adaptativa, capas con visibilidad y bloqueo.
 - Selección, arrastre, rotación, duplicado, borrado, deshacer/rehacer y edición numérica de cada objeto.
 - Niveles ilimitados con pestañas de planta.
+
+La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfaz desde el control **Aa** de la barra de estado.
+
+![Configuración de la rejilla](docs/rejilla-config.png)
+
+![Tamaño de letra de la interfaz](docs/menu-letra.png)
 
 ### Vista 3D
 - Renderizador propio sobre Canvas 2D (sin WebGL ni librerías externas): perspectiva orbital, iluminación, sombras suaves y cielo.
@@ -83,6 +91,7 @@ Todos los datos se dibujan y se guardan en tu equipo. No se envía nada a ningú
 | Guardar proyecto / Abrir | `Ctrl+S` / `Ctrl+O` |
 | Nuevo proyecto / Duplicar mueble | `Ctrl+N` / `Ctrl+D` |
 | Alternar rejilla / snap / orto | `G` / `S` / `O` |
+| Configurar rejilla y paso de ajuste | `Shift+G` |
 | Rotar mueble seleccionado | `R` |
 | Ajustar vista | `Shift+F` o `Home` |
 | Vistas 2D / 3D / Láminas | `1` / `2` / `3` |
@@ -119,7 +128,8 @@ tests/                      Pruebas de humo con Node
 Con Node disponible:
 
 ```bash
-node tests/test-core.js      # geometría, biblioteca, plantillas, store, DXF
+node tests/test-core.js      # geometría, biblioteca, plantillas, store (rejilla), DXF
+node tests/test-grid.js      # rejilla configurable del editor 2D: ajuste, saneado y render
 node tests/test-sheets.js    # previews Canvas y PDF vectorial (xref/páginas)
 node tests/test-view3d.js    # renderizador 3D con canvas simulado
 node tests/make-samples.js   # regenera las muestras
