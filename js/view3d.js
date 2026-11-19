@@ -45,6 +45,13 @@
   var SHADOW_KY = -0.67;
   var SHADOW_MAX = 520;
 
+  // Presupuesto de mallas poligonales de biblioteca (def.mesh). Las caras de
+  // malla se descartan al agotar el presupuesto sin afectar a las cajas.
+  var MESH_ITEM_FACE_MAX = 600;        // caras por ítem
+  var MESH_SCENE_FACE_MAX = 40000;     // caras de malla por escena
+  var MESH_FACE_POINTS_MAX = 64;       // puntos por cara (el contrato pide 3..8)
+  var MESH_FOOTPRINT_SHADOW_MAX = 60;  // ítems con sombra de base (opcional)
+
   var ROOF_STYLES = { flat: 1, gable: 1, arc: 1, spline: 1 };
   var WALL_TEXTURES = { stucco: 1, brick: 1, wood: 1, stone: 1, smooth: 1 };
   var ROOF_TEXTURES = { tile: 1, shingle: 1, metal: 1, wood: 1, concrete: 1, smooth: 1 };
@@ -1967,6 +1974,9 @@
     var padMin = { x: Infinity, y: Infinity }, padMax = { x: -Infinity, y: -Infinity };
     var shadowCount = 0;
     var padFound = false;
+    // Contadores de mallas de biblioteca (def.mesh) para el presupuesto global.
+    var meshFaces = 0;
+    var meshShadowCount = 0;
 
     function bump(x, y, z) {
       if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return;
@@ -2509,29 +2519,120 @@
         if (def && num(def.d) > 0 && num(item.d) > 0) sy = clamp(num(item.d) / num(def.d), 0.45, 2.4);
         if (def && num(def.h) > 0 && num(item.h) > 0) sz = clamp(num(item.h) / num(def.h), 0.45, 2.4);
         var itemColor = (def && def.color) || '#8e99a6';
-        for (var bi = 0; bi < boxes.length; bi++) {
-          var bx = boxes[bi];
-          if (!bx) continue;
-          var lx = num(bx.x) * sx, ly = num(bx.y) * sy;
-          var bw = Math.max(20, num(bx.w) * sx), bd = Math.max(20, num(bx.d) * sy);
-          var bz = Math.max(0, num(bx.z) * sz), bh = Math.max(15, num(bx.h) * sz);
-          var lx0 = lx, ly0 = ly, lx1 = lx + bw, ly1 = ly + bd;
-          var local = [[lx0, ly0], [lx1, ly0], [lx1, ly1], [lx0, ly1]];
-          var corners2 = [];
-          for (var ci = 0; ci < 4; ci++) {
-            var lxp = local[ci][0], lyp = local[ci][1];
-            corners2.push({
-              x: ix + lxp * cosr - lyp * sinr,
-              y: iy + lxp * sinr + lyp * cosr
-            });
+        // Malla poligonal opcional (def.mesh): cuando la definición de la
+        // biblioteca trae caras válidas, la malla sustituye a las cajas como
+        // representación 3D (las cajas quedan de respaldo y para la miniatura
+        // de planta). Así no se dibuja geometría duplicada.
+        var mesh = (def && Array.isArray(def.mesh)) ? def.mesh : null;
+        var hasMesh = false;
+        if (mesh && mesh.length) {
+          for (var mv0 = 0; mv0 < mesh.length; mv0++) {
+            var mtest = mesh[mv0];
+            var mtestPts = mtest && mtest.points;
+            if (!mtestPts || typeof mtestPts.length !== 'number') continue;
+            var mn = mtestPts.length;
+            if (mn < 3 || mn > MESH_FACE_POINTS_MAX) continue;
+            var mvalid = true;
+            for (var mv1 = 0; mv1 < mn; mv1++) {
+              var mtp = mtestPts[mv1];
+              if (!mtp || !isFinite(Number(mtp.x)) || !isFinite(Number(mtp.y)) ||
+                !isFinite(Number(mtp.z))) {
+                mvalid = false;
+                break;
+              }
+            }
+            if (mvalid) { hasMesh = true; break; }
           }
-          var z0i = passI.elevation + bz;
-          var z1i = z0i + bh;
-          addBox(passI.others, corners2, z0i, z1i, bx.color || itemColor, EDGE_FURN);
-          for (var ci2 = 0; ci2 < 4; ci2++) {
-            bump(corners2[ci2].x, corners2[ci2].y, z0i);
-            bump(corners2[ci2].x, corners2[ci2].y, z1i);
-            bumpPad(corners2[ci2].x, corners2[ci2].y);
+        }
+        if (!hasMesh) {
+          for (var bi = 0; bi < boxes.length; bi++) {
+            var bx = boxes[bi];
+            if (!bx) continue;
+            var lx = num(bx.x) * sx, ly = num(bx.y) * sy;
+            var bw = Math.max(20, num(bx.w) * sx), bd = Math.max(20, num(bx.d) * sy);
+            var bz = Math.max(0, num(bx.z) * sz), bh = Math.max(15, num(bx.h) * sz);
+            var lx0 = lx, ly0 = ly, lx1 = lx + bw, ly1 = ly + bd;
+            var local = [[lx0, ly0], [lx1, ly0], [lx1, ly1], [lx0, ly1]];
+            var corners2 = [];
+            for (var ci = 0; ci < 4; ci++) {
+              var lxp = local[ci][0], lyp = local[ci][1];
+              corners2.push({
+                x: ix + lxp * cosr - lyp * sinr,
+                y: iy + lxp * sinr + lyp * cosr
+              });
+            }
+            var z0i = passI.elevation + bz;
+            var z1i = z0i + bh;
+            addBox(passI.others, corners2, z0i, z1i, bx.color || itemColor, EDGE_FURN);
+            for (var ci2 = 0; ci2 < 4; ci2++) {
+              bump(corners2[ci2].x, corners2[ci2].y, z0i);
+              bump(corners2[ci2].x, corners2[ci2].y, z1i);
+              bumpPad(corners2[ci2].x, corners2[ci2].y);
+            }
+          }
+        }
+        // --- caras de la malla ya validada: se transforman con la misma
+        // escala/rotación/traslación que las cajas y se añaden como caras lisas
+        // (sin arista por defecto) para que el volumen se lea real. ---
+        var itemMeshFaces = 0;
+        if (mesh && mesh.length) {
+          var meshTopZ = passI.elevation;
+          for (var mi = 0; mi < mesh.length; mi++) {
+            if (itemMeshFaces >= MESH_ITEM_FACE_MAX || meshFaces >= MESH_SCENE_FACE_MAX) break;
+            var mf = mesh[mi];
+            var mpts = mf && mf.points;
+            if (!mpts || typeof mpts.length !== 'number') continue;
+            var np = mpts.length;
+            if (np < 3 || np > MESH_FACE_POINTS_MAX) continue;
+            var worldPts = [], meshOk = true, mpi;
+            for (mpi = 0; mpi < np; mpi++) {
+              var lp = mpts[mpi];
+              if (!lp) { meshOk = false; break; }
+              var lpx = Number(lp.x), lpy = Number(lp.y), lpz = Number(lp.z);
+              if (!isFinite(lpx) || !isFinite(lpy) || !isFinite(lpz)) { meshOk = false; break; }
+              var wx = ix + lpx * sx * cosr - lpy * sy * sinr;
+              var wy = iy + lpx * sx * sinr + lpy * sy * cosr;
+              var wz = passI.elevation + lpz * sz;
+              if (!isFinite(wx) || !isFinite(wy) || !isFinite(wz)) { meshOk = false; break; }
+              worldPts.push({ x: wx, y: wy, z: wz });
+            }
+            if (!meshOk || worldPts.length < 3) continue;
+            var mEdge = mf.edge === true ? EDGE_FURN
+              : (typeof mf.edge === 'string' && mf.edge ? mf.edge : false);
+            addFace(passI.others, worldPts, mf.color || itemColor, {
+              edge: mEdge,
+              twoSided: mf.twoSided === true,
+              tex: cfg.textures ? (mf.tex || null) : null
+            });
+            itemMeshFaces++;
+            meshFaces++;
+            for (mpi = 0; mpi < worldPts.length; mpi++) {
+              var wp = worldPts[mpi];
+              bump(wp.x, wp.y, wp.z);
+              bumpPad(wp.x, wp.y);
+              if (wp.z > meshTopZ) meshTopZ = wp.z;
+            }
+          }
+          // Sombra de la base con el contorno del ítem (opcional y acotada).
+          if (itemMeshFaces > 0 && opts.ground && cfg.shadows &&
+            meshShadowCount < MESH_FOOTPRINT_SHADOW_MAX) {
+            var fw = num(item.w) || num(def && def.w) || 600;
+            var fd = num(item.d) || num(def && def.d) || 600;
+            if (fw > 0 && fd > 0) {
+              var hw = fw / 2, hd = fd / 2;
+              var foot = [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]];
+              var footPts = [];
+              for (var fi = 0; fi < 4; fi++) {
+                var fpx = foot[fi][0], fpy = foot[fi][1];
+                footPts.push({
+                  x: ix + fpx * cosr - fpy * sinr,
+                  y: iy + fpx * sinr + fpy * cosr
+                });
+              }
+              shadow(footPts, Math.max(passI.elevation + 250, meshTopZ));
+              meshShadowCount++;
+              for (var fbi = 0; fbi < 4; fbi++) bumpPad(footPts[fbi].x, footPts[fbi].y);
+            }
           }
         }
       }

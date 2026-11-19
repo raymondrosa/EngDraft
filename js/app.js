@@ -458,6 +458,7 @@
     refreshLayers();
     renderLibrary();
     updateZoomStatus();
+    sync3DQuickControls();
 
     setTimeout(function () {
       App.editor._resize();
@@ -587,6 +588,10 @@
     if (canvas3dEl) canvas3dEl.addEventListener('pointerdown', function () {
       if (App.flight) setFlight(false, { silent: true });
     });
+    // Controles rápidos de la vista 3D: techo, modo y acceso a materiales.
+    if ($('#roofQuick')) $('#roofQuick').addEventListener('change', function (e) { setRoofQuick(e.target.value); });
+    if ($('#modeQuick')) $('#modeQuick').addEventListener('change', function (e) { setRenderMode(e.target.value); });
+    if ($('#btnSceneQuick')) $('#btnSceneQuick').addEventListener('click', openSceneMaterials);
 
     $$('#viewTabs button').forEach(function (b) {
       b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
@@ -739,6 +744,7 @@
         // (deshacer, rehacer, abrir archivo o editar datos del proyecto).
         applyGridToEditor();
         applyScene3D();
+        sync3DQuickControls();
         if (App.tab === 'scene' && !isInspectorInputFocused()) renderScenePanel();
         if (App.view === '3d') schedule3D();
         if (App.view === 'sheets') scheduleSheetPreviews();
@@ -1028,6 +1034,7 @@
     schedule3D();
     renderScenePanel();
     updateStageActions();
+    sync3DQuickControls();
     toast(mode === 'realistic' ? 'Modo realista: texturas, luz solar y sombras.' : 'Modo esquemático activado.', 'info', 2600);
   }
 
@@ -1049,6 +1056,63 @@
     renderScenePanel();
     updateStageActions();
     toast('Escena restablecida (materiales, techo y render).', 'success', 2400);
+  }
+
+  // Controles rápidos de la vista 3D (techo y modo de renderizado).
+  function sync3DQuickControls() {
+    if (!App.store) return;
+    var sc = sceneSettings();
+    var roofSel = $('#roofQuick');
+    if (roofSel) roofSel.value = App.options3d.roof ? sc.roofStyle : 'off';
+    var modeSel = $('#modeQuick');
+    if (modeSel) modeSel.value = sc.render.mode;
+    var btn = $('#btnSceneQuick');
+    if (btn) btn.title = 'Abrir colores, texturas y materiales de la escena';
+  }
+
+  function setRoofQuick(value) {
+    if (!App.store) return;
+    var style = ROOF_STYLES[value] ? value : null;
+    if (!style) {
+      apply3DOptions({ roof: false });
+      toast('Techo oculto. Elige Plano, A dos aguas, Arco o Spline para mostrarlo.', 'info', 2800);
+      sync3DQuickControls();
+      return;
+    }
+    App.options3d.roof = true;
+    App.store.act('Tipo de techo', function () {
+      App.store.project.settings.roof.style = style;
+    });
+    applyScene3D();
+    schedule3D();
+    updateStageActions();
+    renderScenePanel();
+    sync3DQuickControls();
+    toast('Techo: ' + ROOF_STYLES[style] + '.', 'success', 2200);
+  }
+
+  function setRenderMode(mode) {
+    if (!App.store) return;
+    var next = mode === 'realistic' ? 'realistic' : 'schematic';
+    App.store.act('Modo de renderizado', function () {
+      App.store.project.settings.render.mode = next;
+    });
+    applyScene3D();
+    schedule3D();
+    updateStageActions();
+    renderScenePanel();
+    sync3DQuickControls();
+    toast(next === 'realistic' ? 'Modo realista: texturas, luz solar y sombras.' : 'Modo esquemático activado.', 'info', 2400);
+  }
+
+  function openSceneMaterials() {
+    applyInspectorState('open');
+    setInspectorTab('scene');
+    setTimeout(function () {
+      var block = $('#sceneMaterials');
+      if (block && block.scrollIntoView) block.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }, 140);
+    toast('Elige el color y la textura de paredes, techo y suelo.', 'info', 2600);
   }
 
   function textureOptions(key, selected) {
@@ -1084,9 +1148,10 @@
       '<div class="field-grid">' +
       field('Altura / flecha', '<div class="input-row"><input class="input" type="number" min="0.2" step="0.1" data-scene-field="roofHeight" value="' + unitLenInput(sc.roofHeight) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
       field('Alero', '<div class="input-row"><input class="input" type="number" min="0" step="0.1" data-scene-field="roofOverhang" value="' + unitLenInput(sc.roofOverhang) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
-      '</div><div class="field-hint">Arco y spline generan una cubierta curva sobre la planta del último nivel.</div></div>';
+      '</div><div class="field-hint">Al elegir un estilo se muestra el techo automáticamente. También puedes cambiarlo con el selector <strong>Techo</strong> de la vista 3D.</div></div>';
 
-    html += '<div class="scene-group"><div class="section-title">Materiales</div>' +
+    html += '<div class="scene-group" id="sceneMaterials"><div class="section-title">Materiales</div>' +
+      '<div class="field-hint">Colores y texturas de paredes, techo y suelo. También puedes abrirlos con el botón “Colores y texturas” de la vista 3D.</div>' +
       ['wall', 'roof', 'ground'].map(function (key) {
         var mat = sc.materials[key];
         return '<div class="material-row"><span>' + MATERIAL_LABELS[key] + '</span>' +
@@ -1145,7 +1210,8 @@
       App.store.act('Tipo de techo', function () {
         App.store.project.settings.roof.style = ROOF_STYLES[t.value] ? t.value : 'flat';
       });
-      applyScene3D(); schedule3D(); renderScenePanel();
+      App.options3d.roof = true;
+      applyScene3D(); schedule3D(); updateStageActions(); renderScenePanel();
       return;
     }
     if (fieldName === 'roofOn') {
@@ -1247,6 +1313,7 @@
       refreshProps();
     } else if (view === '3d') {
       ensure3D(true);
+      sync3DQuickControls();
       refreshProps();
     } else if (view === 'sheets') {
       setInspectorTab('props');
@@ -1322,6 +1389,7 @@
       try { App.view3d.render(); } catch (e) { console.error(e); }
     }
     updateStageActions();
+    sync3DQuickControls();
   }
 
   function capture3D() {
@@ -1889,6 +1957,9 @@
         readLine('Nivel', levelName(obj.level)) + readLine('Capa', layer.name) +
         readLine('Inicio', 'X ' + unitLen(obj.a.x) + ' · Y ' + unitLen(obj.a.y)) +
         readLine('Fin', 'X ' + unitLen(obj.b.x) + ' · Y ' + unitLen(obj.b.y)) + '</div>' +
+        '<div class="section"><div class="section-title">Acabado en 3D</div>' +
+        '<div class="field-hint">El color y la textura de paredes, techo y suelo se definen para todo el proyecto en la escena 3D.</div>' +
+        '<div class="prop-actions"><button class="btn btn-ghost btn-sm" data-action="scene-materials">' + icon('palette', 12) + 'Colores de paredes y techo</button></div></div>' +
         actionsHtml('wall', obj.id, false);
     } else if (kind === 'item') {
       var def = ED.Library && ED.Library.get ? ED.Library.get(obj.libId) : null;
@@ -2147,6 +2218,7 @@
     else if (action === 'flip-opening') flipOpening(btn.getAttribute('data-wall'), btn.getAttribute('data-opening'), btn.getAttribute('data-open-prop'));
     else if (action === 'flip-curve') flipWallCurve(btn.getAttribute('data-id'));
     else if (action === 'straighten-wall') straightenWall(btn.getAttribute('data-id'));
+    else if (action === 'scene-materials') openSceneMaterials();
     else if (action === 'new-sheet') addSheet();
     else if (action === 'sheet-export') { var sh = getSelectedSheet(); if (sh) exportPDF([sh]); }
     else if (action === 'sheet-duplicate') duplicateSheet();
@@ -2842,12 +2914,12 @@
       '<p><strong>Rejilla a medida.</strong> Con <em>Shift+G</em> o el botón <strong>Rejilla</strong> del lienzo abres el cuadro de rejilla: separación de líneas, línea maestra, origen y un paso de ajuste independiente. Un paso fino (por ejemplo 5 cm o 1") permite dibujar muros y huecos con dimensiones exactas sin perder la referencia visual.</p>' +
       '<p><strong>Tamaño de letra.</strong> El botón <em>Aa</em> de la barra de estado cambia el tamaño del texto entre Normal, Grande y Muy grande; la preferencia queda guardada en este navegador.</p>' +
       '<p><strong>Muros curvos.</strong> Con las herramientas <em>Muro en arco</em> (C) y <em>Muro spline</em> (K) dibujas muros curvos: en el arco, el tercer clic define la curvatura; en la spline, cada clic añade un punto y Enter o doble clic termina. Selecciona un muro curvo para ajustar su flecha, invertir el arco o quitar la curva desde Propiedades. Los muros curvos no admiten puertas ni ventanas en esta versión.</p>' +
-      '<p><strong>Escena 3D.</strong> En la pestaña <em>Escena</em> del panel de ajustes eliges el modo de renderizado (esquemático o realista), el tipo de techo (plano, a dos aguas, arco o spline), su altura y alero, los colores y texturas de paredes, techo y suelo, y el ángulo del sol. El botón <em>Vuelo dron</em> inicia una animación de cámara alrededor de la maqueta; un clic en la vista la detiene.</p>' +
+      '<p><strong>Escena 3D.</strong> En la pestaña <em>Escena</em> del panel de ajustes eliges el modo de renderizado (esquemático o realista), el tipo de techo (plano, a dos aguas, arco o spline), su altura y alero, los colores y texturas de paredes, techo y suelo, y el ángulo del sol. Arriba a la izquierda de la vista 3D tienes además los selectores rápidos <strong>Techo</strong> y <strong>Modo</strong>, y el botón <strong>Colores y texturas</strong> que abre directamente los materiales. El botón <em>Vuelo dron</em> inicia una animación de cámara alrededor de la maqueta; un clic en la vista la detiene.</p>' +
       '<p><strong>Puertas y ventanas.</strong> Selecciona un muro y edita sus aberturas: ancho, alto, posición, antepecho, sentido de apertura y bisagra. Los botones Girar hoja e Invertir bisagra cambian el dibujo en 2D y 3D.</p>' +
       '<p><strong>Privacidad.</strong> Todo se dibuja y se guarda en tu equipo. La aplicación funciona sin conexión y no envía datos a ningún servidor.</p>' +
       '<p><strong>Manual completo.</strong> El manual de uso incluye tutorial paso a paso, buenas prácticas, ejercicios, preguntas frecuentes y checklist de entrega: <a href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">abrir manual en PDF</a>.</p>' +
       '<p><strong>Autor:</strong> ' + AUTHOR + '.</p>' +
-      '<p><span class="badge-soft">ENGDRAFT 1.2</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .engdraft para conservar copias.</p></div>';
+      '<p><span class="badge-soft">ENGDRAFT 1.3</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .engdraft para conservar copias.</p></div>';
     openModal({
       title: 'Ayuda y atajos', subtitle: 'Todo lo necesario para empezar', body: body,
       footer: '<a class="btn btn-ghost" href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">Manual PDF</a>' +

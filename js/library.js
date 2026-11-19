@@ -44,6 +44,441 @@
     dark: '#5a6673', stone: '#dedfd8', linen: '#f2ece2'
   };
 
+  // ------------------------------------------------------------------ mallas 3D
+  // CONTRACT §14.1: def.mesh = [{ points:[{x,y,z},…] (3..8),
+  //   color:'#rrggbb', edge?:false, twoSided?:true, tex?:'wood' }]
+  // Son visuales (solo vista 3D): no se serializan y se escalan como las cajas.
+  // Se generan aquí en carga con primitivas (esferas, tubos, discos, hojas).
+
+  function MFace(pts, color, opts) {
+    var f = { points: pts, color: color };
+    if (opts) {
+      if (opts.edge) f.edge = true;
+      if (opts.twoSided) f.twoSided = true;
+      if (opts.tex) f.tex = opts.tex;
+    }
+    return f;
+  }
+
+  function MNormal(pts) {
+    var nx = 0, ny = 0, nz = 0, n = pts.length;
+    for (var i = 0; i < n; i++) {
+      var a = pts[i], b = pts[(i + 1) % n];
+      nx += (a.y - b.y) * (a.z + b.z);
+      ny += (a.z - b.z) * (a.x + b.x);
+      nz += (a.x - b.x) * (a.y + b.y);
+    }
+    var len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (len < 1e-9) return { x: 0, y: 0, z: 1 };
+    return { x: nx / len, y: ny / len, z: nz / len };
+  }
+
+  function MCentroid(pts) {
+    var x = 0, y = 0, z = 0;
+    for (var i = 0; i < pts.length; i++) { x += pts[i].x; y += pts[i].y; z += pts[i].z; }
+    var n = pts.length || 1;
+    return { x: x / n, y: y / n, z: z / n };
+  }
+
+  // Orienta todas las caras de una pieza hacia fuera desde un punto interior.
+  // Así el sombreado por normal de View3D queda coherente sin cuidar el orden.
+  function MOrient(faces, inside) {
+    for (var i = 0; i < faces.length; i++) {
+      var f = faces[i];
+      var n = MNormal(f.points), c = MCentroid(f.points);
+      if (n.x * (c.x - inside.x) + n.y * (c.y - inside.y) + n.z * (c.z - inside.z) < 0) {
+        f.points.reverse();
+      }
+    }
+    return faces;
+  }
+
+  function MRingXY(cx, cy, z, rx, ry, seg, phase) {
+    var out = [], i, ang;
+    for (i = 0; i < seg; i++) {
+      ang = Math.PI * 2 * i / seg + (phase || 0);
+      out.push({ x: cx + Math.cos(ang) * rx, y: cy + Math.sin(ang) * ry, z: z });
+    }
+    return out;
+  }
+
+  // Elipsoide (esfera aplastada/escalada) con contorno irregular opcional.
+  function MBlob(cx, cy, cz, rx, ry, rz, color, seg, rings, opts) {
+    opts = opts || {};
+    var out = [], rows = [], k, i, ang, phi, row, f, cols = opts.colors, wob = opts.wob || 0;
+    for (k = 1; k <= rings; k++) {
+      phi = Math.PI * (k / (rings + 1));
+      row = [];
+      for (i = 0; i < seg; i++) {
+        ang = Math.PI * 2 * i / seg;
+        f = 1 + wob * Math.sin(ang * 3 + phi * 2.6);
+        row.push({
+          x: cx + Math.cos(ang) * rx * Math.sin(phi) * f,
+          y: cy + Math.sin(ang) * ry * Math.sin(phi) * f,
+          z: cz + rz * Math.cos(phi) + (wob ? rz * 0.1 * Math.sin(ang * 2 + phi) : 0)
+        });
+      }
+      rows.push(row);
+    }
+    function colOf(kk, ii) {
+      if (cols && cols.length) return cols[(kk * 5 + ii * 3) % cols.length];
+      return color;
+    }
+    var top = { x: cx, y: cy, z: cz + rz }, bot = { x: cx, y: cy, z: cz - rz };
+    for (i = 0; i < seg; i++) out.push(MFace([top, rows[0][i], rows[0][(i + 1) % seg]], colOf(0, i), opts));
+    for (k = 0; k < rows.length - 1; k++) {
+      for (i = 0; i < seg; i++) {
+        var j = (i + 1) % seg;
+        out.push(MFace([rows[k][i], rows[k][j], rows[k + 1][j], rows[k + 1][i]], colOf(k, i), opts));
+      }
+    }
+    var last = rows[rows.length - 1];
+    for (i = 0; i < seg; i++) out.push(MFace([bot, last[(i + 1) % seg], last[i]], colOf(rows.length - 1, i), opts));
+    return MOrient(out, { x: cx, y: cy, z: cz });
+  }
+
+  // Tramo de cilindro o cono entre dos puntos 3D (tronco, ramas, fustes).
+  function MTubeSeg(p0, p1, r0, r1, color, seg, opts) {
+    opts = opts || {};
+    var ax = p1.x - p0.x, ay = p1.y - p0.y, az = p1.z - p0.z;
+    var len = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
+    ax /= len; ay /= len; az /= len;
+    var hx = 0, hy = 0, hz = 1;
+    if (Math.abs(az) > 0.92) { hx = 1; hy = 0; hz = 0; }
+    var ux = hy * az - hz * ay, uy = hz * ax - hx * az, uz = hx * ay - hy * ax;
+    var ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
+    ux /= ul; uy /= ul; uz /= ul;
+    var vx = ay * uz - az * uy, vy = az * ux - ax * uz, vz = ax * uy - ay * ux;
+    function ringAt(p, r) {
+      var arr = [], i, ang, ca, sa;
+      for (i = 0; i < seg; i++) {
+        ang = Math.PI * 2 * i / seg; ca = Math.cos(ang) * r; sa = Math.sin(ang) * r;
+        arr.push({ x: p.x + ux * ca + vx * sa, y: p.y + uy * ca + vy * sa, z: p.z + uz * ca + vz * sa });
+      }
+      return arr;
+    }
+    var out = [], A = ringAt(p0, r0), B = ringAt(p1, r1), i, j;
+    for (i = 0; i < seg; i++) {
+      j = (i + 1) % seg;
+      out.push(MFace([A[i], A[j], B[j], B[i]], color, opts));
+    }
+    if (opts.caps) {
+      out.push(MFace(A.slice(), color, opts));
+      out.push(MFace(B.slice(), color, opts));
+    }
+    return MOrient(out, {
+      x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2, z: (p0.z + p1.z) / 2
+    });
+  }
+
+  function MTubeZ(cx, cy, z0, z1, r0, r1, color, seg, opts) {
+    return MTubeSeg({ x: cx, y: cy, z: z0 }, { x: cx, y: cy, z: z1 }, r0, r1, color, seg, opts);
+  }
+
+  function MDiscZ(cx, cy, z, r, color, seg, opts) {
+    return MFace(MRingXY(cx, cy, z, r, r, seg, 0), color, opts);
+  }
+
+  function MDiscY(cx, y, cz, r, color, seg) {
+    var out = [], i, ang;
+    for (i = 0; i < seg; i++) {
+      ang = Math.PI * 2 * i / seg;
+      out.push({ x: cx + Math.cos(ang) * r, y: y, z: cz + Math.sin(ang) * r });
+    }
+    return MFace(out, color, {});
+  }
+
+  // Abanico de triángulos en el plano XZ (tapas de llanta).
+  function MFanY(cx, y, cz, r, color, seg) {
+    var out = [], i, a0, a1;
+    for (i = 0; i < seg; i++) {
+      a0 = Math.PI * 2 * i / seg;
+      a1 = Math.PI * 2 * (i + 1) / seg;
+      out.push(MFace([
+        { x: cx, y: y, z: cz },
+        { x: cx + Math.cos(a0) * r, y: y, z: cz + Math.sin(a0) * r },
+        { x: cx + Math.cos(a1) * r, y: y, z: cz + Math.sin(a1) * r }
+      ], color, {}));
+    }
+    return out;
+  }
+
+  // Rueda: banda de rodadura + flancos + llanta clara y buje.
+  function MWheel(cx, cy, cz, r, halfW, tire, rim, seg) {
+    seg = seg || 10;
+    var out = [], i, j;
+    out = out.concat(MTubeSeg({ x: cx, y: cy - halfW, z: cz }, { x: cx, y: cy + halfW, z: cz }, r, r, tire, seg, {}));
+    var inner = r * 0.62;
+    function ringXZ(y, rad) {
+      var arr = [], k, ang;
+      for (k = 0; k < seg; k++) {
+        ang = Math.PI * 2 * k / seg;
+        arr.push({ x: cx + Math.cos(ang) * rad, y: y, z: cz + Math.sin(ang) * rad });
+      }
+      return arr;
+    }
+    var oL = ringXZ(cy - halfW, r), iL = ringXZ(cy - halfW, inner);
+    var oR = ringXZ(cy + halfW, r), iR = ringXZ(cy + halfW, inner);
+    for (i = 0; i < seg; i++) {
+      j = (i + 1) % seg;
+      out.push(MFace([oL[i], oL[j], iL[j], iL[i]], tire, {}));
+      out.push(MFace([oR[i], oR[j], iR[j], iR[i]], tire, {}));
+    }
+    out = out.concat(MFanY(cx, cy - halfW - 1, cz, inner, rim, seg));
+    out = out.concat(MFanY(cx, cy + halfW + 1, cz, inner, rim, seg));
+    out = out.concat(MFanY(cx, cy - halfW - 2, cz, inner * 0.34, '#8e99a6', seg));
+    out = out.concat(MFanY(cx, cy + halfW + 2, cz, inner * 0.34, '#8e99a6', seg));
+    return MOrient(out, { x: cx, y: cy, z: cz });
+  }
+
+  // Hoja/fronda curva: tira de 4 quads que se eleva y cae hacia la punta.
+  function MBlade(ox, oy, oz, ang, len, halfW, lift, droop, color) {
+    var opts = { twoSided: true };
+    var rows = 5, out = [], prev = null, i, s, dist, z, hw, rx, ry, row;
+    var dx = Math.cos(ang), dy = Math.sin(ang);
+    var px = -dy, py = dx;
+    for (i = 0; i <= rows; i++) {
+      s = i / rows;
+      dist = 45 + len * s;
+      z = oz + lift * Math.sin(s * 1.25) - droop * s * s;
+      hw = halfW * (0.22 + 0.9 * Math.sin(Math.PI * Math.pow(s, 0.8)));
+      rx = ox + dx * dist;
+      ry = oy + dy * dist;
+      row = [
+        { x: rx + px * hw, y: ry + py * hw, z: z },
+        { x: rx - px * hw, y: ry - py * hw, z: z }
+      ];
+      if (prev) out.push(MFace([prev[0], prev[1], row[1], row[0]], color, opts));
+      prev = row;
+    }
+    return MOrient(out, { x: ox + dx * len * 0.5, y: oy + dy * len * 0.5, z: oz - 500 });
+  }
+
+  // --- palmera: tronco curvo con anillos, 11 frondas colgantes y cocos ---
+  function buildPalmMesh() {
+    var mesh = [], i, s, t, r0, r1, greens = ['#8db079', '#9cbd87', '#a8c894', '#93b57f'];
+    var pts = [];
+    for (s = 0; s <= 6; s++) {
+      t = s / 6;
+      pts.push({ x: 55 * Math.sin(t * 2.1) - 30, y: 28 * Math.sin(t * 1.7), z: 10 + t * 4040 });
+    }
+    for (s = 0; s < 6; s++) {
+      r0 = 118 - 62 * (s / 6);
+      r1 = 118 - 62 * ((s + 1) / 6);
+      mesh = mesh.concat(MTubeSeg(pts[s], pts[s + 1], r0, r1, s % 2 ? '#c0ab8e' : '#b39f84', 8, s === 0 ? { caps: true } : {}));
+    }
+    for (i = 1; i < 6; i++) {
+      var rr = 118 - 62 * (i / 6);
+      mesh = mesh.concat(MTubeZ(pts[i].x, pts[i].y, pts[i].z - 28, pts[i].z + 28, rr + 15, rr + 15, '#a08c72', 8, {}));
+    }
+    mesh = mesh.concat(MTubeZ(pts[6].x, pts[6].y, 3920, 4060, 100, 42, '#9db185', 8, { caps: true }));
+    for (i = 0; i < 11; i++) {
+      var ang = (Math.PI * 2 / 11) * i + Math.PI / 11;
+      mesh = mesh.concat(MBlade(pts[6].x, pts[6].y, 4020, ang, 1150 + (i % 3) * 90, 115, 1150, 1900, greens[i % 4]));
+    }
+    var cocos = [[78, 24, 3940], [-66, 62, 3980], [14, -84, 3900]];
+    for (i = 0; i < 3; i++) {
+      mesh = mesh.concat(MBlob(cocos[i][0], cocos[i][1], cocos[i][2], 52, 52, 56, '#8a6b45', 5, 2, {}));
+    }
+    return mesh;
+  }
+
+  // --- árbol: tronco con horquillas y copa de 6 esferas irregulares ---
+  function buildTreeMesh() {
+    var mesh = [], i;
+    var trunk = [
+      { x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 700 }, { x: 0, y: 0, z: 1400 },
+      { x: 0, y: 0, z: 1950 }, { x: 0, y: 0, z: 2450 }
+    ];
+    var trunkR = [205, 185, 168, 150, 135];
+    for (i = 0; i < 4; i++) {
+      mesh = mesh.concat(MTubeSeg(trunk[i], trunk[i + 1], trunkR[i], trunkR[i + 1],
+        i % 2 ? '#a2907a' : '#9b8a70', 8, { tex: 'wood' }));
+    }
+    var forks = [
+      [{ x: 0, y: 0, z: 2050 }, { x: -500, y: 220, z: 2980 }, 100, 46],
+      [{ x: 0, y: 0, z: 2150 }, { x: 440, y: -260, z: 3010 }, 96, 44],
+      [{ x: 0, y: 0, z: 2320 }, { x: 120, y: 90, z: 3480 }, 82, 36]
+    ];
+    for (i = 0; i < 3; i++) {
+      mesh = mesh.concat(MTubeSeg(forks[i][0], forks[i][1], forks[i][2], forks[i][3], '#a2907a', 8, {}));
+    }
+    var crown = [
+      [0, 0, 2960, 1050, 1030, 780, ['#7fa06a', '#86a873']],
+      [-390, 250, 3250, 690, 650, 560, ['#8caa76', '#93b17f']],
+      [430, -270, 3200, 640, 610, 540, ['#93b17f', '#9cba87']],
+      [-170, -430, 3650, 610, 560, 480, ['#9cba87', '#a5c193']],
+      [330, 300, 3750, 590, 550, 470, ['#a5c193', '#adc99b']],
+      [20, 70, 4140, 470, 450, 400, ['#adc99b', '#b6d4a3']]
+    ];
+    for (i = 0; i < crown.length; i++) {
+      var c = crown[i];
+      mesh = mesh.concat(MBlob(c[0], c[1], c[2], c[3], c[4], c[5], c[6][0], 8, 4, { colors: c[6], wob: 0.09 }));
+    }
+    return mesh;
+  }
+
+  // --- arbusto: 4 esferas aplastadas solapadas ---
+  function buildBushMesh() {
+    var mesh = [];
+    var parts = [
+      [-160, 80, 258, 350, 320, 245, ['#7f9a6c', '#87a273']],
+      [160, 40, 290, 320, 300, 275, ['#8caa76', '#93b17f']],
+      [-20, -190, 265, 330, 310, 250, ['#8fae7c', '#97b585']],
+      [50, 110, 500, 280, 260, 235, ['#9cba87', '#a5c193']]
+    ];
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      mesh = mesh.concat(MBlob(p[0], p[1], p[2], p[3], p[4], p[5], p[6][0], 7, 3, { colors: p[6], wob: 0.1 }));
+    }
+    return mesh;
+  }
+
+  // --- seto: cuerpo alargado con cúpula y bultos de follaje ---
+  function buildHedgeMesh() {
+    var mesh = [], i;
+    mesh = mesh.concat(MBlob(0, 0, 500, 855, 205, 500, '#91af7c', 10, 4,
+      { colors: ['#91af7c', '#97b585', '#9cba87'], wob: 0.05 }));
+    var tones = ['#9cba87', '#a5c193', '#b0cd9e'];
+    for (i = 0; i < 7; i++) {
+      mesh = mesh.concat(MBlob(-720 + i * 240, (i % 2) ? 55 : -60, 980, 210, 185, 190,
+        tones[i % 3], 5, 2, { wob: 0.12 }));
+    }
+    return mesh;
+  }
+
+  // --- macizo floral: flores esféricas de colores y hojas ---
+  function buildFlowerBedMesh() {
+    var mesh = [], i;
+    var flowers = [
+      [-430, 160, '#d9b45b'], [-130, 250, '#d78f9e'], [230, 150, '#c96f62'],
+      [420, -130, '#e6e2d6'], [-40, -180, '#b58ac4'], [-330, -230, '#d9b45b'],
+      [120, -210, '#d78f9e']
+    ];
+    for (i = 0; i < flowers.length; i++) {
+      var x = flowers[i][0], y = flowers[i][1], col = flowers[i][2];
+      mesh = mesh.concat(MBlob(x, y, 402, 78, 78, 72, col, 5, 2, { colors: [col, '#f2ead7'] }));
+      mesh = mesh.concat(MBlade(x - 28, y - 18, 352, (i * 1.7) % (Math.PI * 2), 88, 26, 62, 38, '#7f9a6c'));
+      mesh = mesh.concat(MBlade(x + 20, y + 16, 352, (i * 2.3 + 2.2) % (Math.PI * 2), 74, 22, 44, 30, '#93b57f'));
+    }
+    return mesh;
+  }
+
+  // --- automóvil moderno: carrocería con arcos de rueda, cabina de cristal,
+  //     faros/pilotos, parrilla, faldones, espejos y 4 ruedas (frente hacia -X) ---
+  function buildCarMesh() {
+    var body = [], glass = '#46586a', paint = '#9db2c3', paintDark = '#7e97aa';
+    var trim = '#2f3a45', light = '#efe8cd';
+    function q(a, b, c, d, color, opts) { body.push(MFace([a, b, c, d], color, opts)); }
+
+    var NB = 810, NT = 790;   // semiancho en el faldón y en la línea de cintura
+    var Z0 = 220, BELT = 950; // piso de carrocería y cintura
+    var i;
+    // Bajos.
+    q({ x: -2130, y: -NB, z: Z0 }, { x: 2130, y: -NB, z: Z0 },
+      { x: 2130, y: NB, z: Z0 }, { x: -2130, y: NB, z: Z0 }, trim);
+    // Laterales con caída hacia el techo y huecos de rueda escalonados.
+    var xs = [-2150, -1810, -1700, -1060, -960, 950, 1060, 1600, 1800, 2150];
+    var zb = [220, 220, 665, 665, 220, 220, 665, 665, 220, 220];
+    for (i = 0; i < xs.length - 1; i++) {
+      q({ x: xs[i], y: NB, z: zb[i] }, { x: xs[i + 1], y: NB, z: zb[i + 1] },
+        { x: xs[i + 1], y: NT, z: BELT }, { x: xs[i], y: NT, z: BELT }, paint);
+      q({ x: xs[i], y: -NB, z: zb[i] }, { x: xs[i + 1], y: -NB, z: zb[i + 1] },
+        { x: xs[i + 1], y: -NT, z: BELT }, { x: xs[i], y: -NT, z: BELT }, paint);
+    }
+    // Frente y zaga.
+    q({ x: -2150, y: -NB, z: Z0 }, { x: -2150, y: NB, z: Z0 },
+      { x: -2150, y: NT, z: BELT }, { x: -2150, y: -NT, z: BELT }, paint);
+    q({ x: 2150, y: -NB, z: Z0 }, { x: 2150, y: NB, z: Z0 },
+      { x: 2150, y: NT, z: BELT }, { x: 2150, y: -NT, z: BELT }, paint);
+    // Capó y tapa del maletero con ligera inclinación.
+    q({ x: -2150, y: -NT, z: BELT }, { x: -2150, y: NT, z: BELT },
+      { x: -820, y: NT, z: 1015 }, { x: -820, y: -NT, z: 1015 }, paint);
+    q({ x: 1080, y: -NT, z: 1015 }, { x: 1080, y: NT, z: 1015 },
+      { x: 2150, y: NT, z: BELT }, { x: 2150, y: -NT, z: BELT }, paint);
+    // Parabrisas, techo y luneta trasera.
+    q({ x: -820, y: -NT, z: 1015 }, { x: -820, y: NT, z: 1015 },
+      { x: -300, y: 680, z: 1470 }, { x: -300, y: -680, z: 1470 }, glass);
+    q({ x: -300, y: -680, z: 1470 }, { x: -300, y: 680, z: 1470 },
+      { x: 640, y: 680, z: 1470 }, { x: 640, y: -680, z: 1470 }, paint);
+    q({ x: 640, y: -680, z: 1470 }, { x: 640, y: 680, z: 1470 },
+      { x: 1080, y: NT, z: 1015 }, { x: 1080, y: -NT, z: 1015 }, glass);
+    // Cristales laterales, pilares A/B/C.
+    var ys = NT, yt = 680;
+    q({ x: -820, y: ys, z: BELT }, { x: 120, y: ys, z: BELT },
+      { x: 120, y: yt, z: 1470 }, { x: -300, y: yt, z: 1470 }, glass);
+    q({ x: 180, y: ys, z: BELT }, { x: 1080, y: ys, z: BELT },
+      { x: 640, y: yt, z: 1470 }, { x: 180, y: yt, z: 1470 }, glass);
+    q({ x: 120, y: ys + 2, z: BELT }, { x: 180, y: ys + 2, z: BELT },
+      { x: 180, y: yt + 2, z: 1470 }, { x: 120, y: yt + 2, z: 1470 }, paintDark);
+    q({ x: -820, y: -ys, z: BELT }, { x: 120, y: -ys, z: BELT },
+      { x: 120, y: -yt, z: 1470 }, { x: -300, y: -yt, z: 1470 }, glass);
+    q({ x: 180, y: -ys, z: BELT }, { x: 1080, y: -ys, z: BELT },
+      { x: 640, y: -yt, z: 1470 }, { x: 180, y: -yt, z: 1470 }, glass);
+    q({ x: 120, y: -ys - 2, z: BELT }, { x: 180, y: -ys - 2, z: BELT },
+      { x: 180, y: -yt - 2, z: 1470 }, { x: 120, y: -yt - 2, z: 1470 }, paintDark);
+    // Pilares A y C (triángulos de chapa entre parabrisas/luneta y cristal lateral).
+    body.push(MFace([{ x: -820, y: ys, z: BELT }, { x: -820, y: ys, z: 1015 }, { x: -300, y: yt, z: 1470 }], paint));
+    body.push(MFace([{ x: 1080, y: ys, z: 1015 }, { x: 1080, y: ys, z: BELT }, { x: 640, y: yt, z: 1470 }], paint));
+    body.push(MFace([{ x: -820, y: -ys, z: BELT }, { x: -820, y: -ys, z: 1015 }, { x: -300, y: -yt, z: 1470 }], paint));
+    body.push(MFace([{ x: 1080, y: -ys, z: 1015 }, { x: 1080, y: -ys, z: BELT }, { x: 640, y: -yt, z: 1470 }], paint));
+    // Espejos retrovisores.
+    q({ x: -770, y: NT - 4, z: 1030 }, { x: -660, y: NT - 4, z: 1030 },
+      { x: -660, y: 880, z: 1075 }, { x: -770, y: 880, z: 1075 }, paint, { twoSided: true });
+    q({ x: -770, y: -NT + 4, z: 1030 }, { x: -660, y: -NT + 4, z: 1030 },
+      { x: -660, y: -880, z: 1075 }, { x: -770, y: -880, z: 1075 }, paint, { twoSided: true });
+    // Cejas de los pasos de rueda y faldones laterales.
+    var arch = [[-1810, -1700], [-1700, -1060], [-1060, -960], [1060, 1600], [1600, 1800]];
+    var ab = [[220, 665], [665, 665], [665, 220], [665, 665], [665, 220]];
+    for (i = 0; i < arch.length; i++) {
+      var a0 = arch[i][0], a1 = arch[i][1], b0 = ab[i][0], b1 = ab[i][1];
+      q({ x: a0, y: NB + 5, z: b0 - 30 }, { x: a1, y: NB + 5, z: b1 - 30 },
+        { x: a1, y: NB + 5, z: b1 + 34 }, { x: a0, y: NB + 5, z: b0 + 34 }, trim);
+      q({ x: a0, y: -NB - 5, z: b0 - 30 }, { x: a1, y: -NB - 5, z: b1 - 30 },
+        { x: a1, y: -NB - 5, z: b1 + 34 }, { x: a0, y: -NB - 5, z: b0 + 34 }, trim);
+    }
+    q({ x: -950, y: NB + 5, z: Z0 }, { x: 950, y: NB + 5, z: Z0 },
+      { x: 950, y: NB + 5, z: Z0 + 130 }, { x: -950, y: NB + 5, z: Z0 + 130 }, trim);
+    q({ x: -950, y: -NB - 5, z: Z0 }, { x: 950, y: -NB - 5, z: Z0 },
+      { x: 950, y: -NB - 5, z: Z0 + 130 }, { x: -950, y: -NB - 5, z: Z0 + 130 }, trim);
+    // Líneas de puerta.
+    var seams = [-150, 560];
+    for (i = 0; i < seams.length; i++) {
+      q({ x: seams[i], y: NB + 1, z: Z0 + 60 }, { x: seams[i] + 8, y: NB + 1, z: Z0 + 60 },
+        { x: seams[i] + 8, y: NT + 1, z: BELT }, { x: seams[i], y: NT + 1, z: BELT }, '#5d6f7f');
+      q({ x: seams[i], y: -NB - 1, z: Z0 + 60 }, { x: seams[i] + 8, y: -NB - 1, z: Z0 + 60 },
+        { x: seams[i] + 8, y: -NT - 1, z: BELT }, { x: seams[i], y: -NT - 1, z: BELT }, '#5d6f7f');
+    }
+    // Parrilla, faros, paragolpes y toma de aire delantera.
+    q({ x: -2152, y: -470, z: 620 }, { x: -2152, y: 470, z: 620 },
+      { x: -2152, y: 470, z: 780 }, { x: -2152, y: -470, z: 780 }, trim);
+    q({ x: -2152, y: 530, z: 790 }, { x: -2152, y: 780, z: 790 },
+      { x: -2152, y: 780, z: 905 }, { x: -2152, y: 530, z: 905 }, light);
+    q({ x: -2152, y: -530, z: 790 }, { x: -2152, y: -780, z: 790 },
+      { x: -2152, y: -780, z: 905 }, { x: -2152, y: -530, z: 905 }, light);
+    q({ x: -2152, y: -NB, z: Z0 }, { x: -2152, y: NB, z: Z0 },
+      { x: -2152, y: NB, z: 585 }, { x: -2152, y: -NB, z: 585 }, paintDark);
+    q({ x: -2152, y: -520, z: 315 }, { x: -2152, y: 520, z: 315 },
+      { x: -2152, y: 520, z: 470 }, { x: -2152, y: -520, z: 470 }, trim);
+    // Pilotos, paragolpes trasero y matrícula.
+    q({ x: 2152, y: 530, z: 745 }, { x: 2152, y: 780, z: 745 },
+      { x: 2152, y: 780, z: 880 }, { x: 2152, y: 530, z: 880 }, '#b3483f');
+    q({ x: 2152, y: -530, z: 745 }, { x: 2152, y: -780, z: 745 },
+      { x: 2152, y: -780, z: 880 }, { x: 2152, y: -530, z: 880 }, '#b3483f');
+    q({ x: 2152, y: -NB, z: Z0 }, { x: 2152, y: NB, z: Z0 },
+      { x: 2152, y: NB, z: 585 }, { x: 2152, y: -NB, z: 585 }, paintDark);
+    q({ x: 2152, y: -180, z: 610 }, { x: 2152, y: 180, z: 610 },
+      { x: 2152, y: 180, z: 730 }, { x: 2152, y: -180, z: 730 }, '#e8e4d8');
+    MOrient(body, { x: 0, y: 0, z: 780 });
+
+    var mesh = body;
+    mesh = mesh.concat(MWheel(-1380, -735, 330, 325, 105, '#2f3a45', '#c9d1d8', 10));
+    mesh = mesh.concat(MWheel(-1380, 735, 330, 325, 105, '#2f3a45', '#c9d1d8', 10));
+    mesh = mesh.concat(MWheel(1380, -735, 330, 325, 105, '#2f3a45', '#c9d1d8', 10));
+    mesh = mesh.concat(MWheel(1380, 735, 330, 325, 105, '#2f3a45', '#c9d1d8', 10));
+    return mesh;
+  }
+
   // ------------------------------------------------------------------ muebles
   function sofa(id, name, seats) {
     var w = seats === 3 ? 2200 : (seats === 2 ? 1650 : 950);
@@ -482,7 +917,7 @@
     B(-150, -150, 500, 300, 300, 100, '#a88663')
   ], 'maceta jardin');
 
-  add('car', 'Vehículo', 'exterior', 4400, 1800, 1500, '#8fa6b8', [
+  var carDef = add('car', 'Vehículo', 'exterior', 4400, 1800, 1500, '#8fa6b8', [
     R(-2200, -900, 4400, 1800, 260, '#9fb4c4'),
     R(-1400, -780, 2300, 1560, 220, '#b8c9d5'),
     R(-1100, -650, 900, 1300, 150, '#cbd8e2'),
@@ -494,6 +929,7 @@
     B(-1300, -800, 1000, 900, 1600, 450, '#7e97aa'),
     B(-1900, -900, 0, 600, 1800, 260, '#3a4450')
   ], 'carro auto vehiculo garaje');
+  carDef.mesh = buildCarMesh();
 
   add('outdoorTable', 'Mesa exterior', 'exterior', 1200, 1200, 750, '#b6a184', [
     C(0, 0, 600, '#ddd0bb', '#a08a6e'),
@@ -555,8 +991,9 @@
       hy = Math.abs(Math.sin(a)) * 95 + 50;
       boxes.push(B(cx - hx, cy - hy, 4200, hx * 2, hy * 2, 260, greens[(i + 2) % 4]));
     }
-    add('palm', 'Palmera', 'plantas', 800, 800, 4500, '#9cb98a', plan, boxes,
+    var palmDef = add('palm', 'Palmera', 'plantas', 800, 800, 4500, '#9cb98a', plan, boxes,
       'palmera palma cocotero fronda tropical planta arbol');
+    palmDef.mesh = buildPalmMesh();
   })();
 
   (function () {
@@ -571,15 +1008,16 @@
       var a = (Math.PI * 2 / 6) * i;
       plan.push(L(Math.cos(a) * 130, Math.sin(a) * 130, Math.cos(a) * 1080, Math.sin(a) * 1080, '#7f9c6d', 2));
     }
-    add('tree', 'Árbol', 'plantas', 2400, 2400, 5000, '#8fa573', plan, [
+    var treeDef = add('tree', 'Árbol', 'plantas', 2400, 2400, 5000, '#8fa573', plan, [
       B(-120, -120, 0, 240, 240, 2200, '#a2907a'),
       B(-1050, -1050, 2050, 2100, 2100, 1050, '#8fae7c'),
       B(-800, -800, 2950, 1600, 1600, 1000, '#9dbc8a'),
       B(-500, -500, 3800, 1000, 1000, 900, '#a9c996')
     ], 'arbol arboleda copa sombra planta jardin');
+    treeDef.mesh = buildTreeMesh();
   })();
 
-  add('bush', 'Arbusto', 'plantas', 1000, 1000, 900, '#94b180', [
+  var bushDef = add('bush', 'Arbusto', 'plantas', 1000, 1000, 900, '#94b180', [
     C(-90, 60, 420, '#a3c08e', '#839f70'),
     C(170, 40, 310, '#9dbc88', '#839f70'),
     C(-40, -150, 280, '#b0cb9c', '#839f70'),
@@ -589,6 +1027,7 @@
     B(-330, -480, 380, 700, 960, 320, '#9dbc88'),
     B(-190, -220, 680, 460, 440, 220, '#aac694')
   ], 'arbusto mata planta jardin seto bajo');
+  bushDef.mesh = buildBushMesh();
 
   (function () {
     var plan = [
@@ -603,8 +1042,9 @@
     for (var k = 0; k < 4; k++) {
       boxes.push(B(-900 + k * 450, -210, 1100, 430, 420, 100, k % 2 ? '#9cb98a' : '#a5c193'));
     }
-    add('hedge', 'Seto', 'plantas', 1800, 450, 1200, '#9cb98a', plan, boxes,
+    var hedgeDef = add('hedge', 'Seto', 'plantas', 1800, 450, 1200, '#9cb98a', plan, boxes,
       'seto cerco vivo arbusto largo jardin jardinera');
+    hedgeDef.mesh = buildHedgeMesh();
   })();
 
   (function () {
@@ -628,8 +1068,9 @@
       plan.push(C(fx, fy, 20, '#f7f4e6', '#d9d4c6'));
       boxes.push(B(fx - 55, fy - 55, 320, 110, 110, 180, flowers[i][2]));
     }
-    add('flowerBed', 'Macizo floral', 'plantas', 1400, 900, 500, '#a9bd8c', plan, boxes,
+    var bedDef = add('flowerBed', 'Macizo floral', 'plantas', 1400, 900, 500, '#a9bd8c', plan, boxes,
       'macizo floral flores jardin cantero parterre');
+    bedDef.mesh = buildFlowerBedMesh();
   })();
 
   add('ornamentalPlant', 'Planta ornamental', 'plantas', 500, 500, 1000, '#a8c48f', [
@@ -725,6 +1166,46 @@
   ], 'rocalla roca piedra jardin decorativo gravilla');
 
   // ------------------------------------------------------------------ vias y accesos
+  // Malla plana para una vía curva de 90°: superficie continua con bordes,
+  // líneas laterales y eje discontinuo (sustituye a las cajas en 3D).
+  function curvedLaneMesh(cx, cy, rOut, rIn, h, base, lineCol, centerCol) {
+    var mesh = [];
+    var sectors = 14, rad = 2, i, k;
+    var baseAlt = base === '#8b9198' ? '#8f959c' : (base === '#c7c4bc' ? '#cbc8c0' : base);
+    function pt(r, a, z) { return { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r, z: z }; }
+    var top = h;
+    for (i = 0; i < sectors; i++) {
+      var a0 = (Math.PI / 2) * (i / sectors);
+      var a1 = (Math.PI / 2) * ((i + 1) / sectors);
+      for (k = 0; k < rad; k++) {
+        var r0 = rIn + (rOut - rIn) * (k / rad);
+        var r1 = rIn + (rOut - rIn) * ((k + 1) / rad) + 1;
+        mesh.push(MFace([pt(r0, a0, top), pt(r1, a0, top), pt(r1, a1, top), pt(r0, a1, top)],
+          (i + k) % 2 ? baseAlt : base));
+      }
+      mesh.push(MFace([pt(rOut, a0, 0), pt(rOut, a1, 0), pt(rOut, a1, top), pt(rOut, a0, top)], base));
+      mesh.push(MFace([pt(rIn, a0, 0), pt(rIn, a1, 0), pt(rIn, a1, top), pt(rIn, a0, top)], base));
+      var rO = rOut - 180, rI = rIn + 180, lw = 130;
+      mesh.push(MFace([pt(rO - lw / 2, a0, top + 2), pt(rO + lw / 2, a0, top + 2),
+        pt(rO + lw / 2, a1, top + 2), pt(rO - lw / 2, a1, top + 2)], lineCol));
+      mesh.push(MFace([pt(rI - lw / 2, a0, top + 2), pt(rI + lw / 2, a0, top + 2),
+        pt(rI + lw / 2, a1, top + 2), pt(rI - lw / 2, a1, top + 2)], lineCol));
+    }
+    mesh.push(MFace([pt(rIn, 0, 0), pt(rOut, 0, 0), pt(rOut, 0, top), pt(rIn, 0, top)], base));
+    mesh.push(MFace([pt(rIn, Math.PI / 2, 0), pt(rOut, Math.PI / 2, 0),
+      pt(rOut, Math.PI / 2, top), pt(rIn, Math.PI / 2, top)], base));
+    if (centerCol) {
+      var mid = (rOut + rIn) / 2;
+      for (i = 0; i < sectors; i += 2) {
+        var c0 = (Math.PI / 2) * ((i + 0.15) / sectors);
+        var c1 = (Math.PI / 2) * ((i + 0.85) / sectors);
+        var hw = 60;
+        mesh.push(MFace([pt(mid - hw, c0, top + 2), pt(mid + hw, c0, top + 2),
+          pt(mid + hw, c1, top + 2), pt(mid - hw, c1, top + 2)], centerCol));
+      }
+    }
+    return mesh;
+  }
   function curvedLane(id, name, w, d, h, cx, cy, rOut, rIn, base, lineCol, centerCol, tags) {
     var plan = [];
     var pts = [];
@@ -793,6 +1274,8 @@
       }
     }
     add(id, name, 'vias', w, d, h, base, plan, boxes, tags);
+    var laneDef = items[id];
+    if (laneDef) laneDef.mesh = curvedLaneMesh(cx, cy, rOut, rIn, h, base, lineCol, centerCol);
   }
 
   add('roadStraight', 'Carretera recta', 'vias', 7000, 6000, 20, '#8b9198', (function () {
