@@ -38,7 +38,9 @@
       },
       settings: {
         units: 'm', grid: 250, wallThickness: 150, wallHeight: 2700,
-        floorHeight: 2800, northAngle: 0, autoDim: true
+        floorHeight: 2800, northAngle: 0, autoDim: true,
+        gridMajor: 4, gridOriginX: 0, gridOriginY: 0, snapStep: 0,
+        gridAdaptive: true, gridStyle: 'lines', showAxes: true
       },
       layers: JSON.parse(JSON.stringify(LAYERS)),
       levels: [

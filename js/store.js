@@ -26,6 +26,18 @@
     { id: 'dimensions', name: 'Cotas', color: '#b5651d', visible: true, locked: false }
   ];
 
+  function finiteNumber(value, fallback) {
+    var x = Number(value);
+    return isFinite(x) ? x : fallback;
+  }
+
+  function gridNumber(value, fallback, min, max) {
+    var x = finiteNumber(value, fallback);
+    if (x < min) x = min;
+    if (x > max) x = max;
+    return x;
+  }
+
   function normalizeProject(input) {
     if (!input || typeof input !== 'object') throw new Error('El archivo no contiene un proyecto válido.');
     var p = input;
@@ -48,7 +60,16 @@
     p.settings = p.settings || {};
     var s = p.settings;
     s.units = ED.Geo.normalizeUnit(s.units);
-    s.grid = s.grid || 250;
+    // Rejilla configurable: separación menor (mm), línea maestra, origen y paso
+    // de ajuste. snapStep 0 significa "usar la misma separación de la rejilla".
+    s.grid = gridNumber(s.grid, 250, 5, 100000);
+    s.gridMajor = Math.round(gridNumber(s.gridMajor, 4, 2, 50));
+    s.gridOriginX = gridNumber(s.gridOriginX, 0, -1e7, 1e7);
+    s.gridOriginY = gridNumber(s.gridOriginY, 0, -1e7, 1e7);
+    s.snapStep = gridNumber(s.snapStep, 0, 0, 100000);
+    s.gridAdaptive = s.gridAdaptive !== false;
+    s.gridStyle = s.gridStyle === 'dots' ? 'dots' : 'lines';
+    s.showAxes = s.showAxes !== false;
     s.wallThickness = s.wallThickness || 150;
     s.wallHeight = s.wallHeight || 2700;
     s.floorHeight = s.floorHeight || 2800;

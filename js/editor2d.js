@@ -7,6 +7,7 @@
     paper: '#f8f6f0',
     gridMinor: 'rgba(36, 49, 61, 0.052)',
     gridMajor: 'rgba(36, 49, 61, 0.115)',
+    gridFine: 'rgba(36, 49, 61, 0.028)',
     axis: 'rgba(46, 125, 143, 0.22)',
     wall: '#303b46',
     wallEdge: '#141d26',
@@ -55,7 +56,11 @@
     this.tool = 'select';
     this.furnitureId = null;
     this.furnitureRotation = 0;
-    this.snap = { grid: true, snapping: true, ortho: false, gridSize: 250 };
+    this.snap = {
+      grid: true, snapping: true, ortho: false,
+      gridSize: 250, gridMajor: 4, gridOriginX: 0, gridOriginY: 0,
+      snapStep: 0, gridAdaptive: true, gridStyle: 'lines', showAxes: true
+    };
     this.mouse = { sx: 0, sy: 0, inside: false };
     this.cursor = { x: 0, y: 0 };
     this.snapInfo = null;
@@ -186,8 +191,77 @@
 
   Editor2D.prototype.setSnap = function (patch) {
     if (!patch) return;
-    for (var k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) this.snap[k] = patch[k];
+    for (var k in patch) {
+      if (!Object.prototype.hasOwnProperty.call(patch, k)) continue;
+      if (k === 'gridOrigin') {
+        var o = patch.gridOrigin;
+        if (o && typeof o === 'object') {
+          this.snap.gridOriginX = isFinite(Number(o.x)) ? Number(o.x) : 0;
+          this.snap.gridOriginY = isFinite(Number(o.y)) ? Number(o.y) : 0;
+        }
+      } else {
+        this.snap[k] = patch[k];
+      }
+    }
     this.requestRender();
+  };
+
+  // Rejilla saneada: espaciado menor, líneas maestras, origen y paso de ajuste.
+  // Si algún valor llega inválido (0, NaN, negativo) se usa un valor seguro.
+  Editor2D.prototype._gridConfig = function () {
+    var s = this.snap || {};
+    var size = Number(s.gridSize);
+    if (!isFinite(size) || size <= 0) size = 250;
+    size = Geo.clamp(size, 1, 100000);
+    var step = Number(s.snapStep);
+    if (!isFinite(step) || step <= 0) step = size;
+    step = Geo.clamp(step, 0.5, 100000);
+    var major = Math.round(Number(s.gridMajor));
+    if (!isFinite(major) || major < 2) major = 4;
+    major = Geo.clamp(major, 2, 50);
+    var ox = Number(s.gridOriginX);
+    if (!isFinite(ox)) ox = 0;
+    var oy = Number(s.gridOriginY);
+    if (!isFinite(oy)) oy = 0;
+    ox = Geo.clamp(ox, -1e7, 1e7);
+    oy = Geo.clamp(oy, -1e7, 1e7);
+    return {
+      size: size, step: step, major: major, ox: ox, oy: oy,
+      style: s.gridStyle === 'dots' ? 'dots' : 'lines',
+      adaptive: s.gridAdaptive !== false,
+      axes: s.showAxes !== false
+    };
+  };
+
+  function gridAxis(value, origin, step) {
+    var t = (value - origin) / step;
+    if (!isFinite(t)) return value;
+    return origin + Math.round(t) * step;
+  }
+
+  // Espaciado realmente dibujado (puede doblarse al alejar para no saturar).
+  Editor2D.prototype._effectiveGridSize = function (g) {
+    g = g || this._gridConfig();
+    var size = g.size;
+    if (g.adaptive) {
+      var guard = 0;
+      while (size * this.view.zoom < 8 && guard++ < 20) size *= 2;
+    }
+    return size;
+  };
+
+  Editor2D.prototype.getGridInfo = function () {
+    var g = this._gridConfig();
+    return {
+      size: g.size,
+      major: g.major,
+      step: g.step,
+      effectiveSize: this._effectiveGridSize(g),
+      origin: { x: g.ox, y: g.oy },
+      style: g.style,
+      adaptive: g.adaptive,
+      axes: g.axes
+    };
   };
 
   Editor2D.prototype._updateCursorStyle = function () {
@@ -326,8 +400,8 @@
       return { point: best.point, type: best.type, snapped: true };
     }
     if (this.snap.grid !== false && opts.noGrid !== true) {
-      var g = this.snap.gridSize || 250;
-      var gp = { x: Math.round(raw.x / g) * g, y: Math.round(raw.y / g) * g };
+      var g = this._gridConfig();
+      var gp = { x: gridAxis(raw.x, g.ox, g.step), y: gridAxis(raw.y, g.oy, g.step) };
       return { point: gp, type: 'REJILLA', snapped: true };
     }
     return { point: { x: raw.x, y: raw.y }, type: null, snapped: false };
@@ -377,41 +451,80 @@
   Editor2D.prototype._drawGrid = function () {
     var ctx = this.ctx;
     var zoom = this.view.zoom;
-    var minor = this.snap.gridSize || 250;
-    if (minor * zoom < 7) minor *= 4;
-    if (minor * zoom < 7) minor *= 5;
-    var major = minor * 4;
+    if (!isFinite(zoom) || zoom <= 0) return;
+    var g = this._gridConfig();
+    var style = g.style === 'dots' ? 'dots' : 'lines';
+    var minSpan = style === 'dots' ? 14 : 9;
+    var minor = g.size;
+    if (g.adaptive) {
+      var guard = 0;
+      while (minor * zoom < minSpan && guard++ < 20) minor *= 2;
+    }
+    if (!isFinite(minor) || minor <= 0) return;
+    var major = minor * g.major;
     var left = this.view.x - this.w / 2 / zoom;
     var right = this.view.x + this.w / 2 / zoom;
     var bottom = this.view.y - this.h / 2 / zoom;
     var top = this.view.y + this.h / 2 / zoom;
+    if (!isFinite(left) || !isFinite(right) || !isFinite(bottom) || !isFinite(top)) return;
+    var ox = g.ox, oy = g.oy;
 
     function lines(step, color, width) {
+      if (!isFinite(step) || step <= 0 || step * zoom < 3) return;
       ctx.beginPath();
       ctx.strokeStyle = color;
       ctx.lineWidth = width;
-      var x0 = Math.floor(left / step) * step;
-      for (var x = x0; x <= right; x += step) {
+      var x = ox + Math.floor((left - ox) / step) * step;
+      for (var i = 0; x <= right && i < 4000; i++, x += step) {
         var sx = Math.round((x - this.view.x) * zoom + this.w / 2) + 0.5;
         ctx.moveTo(sx, 0); ctx.lineTo(sx, this.h);
       }
-      var y0 = Math.floor(bottom / step) * step;
-      for (var y = y0; y <= top; y += step) {
+      var y = oy + Math.floor((bottom - oy) / step) * step;
+      for (var j = 0; y <= top && j < 4000; j++, y += step) {
         var sy = Math.round(this.h / 2 - (y - this.view.y) * zoom) + 0.5;
         ctx.moveTo(0, sy); ctx.lineTo(this.w, sy);
       }
       ctx.stroke();
     }
-    lines.call(this, minor, C.gridMinor, 1);
-    if (major * zoom > 14) lines.call(this, major, C.gridMajor, 1);
-    // Ejes de origen
-    var o = this.worldToScreen({ x: 0, y: 0 });
-    ctx.strokeStyle = C.axis;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    if (o.y >= 0 && o.y <= this.h) { ctx.moveTo(0, o.y + 0.5); ctx.lineTo(this.w, o.y + 0.5); }
-    if (o.x >= 0 && o.x <= this.w) { ctx.moveTo(o.x + 0.5, 0); ctx.lineTo(o.x + 0.5, this.h); }
-    ctx.stroke();
+
+    function dots(step, color, radius) {
+      if (!isFinite(step) || step <= 0 || step * zoom < 9) return;
+      ctx.beginPath();
+      var x0 = ox + Math.floor((left - ox) / step) * step;
+      var y0 = oy + Math.floor((bottom - oy) / step) * step;
+      var count = 0;
+      for (var x = x0; x <= right; x += step) {
+        var sx = Math.round((x - this.view.x) * zoom + this.w / 2);
+        for (var y = y0; y <= top; y += step) {
+          var sy = Math.round(this.h / 2 - (y - this.view.y) * zoom);
+          ctx.rect(sx - radius, sy - radius, radius * 2, radius * 2);
+          if (++count > 12000) { ctx.fillStyle = color; ctx.fill(); return; }
+        }
+      }
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+
+    if (style === 'dots') {
+      dots.call(this, minor, C.gridMinor, 1);
+      if (major * zoom > 16) dots.call(this, major, C.gridMajor, 1.5);
+    } else {
+      // Subdivisión fina para el paso de ajuste cuando es menor que la rejilla.
+      if (g.step < minor * 0.999 && g.step * zoom >= 9) lines.call(this, g.step, C.gridFine, 1);
+      lines.call(this, minor, C.gridMinor, 1);
+      if (major * zoom > 14) lines.call(this, major, C.gridMajor, 1);
+    }
+
+    // Ejes del origen de la rejilla
+    if (g.axes) {
+      var o = this.worldToScreen({ x: ox, y: oy });
+      ctx.strokeStyle = C.axis;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      if (o.y >= 0 && o.y <= this.h) { ctx.moveTo(0, o.y + 0.5); ctx.lineTo(this.w, o.y + 0.5); }
+      if (o.x >= 0 && o.x <= this.w) { ctx.moveTo(o.x + 0.5, 0); ctx.lineTo(o.x + 0.5, this.h); }
+      ctx.stroke();
+    }
   };
 
   Editor2D.prototype._roomColor = function (room) {
@@ -464,7 +577,7 @@
       var pts = room.polygon.map(function (p) { return self.worldToScreen(p); });
       var b = Geo.bounds(pts);
       if (b.maxX < 0 || b.minX > self.w || b.maxY < 0 || b.minY > self.h) return;
-      if (b.w < 46 || b.h < 30) return;
+      if (b.w < 52 || b.h < 34) return;
       var c = Geo.polygonCentroid(room.polygon);
       var sc = self.worldToScreen(c);
       var area = Geo.polygonArea(room.polygon);
@@ -472,15 +585,15 @@
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = C.roomText;
-      var size = Geo.clamp(b.w / 14, 9, 13);
+      var size = Geo.clamp(b.w / 13, 11, 16);
       ctx.font = '600 ' + size.toFixed(1) + 'px "Segoe UI", system-ui, sans-serif';
       var label = (room.name || 'Ambiente').toUpperCase();
       var tw = ctx.measureText(label).width;
       var areaTxt = Geo.formatArea(area, self._units());
-      ctx.font = '500 9px "Bahnschrift", "Consolas", monospace';
+      ctx.font = '500 10.5px "Bahnschrift", "Consolas", monospace';
       var aw = ctx.measureText(areaTxt).width;
-      var padX = 7, boxW = Math.max(tw, aw) + padX * 2, boxH = 31;
-      ctx.fillStyle = 'rgba(250,248,242,0.78)';
+      var padX = 9, boxW = Math.max(tw, aw) + padX * 2, boxH = 36;
+      ctx.fillStyle = 'rgba(250,248,242,0.82)';
       if (typeof ctx.roundRect === 'function') {
         ctx.beginPath();
         ctx.roundRect(sc.x - boxW / 2, sc.y - boxH / 2, boxW, boxH, 4);
@@ -490,10 +603,10 @@
       }
       ctx.fillStyle = C.roomText;
       ctx.font = '600 ' + size.toFixed(1) + 'px "Segoe UI", system-ui, sans-serif';
-      ctx.fillText(label, sc.x, sc.y - 5.5);
-      ctx.font = '500 9px "Bahnschrift", "Consolas", monospace';
+      ctx.fillText(label, sc.x, sc.y - 6.5);
+      ctx.font = '500 10.5px "Bahnschrift", "Consolas", monospace';
       ctx.fillStyle = C.roomSub;
-      ctx.fillText(areaTxt, sc.x, sc.y + 8.5);
+      ctx.fillText(areaTxt, sc.x, sc.y + 9.5);
       ctx.restore();
     });
   };
@@ -710,14 +823,14 @@
       ctx.save();
       ctx.translate(mid.x, mid.y);
       ctx.rotate(ang);
-      ctx.font = '600 10.5px "Bahnschrift", "Consolas", monospace';
+      ctx.font = '600 12px "Bahnschrift", "Consolas", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
-      ctx.lineWidth = 3.5;
+      ctx.lineWidth = 4;
       ctx.strokeStyle = C.paper;
-      ctx.strokeText(text, 0, -3);
+      ctx.strokeText(text, 0, -4);
       ctx.fillStyle = color;
-      ctx.fillText(text, 0, -3);
+      ctx.fillText(text, 0, -4);
       ctx.restore();
     });
   };
@@ -879,16 +992,16 @@
   Editor2D.prototype._labelChip = function (text, x, y) {
     var ctx = this.ctx;
     ctx.save();
-    ctx.font = '600 10px "Segoe UI", system-ui, sans-serif';
-    var w = ctx.measureText(text).width + 14;
-    var h = 20;
-    ctx.fillStyle = 'rgba(20,28,37,0.9)';
+    ctx.font = '600 11.5px "Segoe UI", system-ui, sans-serif';
+    var w = ctx.measureText(text).width + 18;
+    var h = 24;
+    ctx.fillStyle = 'rgba(20,28,37,0.92)';
     if (typeof ctx.roundRect === 'function') {
-      ctx.beginPath(); ctx.roundRect(x - w / 2, y - h, w, h, 4); ctx.fill();
+      ctx.beginPath(); ctx.roundRect(x - w / 2, y - h, w, h, 5); ctx.fill();
     } else {
       ctx.fillRect(x - w / 2, y - h, w, h);
     }
-    ctx.fillStyle = '#eef3f7';
+    ctx.fillStyle = '#f2f7fb';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x, y - h / 2 + 0.5);
@@ -1116,14 +1229,14 @@
       ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
       ctx.fill(); ctx.stroke();
       if (this.snapInfo.type) {
-        ctx.font = '600 8.5px "Bahnschrift", "Consolas", monospace';
+        ctx.font = '600 10px "Bahnschrift", "Consolas", monospace';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'bottom';
-        ctx.fillStyle = 'rgba(20,29,38,0.82)';
-        var tw = ctx.measureText(this.snapInfo.type).width + 8;
-        ctx.fillRect(p.x + 8, p.y - 15, tw, 13);
+        ctx.fillStyle = 'rgba(20,29,38,0.86)';
+        var tw = ctx.measureText(this.snapInfo.type).width + 10;
+        ctx.fillRect(p.x + 10, p.y - 18, tw, 15);
         ctx.fillStyle = '#f4f7fa';
-        ctx.fillText(this.snapInfo.type, p.x + 12, p.y - 4);
+        ctx.fillText(this.snapInfo.type, p.x + 15, p.y - 6);
       }
       ctx.restore();
     }
@@ -1132,23 +1245,23 @@
   Editor2D.prototype._drawHud = function () {
     var ctx = this.ctx;
     // Norte
-    var cx = this.w - 40, cy = 42;
+    var cx = this.w - 44, cy = 44;
     ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.72)';
-    ctx.strokeStyle = 'rgba(36,49,61,0.18)';
+    ctx.fillStyle = 'rgba(255,255,255,0.76)';
+    ctx.strokeStyle = 'rgba(36,49,61,0.2)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.arc(cx, cy, 21, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 23, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     var ang = -Geo.degToRad(this.store.project.settings.northAngle || 0) - Math.PI / 2;
-    var tip = { x: cx + Math.cos(ang) * 13, y: cy + Math.sin(ang) * 13 };
+    var tip = { x: cx + Math.cos(ang) * 14, y: cy + Math.sin(ang) * 14 };
     var base = { x: cx - Math.cos(ang) * 7, y: cy - Math.sin(ang) * 7 };
     ctx.strokeStyle = '#26323c';
     ctx.fillStyle = '#26323c';
     ctx.lineWidth = 1.4;
     ctx.beginPath(); ctx.moveTo(base.x, base.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
-    ctx.beginPath(); ctx.arc(tip.x, tip.y, 2.6, 0, Math.PI * 2); ctx.fill();
-    ctx.font = '700 8px "Segoe UI", sans-serif';
+    ctx.beginPath(); ctx.arc(tip.x, tip.y, 2.8, 0, Math.PI * 2); ctx.fill();
+    ctx.font = '700 10px "Segoe UI", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('N', cx, cy + 3.5);
+    ctx.fillText('N', cx, cy + 4.5);
     ctx.restore();
 
     // Escala gráfica (métrica o imperial)
@@ -1158,25 +1271,25 @@
       : [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
     var step = nice[0];
     for (var i = 0; i < nice.length; i++) {
-      if (nice[i] * this.view.zoom >= 65) { step = nice[i]; break; }
+      if (nice[i] * this.view.zoom >= 90) { step = nice[i]; break; }
       step = nice[i];
     }
     var px = step * this.view.zoom;
     var x0 = 18, y0 = this.h - 24;
     ctx.save();
-    ctx.font = '600 9.5px "Bahnschrift", "Consolas", monospace';
-    ctx.fillStyle = 'rgba(30,42,53,0.72)';
+    ctx.font = '600 11px "Bahnschrift", "Consolas", monospace';
+    ctx.fillStyle = 'rgba(30,42,53,0.82)';
     var stepLabel = imperial ? Geo.formatLength(step, 'ft') : (step >= 1000 ? (step / 1000) + ' m' : (step / 1000).toFixed(1) + ' m');
-    ctx.fillText(stepLabel, x0, y0 - 8);
+    ctx.fillText(stepLabel, x0, y0 - 9);
     var seg = px / 2;
-    ctx.fillStyle = '#2a3742'; ctx.fillRect(x0, y0, seg, 6);
-    ctx.fillStyle = '#f5f3ec'; ctx.fillRect(x0 + seg, y0, seg, 6);
-    ctx.strokeStyle = '#2a3742'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, px, 6);
+    ctx.fillStyle = '#2a3742'; ctx.fillRect(x0, y0, seg, 7);
+    ctx.fillStyle = '#f5f3ec'; ctx.fillRect(x0 + seg, y0, seg, 7);
+    ctx.strokeStyle = '#2a3742'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, px, 7);
     ctx.strokeStyle = 'rgba(36,49,61,0.4)';
     ctx.beginPath();
     for (var k = 0; k <= 4; k++) {
       var xx = x0 + (px / 4) * k;
-      ctx.moveTo(xx + 0.5, y0); ctx.lineTo(xx + 0.5, y0 + 3);
+      ctx.moveTo(xx + 0.5, y0); ctx.lineTo(xx + 0.5, y0 + 3.5);
     }
     ctx.stroke();
     ctx.restore();
@@ -1555,7 +1668,8 @@
     if (!d.moved && Geo.dist(raw, d.startWorld) * this.view.zoom < 2) return;
     d.moved = true;
     var obj = d.obj;
-    var grid = this.snap.grid !== false ? (this.snap.gridSize || 250) : null;
+    var gc = this._gridConfig();
+    var grid = this.snap.grid !== false ? gc.step : 0;
 
     if (d.kind === 'item') {
       if (d.mode === 'rotate') {
@@ -1571,8 +1685,8 @@
         }
         var nx = d.orig.x + dx, ny = d.orig.y + dy;
         if (grid) {
-          nx = Math.round(nx / grid) * grid;
-          ny = Math.round(ny / grid) * grid;
+          nx = gridAxis(nx, gc.ox, grid);
+          ny = gridAxis(ny, gc.oy, grid);
         }
         obj.x = nx; obj.y = ny;
       }
@@ -1587,7 +1701,7 @@
         var wdy = raw.y - d.startWorld.y;
         if (shift) { if (Math.abs(wdx) > Math.abs(wdy)) wdy = 0; else wdx = 0; }
         var ax = d.orig.a.x + wdx, ay = d.orig.a.y + wdy;
-        if (grid) { ax = Math.round(ax / grid) * grid; ay = Math.round(ay / grid) * grid; }
+        if (grid) { ax = gridAxis(ax, gc.ox, grid); ay = gridAxis(ay, gc.oy, grid); }
         var realDx = ax - d.orig.a.x, realDy = ay - d.orig.a.y;
         obj.a.x = ax; obj.a.y = ay;
         obj.b.x = d.orig.b.x + realDx; obj.b.y = d.orig.b.y + realDy;
@@ -1601,7 +1715,7 @@
       if (shift) { if (Math.abs(tdx) > Math.abs(tdy)) tdy = 0; else tdx = 0; }
       if (d.kind === 'text') {
         obj.x = d.orig.x + tdx; obj.y = d.orig.y + tdy;
-        if (grid) { obj.x = Math.round(obj.x / grid) * grid; obj.y = Math.round(obj.y / grid) * grid; }
+        if (grid) { obj.x = gridAxis(obj.x, gc.ox, grid); obj.y = gridAxis(obj.y, gc.oy, grid); }
       } else {
         obj.a = { x: d.orig.a.x + tdx, y: d.orig.a.y + tdy };
         obj.b = { x: d.orig.b.x + tdx, y: d.orig.b.y + tdy };

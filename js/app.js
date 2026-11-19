@@ -23,6 +23,8 @@
     threeTimer: null,
     sheetTimer: null,
     lastCursor: { x: 0, y: 0 },
+    fontScale: 'normal',
+    fontMenuOpen: false,
     _dropDepth: 0
   };
   ED.App = App;
@@ -88,6 +90,181 @@
     return unitSys() === 'ft' ? 'ft · ft²' : 'm · m²';
   }
 
+  // ============================================================ tamaño de letra
+  var FONT_KEY = 'engdraft.ui.font';
+  var FONT_ORDER = ['normal', 'grande', 'xl'];
+  var FONT_LABELS = { normal: 'Normal', grande: 'Grande', xl: 'Muy grande' };
+
+  function storedFontScale() {
+    var v = null;
+    try { v = localStorage.getItem(FONT_KEY); } catch (e) { v = null; }
+    return FONT_LABELS[v] ? v : 'normal';
+  }
+
+  function applyFontScale(scale, opts) {
+    opts = opts || {};
+    var s = FONT_LABELS[scale] ? scale : 'normal';
+    App.fontScale = s;
+    try { document.documentElement.setAttribute('data-font', s); } catch (e) { /* sin DOM */ }
+    if (opts.persist !== false) {
+      try { localStorage.setItem(FONT_KEY, s); } catch (e) { /* sin almacenamiento */ }
+    }
+    var btn = $('#btnFontScale');
+    if (btn) {
+      btn.title = 'Tamaño de letra de la interfaz: ' + FONT_LABELS[s] + ' (clic para cambiar)';
+      btn.setAttribute('aria-label', 'Tamaño de letra: ' + FONT_LABELS[s]);
+    }
+    markFontMenu();
+  }
+
+  function ensureFontMenu() {
+    var menu = $('#fontMenu');
+    if (menu) return menu;
+    menu = document.createElement('div');
+    menu.id = 'fontMenu';
+    menu.className = 'ui-menu';
+    menu.hidden = true;
+    menu.setAttribute('role', 'menu');
+    menu.innerHTML = '<div class="ui-menu-title">Tamaño de letra</div>' +
+      FONT_ORDER.map(function (s) {
+        return '<button type="button" class="ui-menu-item" role="menuitemradio" data-font-scale="' + s + '">' +
+          '<span class="ui-menu-check">✓</span><span>' + FONT_LABELS[s] + '</span></button>';
+      }).join('');
+    document.body.appendChild(menu);
+    menu.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-font-scale]');
+      if (!b) return;
+      applyFontScale(b.getAttribute('data-font-scale'));
+      toast('Tamaño de letra: ' + FONT_LABELS[App.fontScale], 'success', 1800);
+      closeFontMenu();
+    });
+    return menu;
+  }
+
+  function markFontMenu() {
+    var menu = $('#fontMenu');
+    if (!menu) return;
+    $$('[data-font-scale]', menu).forEach(function (b) {
+      var on = b.getAttribute('data-font-scale') === App.fontScale;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+
+  function openFontMenu() {
+    var btn = $('#btnFontScale');
+    if (!btn) return;
+    var menu = ensureFontMenu();
+    markFontMenu();
+    menu.hidden = false;
+    App.fontMenuOpen = true;
+    var r = btn.getBoundingClientRect();
+    var mw = menu.offsetWidth || 220;
+    var mh = menu.offsetHeight || 180;
+    var left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8));
+    var top = r.top - mh - 8;
+    if (top < 8) top = r.bottom + 8;
+    menu.style.left = Math.round(left) + 'px';
+    menu.style.top = Math.round(top) + 'px';
+    btn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeFontMenu() {
+    var menu = $('#fontMenu');
+    if (menu) menu.hidden = true;
+    App.fontMenuOpen = false;
+    var btn = $('#btnFontScale');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleFontMenu() {
+    if (App.fontMenuOpen) closeFontMenu();
+    else openFontMenu();
+  }
+
+  // ==================================================================== rejilla
+  function gridSettings() {
+    var s = (App.store && App.store.project.settings) || {};
+    var size = Number(s.grid);
+    var major = Math.round(Number(s.gridMajor));
+    var step = Number(s.snapStep);
+    var ox = Number(s.gridOriginX);
+    var oy = Number(s.gridOriginY);
+    return {
+      size: isFinite(size) && size > 0 ? size : 250,
+      major: isFinite(major) && major >= 2 ? major : 4,
+      step: isFinite(step) && step > 0 ? step : 0,
+      originX: isFinite(ox) ? ox : 0,
+      originY: isFinite(oy) ? oy : 0,
+      style: s.gridStyle === 'dots' ? 'dots' : 'lines',
+      adaptive: s.gridAdaptive !== false,
+      axes: s.showAxes !== false
+    };
+  }
+
+  function gridLabel(mm) {
+    var v = Number(mm);
+    if (!isFinite(v)) return '—';
+    if (ED.Geo.isImperial(unitSys())) {
+      var inches = v / 25.4;
+      if (Math.abs(inches) < 12) {
+        var sign = inches < 0 ? '-' : '';
+        var q = Math.round(Math.abs(inches) * 4) / 4;
+        var whole = Math.floor(q);
+        var frac = Math.round((q - whole) * 4);
+        var fracTxt = frac === 1 ? ' 1/4' : frac === 2 ? ' 1/2' : frac === 3 ? ' 3/4' : '';
+        return sign + whole + fracTxt + '"';
+      }
+      return ED.Geo.formatLength(v, 'ft');
+    }
+    if (Math.abs(v) < 1000) return fnum(v / 10, 2) + ' cm';
+    return fnum(v / 1000, 2) + ' m';
+  }
+
+  function gridTooltip() {
+    var g = gridSettings();
+    return 'Rejilla: ' + gridLabel(g.size) +
+      ' · línea maestra cada ' + g.major +
+      ' · ajuste: ' + (g.step ? gridLabel(g.step) : 'igual a la rejilla') +
+      ' · origen: ' + gridLabel(g.originX) + ', ' + gridLabel(g.originY) +
+      ' · ' + (g.style === 'dots' ? 'puntos' : 'líneas') +
+      (g.adaptive ? ' · adaptativa' : '');
+  }
+
+  function updateGridChips() {
+    if (!App.store) return;
+    var g = gridSettings();
+    var label = gridLabel(g.size);
+    var chip = $('#gridChipLabel');
+    if (chip) chip.textContent = label;
+    var status = $('#statusGrid');
+    if (status) status.textContent = 'Rejilla ' + label;
+    var tip = gridTooltip();
+    var setup = $('#btnGridSetup');
+    if (setup) setup.title = tip + ' · Clic para configurar (Shift+G)';
+    var statusBtn = $('#btnGridStatus');
+    if (statusBtn) statusBtn.title = tip + ' · Clic para configurar (Shift+G)';
+  }
+
+  function applyGridToEditor() {
+    if (!App.editor) return;
+    var g = gridSettings();
+    App.editor.setSnap({
+      grid: App.editor.snap.grid,
+      snapping: App.editor.snap.snapping,
+      ortho: App.editor.snap.ortho,
+      gridSize: g.size,
+      gridMajor: g.major,
+      snapStep: g.step,
+      gridOriginX: g.originX,
+      gridOriginY: g.originY,
+      gridStyle: g.style,
+      gridAdaptive: g.adaptive,
+      showAxes: g.axes
+    });
+    updateGridChips();
+  }
+
   var ICON = {
     cursor: '<path d="M4.5 3.2 15 9.4l-4.7 1.5-1.7 4.6L4.5 3.2Z" stroke-width="1.4" stroke-linejoin="round"/>',
     hand: '<path d="M7 9V5.2a1.3 1.3 0 0 1 2.6 0V9m0-1.2V4.3a1.3 1.3 0 0 1 2.6 0V9m0-1.4V5.2a1.3 1.3 0 0 1 2.6 0v6.1c0 2.7-1.8 4.5-4.4 4.5-2.2 0-3.4-1-4.3-2.8L4 10.1c-.6-1.2.9-2.3 1.9-1.3L7 9.9" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>',
@@ -138,6 +315,11 @@
   function boot() {
     if (App.booted) return;
     App.booted = true;
+
+    var bootParams = null;
+    try { bootParams = new URLSearchParams(window.location.search); } catch (e) { bootParams = null; }
+    var fontParam = bootParams ? bootParams.get('font') : null;
+    applyFontScale(fontParam || storedFontScale(), { persist: false });
 
     var project = null;
     var restored = false;
@@ -195,9 +377,12 @@
     if (restored) toast('Sesión restaurada desde este navegador.', 'success', 3200);
     else toast('Residencia Aurora cargada. Explora el plano 2D, la vista 3D y las láminas.', 'info', 5200);
     try {
-      var viewParam = new URLSearchParams(window.location.search).get('view');
+      var viewParam = bootParams ? bootParams.get('view') : null;
       if (viewParam === '3d') setTimeout(function () { setView('3d'); }, 160);
       else if (viewParam === 'sheets') setTimeout(function () { setView('sheets'); }, 160);
+      var dialogParam = bootParams ? bootParams.get('dialog') : null;
+      if (dialogParam === 'grid') setTimeout(function () { showGridDialog(); }, 260);
+      else if (dialogParam === 'help') setTimeout(function () { showHelp(); }, 260);
     } catch (e) { /* URLSearchParams no disponible */ }
     if (!window.ResizeObserver) console.warn('ResizeObserver no disponible');
   }
@@ -206,7 +391,7 @@
     var p = {
       schema: 'engdraft/v1',
       meta: { name: 'Proyecto nuevo', client: '', location: '', engineer: '', license: '', phone: '', email: '', date: '2026-11-18', revision: 'A', description: '', notes: '' },
-      settings: { units: 'm', grid: 250, wallThickness: 150, wallHeight: 2700, floorHeight: 2800, northAngle: 0, autoDim: true },
+      settings: { units: 'm', grid: 250, wallThickness: 150, wallHeight: 2700, floorHeight: 2800, northAngle: 0, autoDim: true, gridMajor: 4, gridOriginX: 0, gridOriginY: 0, snapStep: 0, gridAdaptive: true, gridStyle: 'lines', showAxes: true },
       layers: [
         { id: 'walls', name: 'Muros', color: '#263238', visible: true, locked: false },
         { id: 'openings', name: 'Aberturas', color: '#2e7d8f', visible: true, locked: false },
@@ -259,6 +444,15 @@
     $('#btnHelpStatus').addEventListener('click', showHelp);
     $('#btnUnits').addEventListener('click', toggleUnits);
     $('#projectNameBtn').addEventListener('click', showProjectInfo);
+    if ($('#btnGridSetup')) $('#btnGridSetup').addEventListener('click', function (e) { e.preventDefault(); showGridDialog(); });
+    if ($('#btnGridStatus')) $('#btnGridStatus').addEventListener('click', function () { showGridDialog(); });
+    if ($('#btnFontScale')) $('#btnFontScale').addEventListener('click', function (e) { e.stopPropagation(); toggleFontMenu(); });
+    document.addEventListener('click', function (e) {
+      if (!App.fontMenuOpen) return;
+      if (e.target.closest && (e.target.closest('#fontMenu') || e.target.closest('#btnFontScale'))) return;
+      closeFontMenu();
+    });
+    window.addEventListener('resize', closeFontMenu);
 
     $$('#viewTabs button').forEach(function (b) {
       b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
@@ -389,10 +583,8 @@
       },
       onError: function (msg) { toast(msg, 'warn', 3600); }
     });
-    App.editor.setSnap({
-      grid: true, snapping: true, ortho: false,
-      gridSize: App.store.project.settings.grid || 250
-    });
+    App.editor.setSnap({ grid: true, snapping: true, ortho: false });
+    applyGridToEditor();
     App.editor.setTool('select');
     syncCanvasToggles();
   }
@@ -404,6 +596,9 @@
         refreshUndo();
         setSaveState('saving');
         updateZoomStatus();
+        // Mantiene la rejilla del editor sincronizada con el proyecto
+        // (deshacer, rehacer, abrir archivo o editar datos del proyecto).
+        applyGridToEditor();
         if (App.view === '3d') schedule3D();
         if (App.view === 'sheets') scheduleSheetPreviews();
         if (!isInspectorInputFocused() && !(App.editor && App.editor.drag)) {
@@ -470,6 +665,7 @@
     if (coords && App.lastCursor) {
       coords.textContent = 'X: ' + unitLen(App.lastCursor.x) + '   Y: ' + unitLen(App.lastCursor.y);
     }
+    updateGridChips();
   }
 
   function toggleUnits() {
@@ -529,6 +725,7 @@
       var k = b.getAttribute('data-toggle');
       b.classList.toggle('on', !!App.editor.snap[k]);
     });
+    updateGridChips();
   }
 
   function toggleSnap(key) {
@@ -855,6 +1052,7 @@
     if (App.view === '2d') {
       html = '<button class="stage-action" data-stage-action="detect-rooms">' + icon('sparkle', 14) + 'Detectar ambientes</button>' +
         '<button class="stage-action" data-stage-action="auto-dims">' + icon('measure', 14) + 'Cotas generales</button>' +
+        '<button class="stage-action" data-stage-action="grid">' + icon('grid', 14) + 'Rejilla</button>' +
         '<button class="stage-action" data-stage-action="fit">' + icon('fit', 14) + 'Ajustar</button>';
     } else if (App.view === '3d') {
       html = '<div class="stage-action-group">' +
@@ -920,6 +1118,7 @@
       if (count) { toast(count + ' ambiente' + (count === 1 ? '' : 's') + ' detectado' + (count === 1 ? '' : 's') + '.', 'success', 3000); refreshProps(); }
       else toast('No se encontraron recintos nuevos. Cierra los muros y vuelve a intentar.', 'warn', 3400);
     } else if (action === 'auto-dims') addAutoDims();
+    else if (action === 'grid') showGridDialog();
     else if (action === 'fit') { App.editor.fitToContent(); updateZoomStatus(); }
     else if (action === 'fit3d') { if (App.view3d && App.view3d.fit) App.view3d.fit(); if (App.view3d) App.view3d.render(); }
     else if (action === 'capture3d') capture3D();
@@ -985,7 +1184,7 @@
       try {
         App.store.importJSON(String(reader.result));
         App.selectedSheetId = App.store.project.sheets.length ? App.store.project.sheets[0].id : null;
-        App.editor.setSnap({ gridSize: App.store.project.settings.grid || 250 });
+        applyGridToEditor();
         App.editor.fitToContent();
         refreshHeader();
         refreshLevelTabs();
@@ -1753,7 +1952,7 @@
         var project = ED.Templates.create(selected);
         App.store.replaceProject(project);
         App.selectedSheetId = App.store.project.sheets.length ? App.store.project.sheets[0].id : null;
-        App.editor.setSnap({ gridSize: App.store.project.settings.grid || 250 });
+        applyGridToEditor();
         App.editor.fitToContent();
         refreshHeader(); refreshLevelTabs(); refreshUndo(); refreshProps(); refreshLayers();
         setView('2d');
@@ -1765,6 +1964,261 @@
         toast('No se pudo crear el proyecto: ' + (e.message || e), 'error', 4200);
       }
     });
+  }
+
+  // ============================================================= modal de rejilla
+  function drawGridPreview(canvas, cfg) {
+    if (!canvas || !canvas.getContext) return;
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+    var cssW = Math.max(160, Math.round((rect && rect.width) || canvas.clientWidth || 560));
+    var cssH = Math.max(64, Math.round((rect && rect.height) || canvas.clientHeight || 112));
+    if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
+    }
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#f8f6f0';
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    var size = cfg.size > 0 ? cfg.size : 250;
+    var major = cfg.major >= 2 ? cfg.major : 4;
+    var step = cfg.step > 0 && cfg.step < size ? cfg.step : 0;
+    var zoom = cssW / (size * major * 4);
+    var stepPx = Math.max(3, size * zoom);
+    var majorPx = stepPx * major;
+    var ox = (((cfg.originX || 0) * zoom) % stepPx + stepPx) % stepPx;
+    var oy = (((cfg.originY || 0) * zoom) % stepPx + stepPx) % stepPx;
+
+    function lineV(x) { ctx.moveTo(Math.round(x) + 0.5, 0); ctx.lineTo(Math.round(x) + 0.5, cssH); }
+    function lineH(y) { ctx.moveTo(0, Math.round(y) + 0.5); ctx.lineTo(cssW, Math.round(y) + 0.5); }
+
+    var finePx = step ? step * zoom : 0;
+    if (step && finePx >= 4) {
+      ctx.strokeStyle = 'rgba(36,49,61,0.09)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (var fx = ox % finePx; fx < cssW; fx += finePx) lineV(fx);
+      for (var fy = oy % finePx; fy < cssH; fy += finePx) lineH(fy);
+      ctx.stroke();
+    }
+
+    if (cfg.style === 'dots') {
+      ctx.fillStyle = 'rgba(36,49,61,0.30)';
+      for (var dx = ox % stepPx; dx < cssW; dx += stepPx) {
+        for (var dy = oy % stepPx; dy < cssH; dy += stepPx) ctx.fillRect(Math.round(dx), Math.round(dy), 1.6, 1.6);
+      }
+    } else {
+      ctx.strokeStyle = 'rgba(36,49,61,0.18)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (var x = ox % stepPx; x < cssW; x += stepPx) lineV(x);
+      for (var y = oy % stepPx; y < cssH; y += stepPx) lineH(y);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = 'rgba(36,49,61,0.38)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (var mx = ox % majorPx; mx < cssW; mx += majorPx) lineV(mx);
+    for (var my = oy % majorPx; my < cssH; my += majorPx) lineH(my);
+    ctx.stroke();
+
+    if (cfg.axes) {
+      ctx.strokeStyle = 'rgba(46,125,143,0.5)';
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      lineV(ox % stepPx);
+      lineH(oy % stepPx);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = 'rgba(30,42,53,0.76)';
+    ctx.font = '600 11px "Bahnschrift", "Consolas", monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('1 cuadro = ' + gridLabel(size) + ' · maestra cada ' + major +
+      (step ? ' · paso ' + gridLabel(step) : ' · ajuste a la rejilla'), 10, cssH - 7);
+  }
+
+  function showGridDialog() {
+    var g = gridSettings();
+    var unit = unitSys();
+    var imperial = ED.Geo.isImperial(unit);
+    var sizeLabel = unitSizeLabel();
+    var presets = imperial
+      ? [{ label: '3"', mm: 76.2 }, { label: '6"', mm: 152.4 }, { label: '12"', mm: 304.8 }, { label: '24"', mm: 609.6 }, { label: '60"', mm: 1524 }]
+      : [{ label: '10 cm', mm: 100 }, { label: '25 cm', mm: 250 }, { label: '50 cm', mm: 500 }, { label: '1 m', mm: 1000 }, { label: '2 m', mm: 2000 }];
+    var majorOptions = [2, 3, 4, 5, 6, 8, 10];
+    if (majorOptions.indexOf(g.major) < 0) {
+      majorOptions.push(g.major);
+      majorOptions.sort(function (a, b) { return a - b; });
+    }
+
+    var body = '<div class="form-grid">' +
+      '<div class="field full"><label>Separación de la rejilla</label>' +
+      '<div class="chip-row">' + presets.map(function (p) {
+        return '<button type="button" class="chip' + (Math.abs(p.mm - g.size) < 0.5 ? ' active' : '') +
+          '" data-grid-preset="' + p.mm + '">' + p.label + '</button>';
+      }).join('') + '</div>' +
+      '<div class="input-row"><input class="input" id="gridSize" type="number" min="0.1" step="any" value="' +
+      ED.Geo.sizeInput(g.size, unit) + '"><span class="input-unit">' + sizeLabel + '</span></div>' +
+      '<div class="field-hint">Línea base de la cuadrícula. Si no defines un paso distinto, también es el paso de ajuste al dibujar.</div></div>' +
+
+      '<div class="field"><label>Línea maestra cada</label><select class="select" id="gridMajor">' +
+      majorOptions.map(function (v) {
+        return '<option value="' + v + '"' + (v === g.major ? ' selected' : '') + '>' + v + ' líneas</option>';
+      }).join('') + '</select></div>' +
+      '<div class="field"><label>Estilo</label><div class="segmented" id="gridStyle">' +
+      '<button type="button" data-grid-style="lines" class="' + (g.style === 'lines' ? 'active' : '') + '">Líneas</button>' +
+      '<button type="button" data-grid-style="dots" class="' + (g.style === 'dots' ? 'active' : '') + '">Puntos</button>' +
+      '</div></div>' +
+
+      '<div class="field full"><label class="field-inline"><input type="checkbox" id="gridCustomStep"' +
+      (g.step ? ' checked' : '') + '> Usar un paso de ajuste distinto (dimensiones exactas)</label>' +
+      '<div class="input-row"><input class="input" id="gridStep" type="number" min="0.1" step="any" value="' +
+      ED.Geo.sizeInput(g.step || Math.max(10, g.size / 5), unit) + '"><span class="input-unit">' + sizeLabel + '</span></div>' +
+      '<div class="field-hint">El cursor se ajusta a este paso aunque la rejilla se dibuje con la separación anterior. Sirve para muros y huecos de medidas exactas.</div></div>' +
+
+      '<div class="field"><label>Origen X</label><div class="input-row"><input class="input" id="gridOriginX" type="number" step="any" value="' +
+      ED.Geo.lengthInput(g.originX, unit) + '"><span class="input-unit">' + unitLenLabel() + '</span></div></div>' +
+      '<div class="field"><label>Origen Y</label><div class="input-row"><input class="input" id="gridOriginY" type="number" step="any" value="' +
+      ED.Geo.lengthInput(g.originY, unit) + '"><span class="input-unit">' + unitLenLabel() + '</span></div></div>' +
+
+      '<div class="field full"><label class="field-inline"><input type="checkbox" id="gridAdaptive"' +
+      (g.adaptive ? ' checked' : '') + '> Rejilla adaptativa al zoom</label>' +
+      '<div class="field-hint">Al alejar la vista, las líneas se agrupan para no saturar el plano.</div></div>' +
+      '<div class="field full"><label class="field-inline"><input type="checkbox" id="gridAxes"' +
+      (g.axes ? ' checked' : '') + '> Mostrar los ejes del origen</label></div>' +
+      '<div class="field full"><label>Vista previa</label><canvas class="grid-preview" id="gridPreview" width="580" height="112"></canvas></div>' +
+      '</div>' +
+      '<div class="modal-note">' + icon('info', 15) + '<div>La rejilla y el paso de ajuste se guardan en el proyecto. Con <strong>Deshacer</strong> (Ctrl+Z) puedes volver a la configuración anterior.</div></div>';
+
+    var footer = '<button class="btn btn-ghost" id="gridReset">Restablecer</button>' +
+      '<span class="spacer"></span>' +
+      '<button class="btn btn-ghost" data-close>Cancelar</button>' +
+      '<button class="btn btn-primary" id="gridApply">Aplicar rejilla</button>';
+
+    var modal = openModal({
+      title: 'Rejilla y ajuste',
+      subtitle: 'Separa las líneas y define el paso de dibujo para medidas exactas',
+      body: body, footer: footer, wide: true, noAutoFocus: true
+    });
+    var root = modal.root;
+
+    function el(id) { return $('#' + id, root); }
+    function val(id) { var e = el(id); return e ? e.value : ''; }
+
+    function readDraft() {
+      var size = ED.Geo.parseSizeInput(val('gridSize'), unit);
+      if (!isFinite(size) || size <= 0) size = 250;
+      var major = Math.round(n(val('gridMajor'), 4));
+      var custom = !!(el('gridCustomStep') && el('gridCustomStep').checked);
+      var rawStep = custom ? ED.Geo.parseSizeInput(val('gridStep'), unit) : 0;
+      var styleBtn = $('[data-grid-style].active', root);
+      return {
+        size: size,
+        major: isFinite(major) && major >= 2 ? major : 4,
+        step: custom && isFinite(rawStep) && rawStep > 0 ? rawStep : 0,
+        originX: parseLenInput(val('gridOriginX')),
+        originY: parseLenInput(val('gridOriginY')),
+        style: styleBtn ? styleBtn.getAttribute('data-grid-style') : 'lines',
+        adaptive: !!(el('gridAdaptive') && el('gridAdaptive').checked),
+        axes: !!(el('gridAxes') && el('gridAxes').checked)
+      };
+    }
+
+    function syncControls() {
+      var custom = !!(el('gridCustomStep') && el('gridCustomStep').checked);
+      var stepInput = el('gridStep');
+      if (stepInput) {
+        stepInput.disabled = !custom;
+        stepInput.style.opacity = custom ? '1' : '0.45';
+      }
+    }
+
+    function updatePreview() {
+      var c = el('gridPreview');
+      if (c) drawGridPreview(c, readDraft());
+    }
+
+    function markPresets(size) {
+      $$('[data-grid-preset]', root).forEach(function (b) {
+        b.classList.toggle('active', Math.abs(Number(b.getAttribute('data-grid-preset')) - size) < 0.5);
+      });
+    }
+
+    function setDraft(cfg) {
+      if (el('gridSize')) el('gridSize').value = ED.Geo.sizeInput(cfg.size, unit);
+      if (el('gridMajor')) el('gridMajor').value = String(cfg.major);
+      if (el('gridOriginX')) el('gridOriginX').value = ED.Geo.lengthInput(cfg.originX, unit);
+      if (el('gridOriginY')) el('gridOriginY').value = ED.Geo.lengthInput(cfg.originY, unit);
+      if (el('gridCustomStep')) el('gridCustomStep').checked = !!cfg.step;
+      if (el('gridStep')) el('gridStep').value = ED.Geo.sizeInput(cfg.step || Math.max(10, cfg.size / 5), unit);
+      if (el('gridAdaptive')) el('gridAdaptive').checked = !!cfg.adaptive;
+      if (el('gridAxes')) el('gridAxes').checked = !!cfg.axes;
+      $$('[data-grid-style]', root).forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-grid-style') === cfg.style);
+      });
+      markPresets(cfg.size);
+      syncControls();
+      updatePreview();
+    }
+
+    root.addEventListener('click', function (e) {
+      var preset = e.target.closest('[data-grid-preset]');
+      if (preset) {
+        var mm = Number(preset.getAttribute('data-grid-preset'));
+        if (el('gridSize')) el('gridSize').value = ED.Geo.sizeInput(mm, unit);
+        markPresets(mm);
+        updatePreview();
+        return;
+      }
+      var style = e.target.closest('[data-grid-style]');
+      if (style) {
+        $$('[data-grid-style]', root).forEach(function (b) { b.classList.toggle('active', b === style); });
+        updatePreview();
+      }
+    });
+    root.addEventListener('input', function () { syncControls(); updatePreview(); });
+    root.addEventListener('change', function () { syncControls(); updatePreview(); });
+
+    $('#gridReset', root).addEventListener('click', function () {
+      setDraft({
+        size: imperial ? 304.8 : 250, major: 4, step: 0,
+        originX: 0, originY: 0, style: 'lines', adaptive: true, axes: true
+      });
+    });
+
+    $('#gridApply', root).addEventListener('click', function () {
+      var cfg = readDraft();
+      var size = ED.Geo.clamp(cfg.size, 5, 100000);
+      var step = cfg.step ? ED.Geo.clamp(cfg.step, 1, 100000) : 0;
+      App.store.act('Configurar rejilla', function () {
+        var s = App.store.project.settings;
+        s.grid = size;
+        s.gridMajor = ED.Geo.clamp(cfg.major, 2, 50);
+        s.snapStep = step;
+        s.gridOriginX = cfg.originX;
+        s.gridOriginY = cfg.originY;
+        s.gridStyle = cfg.style === 'dots' ? 'dots' : 'lines';
+        s.gridAdaptive = cfg.adaptive;
+        s.showAxes = cfg.axes;
+      });
+      applyGridToEditor();
+      App.editor.render();
+      refreshProps();
+      updateGridChips();
+      modal.close();
+      toast('Rejilla actualizada: ' + gridLabel(size) +
+        (step ? ' · paso ' + gridLabel(step) : ''), 'success', 3000);
+    });
+
+    setTimeout(function () {
+      var c = el('gridPreview');
+      if (c) updatePreview();
+    }, 50);
   }
 
   function showProjectInfo() {
@@ -1817,6 +2271,8 @@
         s.units = ED.Geo.normalizeUnit(val('units'));
       });
       App.editor.setSnap({ gridSize: s.grid });
+      applyGridToEditor();
+      updateGridChips();
       updateUnitsUI();
       refreshHeader();
       App.editor.render();
@@ -1871,12 +2327,15 @@
       shortcut('Nuevo proyecto', ['Ctrl', 'N']) + shortcut('Duplicar mueble', ['Ctrl', 'D']) +
       shortcut('Ajustar vista', ['Shift', 'F']) + shortcut('Zoom', ['+', '−']) +
       shortcut('Vistas', ['1', '2', '3']) + shortcut('Rotar mueble', ['R']) +
+      shortcut('Configurar rejilla', ['Shift', 'G']) +
       '</div></div></div>' +
       '<hr style="border:0;border-top:1px solid #26323e;margin:18px 0">' +
       '<div class="help-copy"><p><strong>Flujo recomendado.</strong> Dibuja el perímetro con la herramienta Muro, inserta puertas y ventanas sobre los muros, y pulsa <strong>Detectar ambientes</strong> para etiquetar los recintos. Amuebla desde la biblioteca y comprueba el resultado en 3D.</p>' +
       '<p><strong>Láminas y PDF.</strong> En la vista Láminas puedes escoger tamaño, orientación, escala y uno de los cuatro cajetines. El PDF se genera vectorial, con el plano nítido a cualquier zoom.</p>' +
       '<p><strong>DWG/DXF.</strong> El navegador no escribe el formato binario propietario DWG; EngDraft exporta DXF R12, el formato de intercambio de AutoCAD. Abre el DXF en AutoCAD y usa <em>Guardar como → DWG</em> si necesitas ese formato.</p>' +
       '<p><strong>Unidades.</strong> El botón del sistema de unidades en la barra de estado alterna entre métrico (m · m²) e imperial (ft · ft²). También puedes cambiarlo en Datos del proyecto. Las cotas, áreas, propiedades y láminas se actualizan.</p>' +
+      '<p><strong>Rejilla a medida.</strong> Con <em>Shift+G</em> o el botón <strong>Rejilla</strong> del lienzo abres el cuadro de rejilla: separación de líneas, línea maestra, origen y un paso de ajuste independiente. Un paso fino (por ejemplo 5 cm o 1") permite dibujar muros y huecos con dimensiones exactas sin perder la referencia visual.</p>' +
+      '<p><strong>Tamaño de letra.</strong> El botón <em>Aa</em> de la barra de estado cambia el tamaño del texto entre Normal, Grande y Muy grande; la preferencia queda guardada en este navegador.</p>' +
       '<p><strong>Puertas y ventanas.</strong> Selecciona un muro y edita sus aberturas: ancho, alto, posición, antepecho, sentido de apertura y bisagra. Los botones Girar hoja e Invertir bisagra cambian el dibujo en 2D y 3D.</p>' +
       '<p><strong>Privacidad.</strong> Todo se dibuja y se guarda en tu equipo. La aplicación funciona sin conexión y no envía datos a ningún servidor.</p>' +
       '<p><strong>Manual completo.</strong> El manual de uso incluye tutorial paso a paso, buenas prácticas, ejercicios, preguntas frecuentes y checklist de entrega: <a href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">abrir manual en PDF</a>.</p>' +
@@ -1941,6 +2400,11 @@
       if (e.key === 'Escape') { closeModal(); e.preventDefault(); }
       return;
     }
+    if (App.fontMenuOpen && e.key === 'Escape') {
+      closeFontMenu();
+      e.preventDefault();
+      return;
+    }
     var tag = (e.target && e.target.tagName) || '';
     var typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable);
     if (typing) return;
@@ -2001,7 +2465,12 @@
       e.preventDefault();
       return;
     }
-    if (lower === 'g') { toggleSnap('grid'); e.preventDefault(); return; }
+    if (lower === 'g') {
+      if (e.shiftKey) { showGridDialog(); e.preventDefault(); return; }
+      toggleSnap('grid');
+      e.preventDefault();
+      return;
+    }
     if (lower === 's') { toggleSnap('snapping'); e.preventDefault(); return; }
     if (lower === 'o') { toggleSnap('ortho'); e.preventDefault(); return; }
     if (lower === 'r') {
@@ -2016,6 +2485,11 @@
   App.setTool = chooseTool;
   App.exportPDF = exportPDF;
   App.toast = toast;
+  App.showGridDialog = showGridDialog;
+  App.showHelp = showHelp;
+  App.setFontScale = function (scale) { applyFontScale(scale); };
+  App.getGridSettings = gridSettings;
+  App.applyGrid = applyGridToEditor;
   App.refresh = function () { refreshHeader(); refreshProps(); refreshLayers(); refreshLevelTabs(); };
 
   // ================================================================== arranque
