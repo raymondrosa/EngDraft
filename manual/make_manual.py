@@ -681,8 +681,8 @@ make_table(["Campo", "Ejemplo"], [
     ["Nombre del proyecto", "Vivienda Unifamiliar Los Álamos"],
     ["Cliente / propietario", "Familia Rojas"],
     ["Ubicación", "Calle 4 #12-34, Barrio Central"],
-    ["Ingeniero / arquitecto", "Ing. Ana Martínez"],
-    ["Matrícula / licencia", "CIP 12-3456"],
+    ["Ingeniero / arquitecto", "Ing. Proyecto"],
+    ["Matrícula / licencia", "***"],
     ["Fecha y revisión", "2026-11-18 · A"],
     ["Descripción y notas", "Vivienda de una planta, 2 dormitorios."],
 ], [5.0, 11.6], font_size=9)
