@@ -94,4 +94,76 @@ const outDir = path.join(require('os').tmpdir(), 'engdraft-test');
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'planos.pdf'), bytes);
 console.log('PDF de prueba:', path.join(outDir, 'planos.pdf'));
+
+// ---------------------------------------------------------------------------
+// Ampliación 1.2: lámina de planta con muros en arco y spline
+// ---------------------------------------------------------------------------
+const proyectoCurvo = ED.Templates.create('blank');
+proyectoCurvo.walls = [
+  {
+    id: 'w_lam_recto', type: 'wall', level: 'l0', layerId: 'walls',
+    a: { x: 0, y: 0 }, b: { x: 5000, y: 0 }, thickness: 150, height: 2700, openings: []
+  },
+  {
+    id: 'w_lam_arco', type: 'wall', level: 'l0', layerId: 'walls',
+    a: { x: 0, y: 3000 }, b: { x: 5000, y: 3000 }, thickness: 150, height: 2700,
+    openings: [], curve: { type: 'arc', bulge: 0.5 }
+  },
+  {
+    id: 'w_lam_spline', type: 'wall', level: 'l0', layerId: 'walls',
+    a: { x: 0, y: 7000 }, b: { x: 5000, y: 7000 }, thickness: 150, height: 2700,
+    openings: [], curve: { type: 'spline', pts: [{ x: 1500, y: 9000 }, { x: 3500, y: 9000 }] }
+  }
+];
+proyectoCurvo.rooms = [{
+  id: 'r_lam', type: 'room', level: 'l0', layerId: 'rooms', name: 'Patio',
+  polygon: [{ x: 0, y: 0 }, { x: 5000, y: 0 }, { x: 5000, y: 3000 }, { x: 0, y: 3000 }],
+  finish: 'wood'
+}];
+proyectoCurvo.items = [{
+  id: 'i_lam', type: 'item', level: 'l0', layerId: 'furniture',
+  libId: 'tree', x: 6000, y: 3000, rotation: 0, w: 2400, d: 2400, h: 5000
+}];
+const laminaCurva = S.createSheet(proyectoCurvo, {
+  template: 'technical', content: 'plan', levelId: 'l0', size: 'A3', orientation: 'landscape'
+});
+proyectoCurvo.sheets = [laminaCurva];
+
+const boundsCurvo = S.planBounds(proyectoCurvo, 'l0');
+['minX', 'minY', 'maxX', 'maxY', 'w', 'h'].forEach(function (k) {
+  assert(typeof boundsCurvo[k] === 'number' && isFinite(boundsCurvo[k]),
+    'planBounds con muros curvos devolvió un valor no finito en ' + k + ': ' + boundsCurvo[k]);
+});
+assert(boundsCurvo.w >= 5000, 'planBounds debe cubrir el ancho de la planta curva; w = ' + boundsCurvo.w);
+assert(boundsCurvo.h >= 7000, 'planBounds debe cubrir el alto de la planta curva; h = ' + boundsCurvo.h);
+assert(boundsCurvo.minY <= 1700,
+  'planBounds debe incluir la flecha del arco (minY ≈ 1675); minY = ' + boundsCurvo.minY);
+assert(boundsCurvo.maxY >= 8900,
+  'planBounds debe incluir la spline (maxY ≈ 9075); maxY = ' + boundsCurvo.maxY);
+
+const cvCurvo = fakeCanvas(720);
+assert.doesNotThrow(function () { S.renderPreview(cvCurvo, proyectoCurvo, laminaCurva); },
+  'renderPreview con muros en arco y spline lanzó una excepción');
+assert(cvCurvo.width > 100 && cvCurvo.height > 100,
+  'La vista previa de la planta curva quedó sin dimensiones');
+const cvCurvo2 = fakeCanvas(1000);
+assert.doesNotThrow(function () { S.renderSheet(cvCurvo2, proyectoCurvo, laminaCurva); },
+  'renderSheet con muros en arco y spline lanzó una excepción');
+assert(cvCurvo2.width > 100 && cvCurvo2.height > 100,
+  'La lámina de planta curva quedó sin dimensiones');
+
+const bytesCurvo = S.createPDFBytes(proyectoCurvo, proyectoCurvo.sheets);
+assert(bytesCurvo instanceof Uint8Array, 'El PDF de la lámina curva no es un Uint8Array');
+assert(bytesCurvo.length > 10000, 'PDF de la lámina curva demasiado pequeño: ' + bytesCurvo.length);
+const txtCurvo = Buffer.from(bytesCurvo).toString('latin1');
+assert(txtCurvo.startsWith('%PDF-1.4'), 'El PDF de la lámina curva no tiene cabecera PDF');
+assert(txtCurvo.includes('%%EOF'), 'El PDF de la lámina curva no tiene %%EOF');
+assert((txtCurvo.match(/\/Type \/Page[^s]/g) || []).length === proyectoCurvo.sheets.length,
+  'El PDF de la lámina curva no tiene una página por lámina');
+const sxCurvo = txtCurvo.match(/startxref\s+(\d+)/);
+assert(sxCurvo, 'El PDF de la lámina curva no tiene startxref');
+const xrefCurvo = txtCurvo.slice(Number(sxCurvo[1]), Number(sxCurvo[1]) + 4);
+assert(xrefCurvo === 'xref', 'El startxref del PDF de la lámina curva no apunta a xref');
+console.log('Lámina de planta con muro en arco y spline: preview, renderSheet y PDF — OK');
+
 console.log('OK — pruebas de láminas completadas');

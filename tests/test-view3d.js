@@ -69,4 +69,182 @@ for (const preset of ['iso', 'top', 'front', 'right']) {
   v.destroy();
 }
 console.log('View3D: 4 presets renderizados sin excepciones');
+
+// =====================================================================
+// Ampliación 1.2: techos, modo realista, materiales y vuelo de dron
+// =====================================================================
+// Proyecto con muro recto + muro en arco + muro spline, en una zona libre
+// al oeste de la vivienda de la demo.
+const proyectoCurvo = ED.Templates.demo();
+proyectoCurvo.walls.push(
+  {
+    id: 'w_test_recto', type: 'wall', level: 'l0', layerId: 'walls',
+    a: { x: -8000, y: 2000 }, b: { x: -2000, y: 2000 },
+    thickness: 150, height: 2700, openings: []
+  },
+  {
+    id: 'w_test_arco', type: 'wall', level: 'l0', layerId: 'walls',
+    a: { x: -8000, y: 4000 }, b: { x: -2000, y: 4000 },
+    thickness: 150, height: 2700, openings: [], curve: { type: 'arc', bulge: 1 }
+  },
+  {
+    id: 'w_test_spline', type: 'wall', level: 'l0', layerId: 'walls',
+    a: { x: -8000, y: 6000 }, b: { x: -2000, y: 6000 },
+    thickness: 150, height: 2700, openings: [],
+    curve: { type: 'spline', pts: [{ x: -6000, y: 7500 }, { x: -4000, y: 7500 }] }
+  }
+);
+const storeCurvo = new ED.Store(proyectoCurvo);
+assert.strictEqual(storeCurvo.project.walls.filter(w => w.curve).length, 2,
+  'El proyecto de prueba debe tener dos muros curvos');
+
+const erroresInternos = [];
+const consoleErrorOriginal = console.error;
+function casos3D() {
+  const estilos = ['flat', 'gable', 'arc', 'spline'];
+  const materiales = {
+    wall: { color: '#ddccbb', texture: 'brick' },
+    roof: { color: '#aa5533', texture: 'tile' },
+    trim: { color: '#ffffff' },
+    ground: { color: '#99aa77', texture: 'grass' }
+  };
+  for (const estilo of estilos) {
+    const canvas = fakeCanvas(1000, 700);
+    const v = new ED.View3D(canvas, { store: storeCurvo });
+    v.setOptions({
+      roof: true, roofStyle: estilo, renderMode: 'realistic',
+      roofHeight: 1500, roofOverhang: 500,
+      materials: materiales, textures: true, shadows: true, sunAngle: 200
+    });
+    v.resize();
+    v.fit();
+    v.render();
+    const info = v.getRenderInfo();
+    assert.strictEqual(info.mode, 'realistic', 'getRenderInfo debe informar modo realista con techo ' + estilo);
+    assert.strictEqual(info.roofStyle, estilo, 'getRenderInfo debe informar el techo ' + estilo + '; informa ' + info.roofStyle);
+    assert.strictEqual(info.textures, true, 'getRenderInfo debe informar texturas activas con techo ' + estilo);
+    assert.strictEqual(info.shadows, true, 'getRenderInfo debe informar sombras activas con techo ' + estilo);
+    assert.strictEqual(info.sunAngle, 200, 'getRenderInfo debe informar sunAngle 200 con techo ' + estilo);
+    assert(info.faces > 0, 'getRenderInfo debe contar caras con techo ' + estilo + '; contó ' + info.faces);
+    assert.strictEqual(info.flying, false, 'getRenderInfo no debe marcar vuelo antes de empezar');
+    const shot = v.screenshot();
+    assert(typeof shot === 'string' && shot.startsWith('data:image/png'),
+      'screenshot inválido con modo realista y techo ' + estilo);
+    v.destroy();
+  }
+
+  // Modo esquemático con techo a dos aguas: no debe lanzar y conserva la paleta.
+  const canvasEsq = fakeCanvas(1000, 700);
+  const vEsq = new ED.View3D(canvasEsq, { store: storeCurvo });
+  vEsq.setOptions({ roof: true, roofStyle: 'gable', renderMode: 'schematic', sunAngle: 90 });
+  vEsq.render();
+  const infoEsq = vEsq.getRenderInfo();
+  assert.strictEqual(infoEsq.mode, 'schematic', 'getRenderInfo debe informar modo esquemático');
+  assert.strictEqual(infoEsq.roofStyle, 'gable', 'El techo a dos aguas debe funcionar también en esquemático');
+  assert(infoEsq.faces > 0, 'El modo esquemático debe generar caras');
+  assert(vEsq.screenshot().startsWith('data:image/png'),
+    'screenshot del modo esquemático no devolvió PNG');
+  // Captura de alta resolución (escala 2) del proyecto con muros curvos.
+  const shot2 = vEsq.screenshot(2);
+  assert(typeof shot2 === 'string' && shot2.startsWith('data:image/png'),
+    'screenshot(2) del proyecto con muros curvos no devolvió PNG');
+  vEsq.destroy();
+  return estilos.length;
+}
+let casos = 0;
+console.error = function () {
+  erroresInternos.push(Array.prototype.slice.call(arguments).map(String).join(' '));
+};
+try {
+  casos = casos3D();
+} finally {
+  console.error = consoleErrorOriginal;
+}
+assert.strictEqual(erroresInternos.length, 0,
+  'render()/screenshot() registraron errores internos con muros curvos: ' + erroresInternos.join(' | '));
+console.log('View3D: 4 estilos de techo en modo realista + esquemático — OK');
+
+// Vuelo de dron: arranca, informa el estado y se detiene sin excepciones.
+let vueloOk = 0;
+console.error = function () {
+  erroresInternos.push(Array.prototype.slice.call(arguments).map(String).join(' '));
+};
+erroresInternos.length = 0;
+try {
+  for (const estilo of ['flat', 'gable', 'arc', 'spline']) {
+    const canvas = fakeCanvas(900, 650);
+    const v = new ED.View3D(canvas, { store: storeCurvo });
+    v.setOptions({ roof: true, roofStyle: estilo, renderMode: 'realistic' });
+    v.render();
+    assert.strictEqual(v.isFlying(), false, 'No debe estar volando antes de startFlight()');
+    assert.strictEqual(v.startFlight({ duration: 3000 }), v, 'startFlight debe devolver el propio View3D');
+    assert.strictEqual(v.isFlying(), true, 'isFlying debe ser true tras startFlight() con techo ' + estilo);
+    assert.strictEqual(v.getRenderInfo().flying, true, 'getRenderInfo debe marcar vuelo activo con techo ' + estilo);
+    assert.doesNotThrow(function () { v.render(); }, 'render() durante el vuelo no debe lanzar (techo ' + estilo + ')');
+    assert.doesNotThrow(function () { v.screenshot(); }, 'screenshot() durante el vuelo no debe lanzar (techo ' + estilo + ')');
+    assert.strictEqual(v.stopFlight(), v, 'stopFlight debe devolver el propio View3D');
+    assert.strictEqual(v.isFlying(), false, 'isFlying debe ser false tras stopFlight() con techo ' + estilo);
+    assert.strictEqual(v.getRenderInfo().flying, false, 'getRenderInfo no debe marcar vuelo tras stopFlight()');
+    assert.doesNotThrow(function () { v.stopFlight(); }, 'stopFlight() debe tolerar que no haya vuelo');
+    // Volver a iniciar sustituye al vuelo anterior sin lanzar.
+    v.startFlight({ duration: 3000 });
+    assert.strictEqual(v.isFlying(), true, 'El vuelo debe poder reiniciarse');
+    v.startFlight({ duration: 4000 });
+    assert.strictEqual(v.isFlying(), true, 'startFlight debe reiniciar un vuelo en curso');
+    v.stopFlight();
+    assert.strictEqual(v.isFlying(), false, 'stopFlight debe detener un vuelo reiniciado');
+    v.destroy();
+    assert.strictEqual(v.isFlying(), false, 'destroy() debe detener el vuelo');
+    vueloOk++;
+  }
+} finally {
+  console.error = consoleErrorOriginal;
+}
+assert.strictEqual(vueloOk, 4, 'El vuelo de dron debe probarse con los 4 estilos de techo');
+assert.strictEqual(erroresInternos.length, 0,
+  'startFlight/stopFlight registraron errores internos: ' + erroresInternos.join(' | '));
+console.log('View3D: vuelo de dron (start/isFlying/stop/destroy) con 4 techos — OK');
+
+// Las opciones heredan de project.settings cuando no se pasan a setOptions.
+const proyectoTema = ED.Templates.demo();
+proyectoTema.settings.roof = { style: 'spline', height: 2400, overhang: 900 };
+proyectoTema.settings.materials = {
+  wall: { color: '#eeddcc', texture: 'stone' },
+  roof: { color: '#884422', texture: 'metal' },
+  trim: { color: '#ffeeee' },
+  ground: { color: '#77aa55', texture: 'gravel' }
+};
+proyectoTema.settings.render = { mode: 'realistic', shadows: false, textures: false, sunAngle: 55 };
+const canvasTema = fakeCanvas(1000, 700);
+const vTema = new ED.View3D(canvasTema, { store: new ED.Store(proyectoTema) });
+vTema.render();
+const infoTema = vTema.getRenderInfo();
+assert.strictEqual(infoTema.mode, 'realistic', 'Sin setOptions debe heredarse render.mode realista del proyecto');
+assert.strictEqual(infoTema.roofStyle, 'spline', 'Sin setOptions debe heredarse roof.style spline del proyecto');
+assert.strictEqual(infoTema.textures, false, 'Sin setOptions debe heredarse render.textures=false');
+assert.strictEqual(infoTema.shadows, false, 'Sin setOptions debe heredarse render.shadows=false');
+assert.strictEqual(infoTema.sunAngle, 55, 'Sin setOptions debe heredarse render.sunAngle del proyecto');
+// setOptions puede forzar un modo distinto al del proyecto.
+vTema.setOptions({ renderMode: 'schematic', textures: true, roofStyle: 'flat' });
+vTema.render();
+const infoForzado = vTema.getRenderInfo();
+assert.strictEqual(infoForzado.mode, 'schematic', 'setOptions debe poder forzar el modo esquemático');
+assert.strictEqual(infoForzado.textures, true, 'setOptions debe poder forzar textures=true');
+assert.strictEqual(infoForzado.roofStyle, 'flat', 'setOptions debe poder forzar roofStyle=flat');
+// Valores inválidos no deben romper ni dejar NaN en getOptions/getRenderInfo.
+assert.doesNotThrow(function () {
+  vTema.setOptions({
+    renderMode: 'holograma', roofStyle: 'domo', textures: null, shadows: null,
+    sunAngle: NaN, roofHeight: 'x', roofOverhang: Infinity, roofColor: 42, roofTexture: 'lava'
+  });
+}, 'setOptions con valores inválidos no debe lanzar');
+const optsInvalidas = vTema.getOptions();
+assert.strictEqual(optsInvalidas.renderMode, null, 'Un renderMode inválido debe caer a null (heredar)');
+assert.strictEqual(optsInvalidas.roofStyle, null, 'Un roofStyle inválido debe caer a null (heredar)');
+vTema.render();
+const infoInvalidas = vTema.getRenderInfo();
+assert.strictEqual(infoInvalidas.mode, 'realistic', 'Tras un renderMode inválido debe reheredarse el del proyecto');
+assert.strictEqual(infoInvalidas.roofStyle, 'spline', 'Tras un roofStyle inválido debe reheredarse el del proyecto');
+vTema.destroy();
+console.log('View3D: herencia de project.settings y setOptions inválidas — OK');
 console.log('OK — prueba 3D completada');

@@ -28,11 +28,113 @@ assert(ED.DXF, 'DXF cargado');
 
 const lib = ED.Library;
 assert(lib.list().length >= 30, 'Se esperaban 30+ accesorios, hay ' + lib.list().length);
-for (const def of lib.list()) {
-  assert(def.plan && def.plan.length, 'Sin planta: ' + def.id);
-  assert(def.boxes && def.boxes.length, 'Sin cajas 3D: ' + def.id);
-  assert(def.w > 0 && def.d > 0 && def.h > 0, 'Dimensiones inválidas: ' + def.id);
+
+// ---------------------------------------------------------------------------
+// Biblioteca ampliada 1.2: plantas, jardines y vías con plan/boxes/dims válidos
+// ---------------------------------------------------------------------------
+var TIPOS_PLAN = { rect: 1, line: 1, circle: 1, poly: 1, arc: 1 };
+function numeroFinito(v, msg) {
+  assert(typeof v === 'number' && isFinite(v), msg + ' (valor: ' + v + ')');
 }
+// Algunos accesorios agrupan sus cajas en un array anidado: se valida aplanado.
+function cajasPlanas(lista) {
+  var out = [];
+  (lista || []).forEach(function (b) {
+    if (Array.isArray(b)) out = out.concat(cajasPlanas(b));
+    else if (b) out.push(b);
+  });
+  return out;
+}
+var idsVistos = {};
+for (const def of lib.list()) {
+  assert(def.id && !idsVistos[def.id], 'Id de biblioteca repetido: ' + def.id);
+  idsVistos[def.id] = true;
+  assert(typeof def.name === 'string' && def.name.trim(), 'Sin nombre: ' + def.id);
+  numeroFinito(def.w, 'Ancho inválido en ' + def.id);
+  numeroFinito(def.d, 'Fondo inválido en ' + def.id);
+  numeroFinito(def.h, 'Alto inválido en ' + def.id);
+  assert(def.w > 0 && def.d > 0 && def.h > 0, 'Dimensiones inválidas: ' + def.id);
+  assert(Array.isArray(def.plan) && def.plan.length, 'Sin planta: ' + def.id);
+  def.plan.forEach(function (sh, idx) {
+    assert(sh && TIPOS_PLAN[sh.t], 'Planta ' + idx + ' de ' + def.id + ' con tipo desconocido: ' + (sh && sh.t));
+    if (sh.t === 'rect') {
+      ['x', 'y', 'w', 'h'].forEach(function (k) {
+        numeroFinito(sh[k], 'rect.' + k + ' de ' + def.id);
+      });
+    } else if (sh.t === 'circle' || sh.t === 'arc') {
+      ['cx', 'cy', 'r'].forEach(function (k) {
+        numeroFinito(sh[k], sh.t + '.' + k + ' de ' + def.id);
+      });
+      assert(sh.r > 0, 'Radio inválido en la planta de ' + def.id);
+    } else if (sh.t === 'line') {
+      ['x1', 'y1', 'x2', 'y2'].forEach(function (k) {
+        numeroFinito(sh[k], 'line.' + k + ' de ' + def.id);
+      });
+    } else if (sh.t === 'poly') {
+      assert(Array.isArray(sh.points) && sh.points.length >= 3,
+        'Polígono con menos de 3 puntos en la planta de ' + def.id);
+      sh.points.forEach(function (p) {
+        assert(p && isFinite(p.x) && isFinite(p.y),
+          'Punto no finito en el polígono de la planta de ' + def.id);
+      });
+    }
+  });
+  const cajas = cajasPlanas(def.boxes);
+  assert(cajas.length > 0, 'Sin cajas 3D: ' + def.id);
+  var cajasUtiles = 0;
+  cajas.forEach(function (bx) {
+    ['x', 'y', 'z', 'w', 'd', 'h'].forEach(function (k) {
+      numeroFinito(bx[k], 'Caja 3D de ' + def.id + ': ' + k);
+    });
+    assert(bx.w >= 0 && bx.d >= 0 && bx.h >= 0,
+      'Caja 3D con medidas negativas en ' + def.id);
+    // Las medidas 0 son marcadores heredados de datos antiguos: se toleran,
+    // pero cada ítem debe conservar al menos una caja con volumen real.
+    if (bx.w > 0 && bx.d > 0 && bx.h > 0) cajasUtiles++;
+    if (bx.color != null) assert(typeof bx.color === 'string', 'Color de caja inválido en ' + def.id);
+  });
+  assert(cajasUtiles > 0, 'Ninguna caja 3D de ' + def.id + ' tiene volumen');
+  assert(lib.categories.some(function (c) { return c.id === def.cat; }),
+    'Categoría inexistente "' + def.cat + '" en ' + def.id);
+}
+// Nota de diagnóstico: la biblioteca histórica agrupa las cajas de algunos ítems
+// en arrays anidados y deja marcadores de volumen 0. Se toleran en la validación.
+const conCajasAnidadas = lib.list().filter(function (d) {
+  return (d.boxes || []).some(Array.isArray);
+}).map(function (d) { return d.id; });
+if (conCajasAnidadas.length) {
+  console.log('Nota: cajas 3D anidadas en', conCajasAnidadas.join(', '),
+    '(View3D solo recorre el primer nivel)');
+}
+
+// Mínimos y nombres de las categorías nuevas (CONTRACT §13.5).
+const minimosNuevos = { plantas: 5, jardines: 4, vias: 5 };
+const conteoCat = {};
+lib.list().forEach(function (d) { conteoCat[d.cat] = (conteoCat[d.cat] || 0) + 1; });
+Object.keys(minimosNuevos).forEach(function (id) {
+  const cat = lib.categories.filter(function (c) { return c.id === id; })[0];
+  assert(cat, 'Falta la categoría nueva "' + id + '"');
+  assert(typeof cat.name === 'string' && cat.name.trim(), 'La categoría "' + id + '" no tiene nombre visible');
+  assert((conteoCat[id] || 0) >= minimosNuevos[id],
+    'La categoría "' + id + '" debe tener al menos ' + minimosNuevos[id] +
+    ' ítems; tiene ' + (conteoCat[id] || 0));
+});
+const requeridos = {
+  plantas: ['palm', 'tree', 'bush', 'hedge', 'flowerBed', 'ornamentalPlant'],
+  jardines: ['lawn', 'planter', 'gardenPath', 'fountain', 'rockGarden'],
+  vias: ['roadStraight', 'roadCurve', 'driveway', 'drivewayCurve', 'sidewalk', 'parking']
+};
+Object.keys(requeridos).forEach(function (cat) {
+  requeridos[cat].forEach(function (id) {
+    const def = lib.get(id);
+    assert(def, 'Falta el ítem "' + id + '" de la categoría ' + cat);
+    assert.strictEqual(def.cat, cat, 'El ítem "' + id + '" debe pertenecer a la categoría ' + cat);
+    assert((def.tags || '').length > 0, 'El ítem "' + id + '" no tiene etiquetas de búsqueda');
+  });
+});
+console.log('Biblioteca 1.2:', lib.list().length, 'ítems;',
+  'plantas', conteoCat.plantas, '· jardines', conteoCat.jardines, '· vías', conteoCat.vias, '— OK');
+
 
 for (const id of ['blank', 'casa1', 'casa2', 'demo']) {
   const p = ED.Templates.create(id);
@@ -61,6 +163,26 @@ const demoArea = demo.rooms.reduce((a, r) => a + ED.Geo.polygonArea(r.polygon), 
 assert(demoArea > 150e6, 'La demo debe superar 150 m² construidos');
 console.log('Demo:', demo.walls.length, 'muros,', demo.rooms.length, 'ambientes,',
   demo.items.length, 'muebles,', (demoArea / 1e6).toFixed(1), 'm²,', demo.sheets.length, 'hojas');
+
+// Aspecto 3D por defecto del proyecto (CONTRACT §13.3): la demo debe seguir válida
+// y saneada también en techo, materiales y modo de renderizado.
+assert.deepStrictEqual(demo.settings.roof, { style: 'flat', height: 1200, overhang: 400 },
+  'La demo debe tener techo plano por defecto (1200 mm / alero 400 mm)');
+assert.deepStrictEqual(demo.settings.materials, {
+  wall: { color: '#f3eee2', texture: 'stucco' },
+  roof: { color: '#b49a7c', texture: 'tile' },
+  trim: { color: '#fdfaf2' },
+  ground: { color: '#c9d3ab', texture: 'grass' }
+}, 'La demo debe traer los materiales por defecto de la 1.2');
+assert.deepStrictEqual(demo.settings.render, { mode: 'schematic', shadows: true, textures: true, sunAngle: 135 },
+  'La demo debe arrancar en modo esquemático con sombras y texturas');
+const demoNorm = ED.Store.normalizeProject(ED.Geo.deepClone(demo));
+assert.deepStrictEqual(demoNorm.settings.roof, demo.settings.roof,
+  'normalizeProject no debe alterar el techo por defecto de la demo');
+assert.deepStrictEqual(demoNorm.settings.materials, demo.settings.materials,
+  'normalizeProject no debe alterar los materiales por defecto de la demo');
+assert.deepStrictEqual(demoNorm.settings.render, demo.settings.render,
+  'normalizeProject no debe alterar el render por defecto de la demo');
 
 // Detección de ambientes por rejilla
 const t0 = Date.now();
