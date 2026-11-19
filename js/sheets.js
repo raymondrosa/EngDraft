@@ -1692,18 +1692,23 @@
     return (layer && layer.color) || fallback || INK;
   }
 
-  function levelElevationText(level) {
+  function levelElevationText(level, units) {
     if (!level) return '';
-    var e = num(level.elevation, 0) / 1000;
-    var s = (e >= 0 ? '+' : '') + fmt(e, 2);
-    return 'NIVEL ' + s + ' m';
+    var mm = num(level.elevation, 0);
+    var s;
+    if (String(units || 'm').toLowerCase() === 'ft') {
+      s = (mm >= 0 ? '+' : '') + fmt(mm / 304.8, 2) + ' ft';
+    } else {
+      s = (mm >= 0 ? '+' : '') + fmt(mm / 1000, 2) + ' m';
+    }
+    return 'NIVEL ' + s;
   }
 
-  function metaline(level) {
+  function metaline(level, units) {
     if (!level) return '';
     var parts = [];
     if (level.name) parts.push(String(level.name).toUpperCase());
-    parts.push(levelElevationText(level));
+    parts.push(levelElevationText(level, units));
     return parts.join('  ·  ');
   }
 
@@ -1840,8 +1845,8 @@
       title: cleanText(sheet.title, defaultTitle(sheet)),
       sheetNo: cleanText(sheet.sheetNo, 'A-01'),
       levelName: level ? cleanText(level.name, '') : '',
-      levelElev: levelElevationText(level),
-      levelText: metaline(level),
+      levelElev: levelElevationText(level, project.settings && project.settings.units),
+      levelText: metaline(level, project.settings && project.settings.units),
       scale: scaleText || 'S/E',
       sheetName: cleanText(sheet.name, ''),
       templateName: (function () {
@@ -1964,6 +1969,7 @@
       adjusted: adjusted,
       headerH: hdrH,
       sbH: sbH,
+      units: (project.settings && project.settings.units) || 'm',
       scaleText: '1:' + eff + (adjusted ? ' (ajustada)' : '')
     };
   }
@@ -2266,7 +2272,7 @@
           size: st.size, bold: true, color: INK, align: 'center', baseline: 'middle'
         });
       }
-      var areaText = Geo().formatArea(area);
+      var areaText = Geo().formatArea(area, project.settings && project.settings.units);
       var st2 = fitTextSize(areaText, maxW, { size: 1.9 * k, color: INK_SOFT }, 1.25);
       if (st2.size >= 1.25) {
         p.text(areaText, pc.x, pc.y + 1.6 * k, {
@@ -2385,7 +2391,17 @@
 
   function paintScaleBar(p, x, y, maxW, info, k) {
     var targetWorld = maxW / info.f;
-    var worldLen = niceScaleLength(targetWorld);
+    var imperial = String(info.units || 'm').toLowerCase() === 'ft';
+    var worldLen;
+    if (imperial) {
+      var ftCands = [304.8, 609.6, 1524, 3048, 6096, 15240, 30480, 60960];
+      worldLen = ftCands[0];
+      for (var fi = 0; fi < ftCands.length; fi++) {
+        if (ftCands[fi] <= targetWorld * 1.1) worldLen = ftCands[fi];
+      }
+    } else {
+      worldLen = niceScaleLength(targetWorld);
+    }
     var barW = worldLen * info.f;
     if (barW > maxW * 1.15) {
       worldLen = worldLen / 2;
@@ -2405,10 +2421,17 @@
     var labelBase = { size: 1.9 * k, color: INK_SOFT, baseline: 'top' };
     var labelY = y + h + 0.9 * k;
     p.text('0', x, labelY, { size: labelBase.size, color: labelBase.color, align: 'left', baseline: 'top' });
-    p.text(fmtNum(worldLen / 2000, 2), x + barW / 2, labelY,
-      { size: labelBase.size, color: labelBase.color, align: 'center', baseline: 'top' });
-    p.text(fmtNum(worldLen / 1000, 2) + ' m', x + barW, labelY,
-      { size: labelBase.size, color: labelBase.color, align: 'right', baseline: 'top' });
+    if (imperial) {
+      p.text(Geo().formatLength(worldLen / 2, 'ft'), x + barW / 2, labelY,
+        { size: labelBase.size, color: labelBase.color, align: 'center', baseline: 'top' });
+      p.text(Geo().formatLength(worldLen, 'ft'), x + barW, labelY,
+        { size: labelBase.size, color: labelBase.color, align: 'right', baseline: 'top' });
+    } else {
+      p.text(fmtNum(worldLen / 2000, 2), x + barW / 2, labelY,
+        { size: labelBase.size, color: labelBase.color, align: 'center', baseline: 'top' });
+      p.text(fmtNum(worldLen / 1000, 2) + ' m', x + barW, labelY,
+        { size: labelBase.size, color: labelBase.color, align: 'right', baseline: 'top' });
+    }
     p.text('ESCALA 1:' + info.eff, x, y - 1.1 * k, {
       size: 2.05 * k, bold: true, color: INK_SOFT, align: 'left', baseline: 'bottom'
     });
@@ -2417,7 +2440,7 @@
   function paintPlanContent(p, project, sheet, content, k, info) {
     var level = findLevel(project, sheet.levelId);
     var headerMid = content.y + info.headerH / 2;
-    p.text(metaline(level), content.x, headerMid, {
+    p.text(metaline(level, project.settings && project.settings.units), content.x, headerMid, {
       size: 2.9 * k, bold: true, color: INK, align: 'left', baseline: 'middle'
     });
     var right = info.adjusted
@@ -3283,9 +3306,9 @@
    * ------------------------------------------------------------------ */
 
   var STANDARD_NOTES = [
-    'Todas las cotas de los planos están expresadas en metros (m) y las superficies en metros cuadrados (m²).',
-    'Los muros se ejecutarán en albañilería de 150 mm de espesor, salvo que el plano indique otra dimensión.',
-    'Las puertas interiores tendrán 0,90 × 2,10 m; las ventanas serán de aluminio con vidrio simple de 4 mm, salvo detalle en contra.',
+    'Las cotas y superficies se expresan en el sistema de unidades seleccionado en el proyecto (métrico o imperial).',
+    'Los muros se ejecutarán en albañilería de 150 mm (6") de espesor, salvo que el plano indique otra dimensión.',
+    'Las puertas interiores tendrán 0,90 × 2,10 m (3\'-0" × 7\'-0"); las ventanas serán de aluminio con vidrio simple de 4 mm (5/32"), salvo detalle en contra.',
     'La cubierta se resolverá con losa de hormigón armado y pendiente mínima del 2 % hacia los desagües.',
     'Las instalaciones sanitaria, eléctrica y de gas deberán cumplir con las normas técnicas vigentes del municipio.',
     'Verificar en obra las cotas y niveles antes de iniciar la excavación; cualquier diferencia debe consultarse con el proyectista.',
@@ -3485,7 +3508,7 @@
         pad(i + 1, 2),
         cleanText(list[i].name, 'Ambiente'),
         l ? cleanText(l.name, '—') : '—',
-        Geo().formatArea(area)
+        Geo().formatArea(area, project.settings && project.settings.units)
       ]);
     }
     return paintTable(p, x, y, w, maxY, k, {
@@ -3497,7 +3520,7 @@
         { label: 'ÁREA', frac: 0.23, align: 'right' }
       ],
       rows: rows,
-      footer: ['', 'TOTAL: ' + rows.length + ' AMBIENTES', '', Geo().formatArea(total)],
+      footer: ['', 'TOTAL: ' + rows.length + ' AMBIENTES', '', Geo().formatArea(total, project.settings && project.settings.units)],
       rowH: 5.0 * k
     });
   }
@@ -3565,9 +3588,9 @@
         }
       }
       total += area;
-      rows.push([cleanText(lvl.name, 'Nivel'), Geo().formatArea(area)]);
+      rows.push([cleanText(lvl.name, 'Nivel'), Geo().formatArea(area, project.settings && project.settings.units)]);
     }
-    rows.push(['TOTAL CONSTRUIDO', Geo().formatArea(total)]);
+    rows.push(['TOTAL CONSTRUIDO', Geo().formatArea(total, project.settings && project.settings.units)]);
     var top = y + titleSize * 2.4;
     var rowH = Math.min(8.0 * k, Math.max(3.8 * k, (maxY - top) / rows.length));
     var tableH = rowH * rows.length;

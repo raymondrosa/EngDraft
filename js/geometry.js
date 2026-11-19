@@ -214,21 +214,82 @@
     return Math.round(rad / step) * step;
   };
 
-  Geo.formatLength = function (mm, unit, decimals) {
-    var u = unit || 'm';
-    var d = decimals == null ? 2 : decimals;
-    if (u === 'ft') {
-      var totalInches = Math.abs(mm) / 25.4;
-      var feet = Math.floor(totalInches / 12);
-      var inches = totalInches - feet * 12;
-      return feet + "'-" + inches.toFixed(1) + '"';
-    }
-    return (mm / 1000).toFixed(d) + ' m';
+  Geo.normalizeUnit = function (unit) {
+    var u = String(unit || 'm').toLowerCase();
+    return (u === 'ft' || u === 'imperial' || u === 'pie' || u === 'pies') ? 'ft' : 'm';
   };
 
-  Geo.formatArea = function (mm2) {
-    return (mm2 / 1e6).toFixed(2) + ' m²';
+  Geo.isImperial = function (unit) {
+    return Geo.normalizeUnit(unit) === 'ft';
   };
+
+  function feetInches(mm) {
+    var sign = mm < 0 ? '-' : '';
+    var totalInches = Math.abs(mm) / 25.4;
+    var feet = Math.floor(totalInches / 12);
+    var rest = totalInches - feet * 12;
+    var quarter = Math.round(rest * 4) / 4;
+    if (quarter >= 12) { feet += 1; quarter = 0; }
+    var whole = Math.floor(quarter);
+    var frac = Math.round((quarter - whole) * 4);
+    var inchStr = String(whole);
+    if (frac === 1) inchStr += ' 1/4';
+    else if (frac === 2) inchStr += ' 1/2';
+    else if (frac === 3) inchStr += ' 3/4';
+    return sign + feet + "'-" + inchStr + '"';
+  }
+
+  Geo.formatFeetInches = function (mm) {
+    return feetInches(mm);
+  };
+
+  Geo.formatLength = function (mm, unit, decimals) {
+    var u = Geo.normalizeUnit(unit);
+    var d = decimals == null ? 2 : decimals;
+    if (u === 'ft') return feetInches(mm);
+    return (Number(mm) / 1000).toFixed(d) + ' m';
+  };
+
+  // Longitud numérica corta para estados, campos y coordenadas.
+  Geo.formatLengthShort = function (mm, unit, decimals) {
+    var u = Geo.normalizeUnit(unit);
+    var d = decimals == null ? 2 : decimals;
+    if (u === 'ft') return (Number(mm) / 304.8).toFixed(d) + ' ft';
+    return (Number(mm) / 1000).toFixed(d) + ' m';
+  };
+
+  Geo.formatArea = function (mm2, unit) {
+    var u = Geo.normalizeUnit(unit);
+    if (u === 'ft') return (Number(mm2) / 92930.4).toFixed(2) + ' ft²';
+    return (Number(mm2) / 1e6).toFixed(2) + ' m²';
+  };
+
+  Geo.lengthInput = function (mm, unit, decimals) {
+    var u = Geo.normalizeUnit(unit);
+    var d = decimals == null ? 2 : decimals;
+    return (Number(mm) / (u === 'ft' ? 304.8 : 1000)).toFixed(d);
+  };
+
+  Geo.parseLengthInput = function (value, unit) {
+    var u = Geo.normalizeUnit(unit);
+    return (Number(value) || 0) * (u === 'ft' ? 304.8 : 1000);
+  };
+
+  // Espesores, alturas y tamaños pequeños: mm o pulgadas.
+  Geo.sizeInput = function (mm, unit, decimals) {
+    var u = Geo.normalizeUnit(unit);
+    if (u === 'ft') return (Number(mm) / 25.4).toFixed(decimals == null ? 1 : decimals);
+    return String(Math.round(Number(mm)));
+  };
+
+  Geo.parseSizeInput = function (value, unit) {
+    var u = Geo.normalizeUnit(unit);
+    return (Number(value) || 0) * (u === 'ft' ? 25.4 : 1);
+  };
+
+  Geo.unitLengthLabel = function (unit) { return Geo.normalizeUnit(unit) === 'ft' ? 'ft' : 'm'; };
+  Geo.unitSizeLabel = function (unit) { return Geo.normalizeUnit(unit) === 'ft' ? 'in' : 'mm'; };
+  Geo.unitAreaLabel = function (unit) { return Geo.normalizeUnit(unit) === 'ft' ? 'ft²' : 'm²'; };
 
   Geo.formatDeg = function (rad) {
     return Geo.normDeg(Geo.radToDeg(rad)).toFixed(1) + '°';

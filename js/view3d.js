@@ -247,20 +247,20 @@
     return fbOpeningSpan(wall, opening);
   }
 
-  function formatAreaText(mm2) {
+  function formatAreaText(mm2, units) {
     var G = ED && ED.Geo;
     if (G && typeof G.formatArea === 'function') {
-      try { return G.formatArea(mm2); } catch (e) { /* respaldo */ }
+      try { return G.formatArea(mm2, units); } catch (e) { /* respaldo */ }
     }
-    return (mm2 / 1e6).toFixed(2) + ' m²';
+    return units === 'ft' ? (mm2 / 92930.4).toFixed(2) + ' ft²' : (mm2 / 1e6).toFixed(2) + ' m²';
   }
 
-  function formatLengthText(mm) {
+  function formatLengthText(mm, units) {
     var G = ED && ED.Geo;
     if (G && typeof G.formatLength === 'function') {
-      try { return G.formatLength(mm, 'm'); } catch (e) { /* respaldo */ }
+      try { return G.formatLength(mm, units || 'm'); } catch (e) { /* respaldo */ }
     }
-    return (mm / 1000).toFixed(2) + ' m';
+    return units === 'ft' ? (mm / 304.8).toFixed(2) + ' ft' : (mm / 1000).toFixed(2) + ' m';
   }
 
   function layerVisible(store, id) {
@@ -1476,7 +1476,7 @@
         var radius = Math.sqrt(area) * 0.5;
         passR.labels.push({
           x: cen.x, y: cen.y, z: floorZ + 1450,
-          name: String(room.name), areaText: formatAreaText(area), radius: radius
+          name: String(room.name), areaText: formatAreaText(area, store.project.settings && store.project.settings.units), radius: radius
         });
       }
     }
@@ -1795,7 +1795,7 @@
         scene.dims.push({
           ax: dm.a.x, ay: dm.a.y, bx: dm.b.x, by: dm.b.y,
           a2x: a2.x, a2y: a2.y, b2x: b2.x, b2y: b2.y,
-          z: zD, text: dm.text || formatLengthText(dlen)
+          z: zD, text: dm.text || formatLengthText(dlen, store.project.settings && store.project.settings.units)
         });
         bump(a2.x, a2.y, zD);
         bump(b2.x, b2.y, zD);

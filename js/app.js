@@ -22,6 +22,7 @@
     saveFallbackTimer: null,
     threeTimer: null,
     sheetTimer: null,
+    lastCursor: { x: 0, y: 0 },
     _dropDepth: 0
   };
   ED.App = App;
@@ -46,6 +47,45 @@
   }
   function safeName(s) {
     return String(s || 'proyecto').replace(/[^\w\-áéíóúñÁÉÍÓÚÑ ]+/g, '').replace(/\s+/g, '_').slice(0, 60) || 'proyecto';
+  }
+
+  var AUTHOR = 'Prof. Raymond Rosa Ávila';
+
+  function unitSys() {
+    return (App.store && App.store.project.settings && App.store.project.settings.units) || 'm';
+  }
+  function unitLen(mm, dec) {
+    return ED.Geo.formatLengthShort(mm, unitSys(), dec == null ? 2 : dec);
+  }
+  function unitLenInput(mm) {
+    return ED.Geo.lengthInput(mm, unitSys(), 2);
+  }
+  function unitLenLabel() {
+    return ED.Geo.unitLengthLabel(unitSys());
+  }
+  function unitSizeInput(mm) {
+    return ED.Geo.sizeInput(mm, unitSys());
+  }
+  function unitSizeLabel() {
+    return ED.Geo.unitSizeLabel(unitSys());
+  }
+  function unitArea(mm2) {
+    return ED.Geo.formatArea(mm2, unitSys());
+  }
+  function areaValue(mm2) {
+    return unitSys() === 'ft' ? Number(mm2) / 92930.4 : Number(mm2) / 1e6;
+  }
+  function lengthValue(mm) {
+    return unitSys() === 'ft' ? Number(mm) / 304.8 : Number(mm) / 1000;
+  }
+  function parseLenInput(value) {
+    return ED.Geo.parseLengthInput(value, unitSys());
+  }
+  function parseSizeInput(value) {
+    return ED.Geo.parseSizeInput(value, unitSys());
+  }
+  function unitsBadge() {
+    return unitSys() === 'ft' ? 'ft · ft²' : 'm · m²';
   }
 
   var ICON = {
@@ -217,6 +257,7 @@
     $('#btnExportDxf').addEventListener('click', showDXFModal);
     $('#btnHelp').addEventListener('click', showHelp);
     $('#btnHelpStatus').addEventListener('click', showHelp);
+    $('#btnUnits').addEventListener('click', toggleUnits);
     $('#projectNameBtn').addEventListener('click', showProjectInfo);
 
     $$('#viewTabs button').forEach(function (b) {
@@ -319,7 +360,8 @@
   function initEditor() {
     App.editor = new ED.Editor2D($('#planCanvas'), App.store, {
       onCursor: function (p) {
-        $('#statusCoords').textContent = 'X: ' + (p.x / 1000).toFixed(2) + ' m   Y: ' + (p.y / 1000).toFixed(2) + ' m';
+        App.lastCursor = { x: p.x, y: p.y };
+        $('#statusCoords').textContent = 'X: ' + unitLen(p.x) + '   Y: ' + unitLen(p.y);
       },
       onStatus: function (text) {
         if (!text) return;
@@ -413,6 +455,33 @@
     document.title = ((p.meta && p.meta.name) || 'EngDraft') + ' — EngDraft';
     var lvl = App.store.activeLevelObj();
     $('#statusLevel').textContent = lvl ? lvl.name : 'Nivel';
+    updateUnitsUI();
+  }
+
+  function updateUnitsUI() {
+    var btn = $('#btnUnits');
+    if (btn) {
+      btn.textContent = unitsBadge();
+      btn.title = unitSys() === 'ft'
+        ? 'Sistema imperial (ft/in). Clic para volver al sistema métrico.'
+        : 'Sistema métrico (m/mm). Clic para cambiar al sistema imperial.';
+    }
+    var coords = $('#statusCoords');
+    if (coords && App.lastCursor) {
+      coords.textContent = 'X: ' + unitLen(App.lastCursor.x) + '   Y: ' + unitLen(App.lastCursor.y);
+    }
+  }
+
+  function toggleUnits() {
+    var s = App.store.project.settings;
+    var next = ED.Geo.normalizeUnit(s.units) === 'ft' ? 'm' : 'ft';
+    App.store.act('Cambiar sistema de unidades', function () { s.units = next; });
+    updateUnitsUI();
+    refreshProps();
+    App.editor.render();
+    if (App.view === '3d') schedule3D();
+    if (App.view === 'sheets') scheduleSheetPreviews(120);
+    toast(next === 'ft' ? 'Sistema imperial activado (pies/pulgadas).' : 'Sistema métrico activado (metros).', 'success', 2800);
   }
 
   function refreshLevelTabs() {
@@ -1058,13 +1127,13 @@
       '</div></div>';
     var statsHtml = '<div class="section"><div class="section-title">Nivel activo <span class="count">' + esc(level.name) + '</span></div>' +
       '<div class="stats-grid">' +
-      '<div class="stat"><div class="v">' + fnum(stats.roomArea / 1e6, 2) + '<small>m²</small></div><div class="l">Área de ambientes</div></div>' +
+      '<div class="stat"><div class="v">' + fnum(areaValue(stats.roomArea), 2) + '<small>' + ED.Geo.unitAreaLabel(unitSys()) + '</small></div><div class="l">Área de ambientes</div></div>' +
       '<div class="stat"><div class="v">' + stats.roomCount + '</div><div class="l">Ambientes</div></div>' +
-      '<div class="stat"><div class="v">' + fnum(stats.wallLength / 1000, 2) + '<small>m</small></div><div class="l">Longitud de muros</div></div>' +
+      '<div class="stat"><div class="v">' + fnum(lengthValue(stats.wallLength), 2) + '<small>' + unitLenLabel() + '</small></div><div class="l">Longitud de muros</div></div>' +
       '<div class="stat"><div class="v">' + stats.itemCount + '</div><div class="l">Muebles</div></div>' +
       '</div></div>';
     var projectStats = '<div class="section"><div class="section-title">Proyecto completo</div>' +
-      '<div class="read-line"><span>Superficie construida</span><strong>' + fnum(all.roomArea / 1e6, 2) + ' m²</strong></div>' +
+      '<div class="read-line"><span>Superficie construida</span><strong>' + unitArea(all.roomArea) + '</strong></div>' +
       '<div class="read-line"><span>Ambientes registrados</span><strong>' + all.rooms + '</strong></div>' +
       '<div class="read-line"><span>Mobiliario total</span><strong>' + all.items + '</strong></div>' +
       '<div class="read-line"><span>Láminas del juego</span><strong>' + p.sheets.length + '</strong></div>' +
@@ -1108,23 +1177,33 @@
 
     if (kind === 'wall') {
       var len = ED.Geo.wallLength(obj);
-      sub = fnum(len / 1000, 2) + ' m · ' + Math.round(obj.thickness) + ' mm';
+      var sizeU = unitSizeLabel();
+      sub = unitLen(len) + ' · ' + unitSizeInput(obj.thickness) + ' ' + sizeU;
       var openHtml = (obj.openings || []).map(function (o) {
+        var typeLabel = o.type === 'window' ? 'Ventana' : o.type === 'garage' ? 'Portón' : o.type === 'pass' ? 'Paso' : 'Puerta';
+        var actions = '';
+        if (o.type === 'door' || o.type === 'garage') {
+          actions = '<div class="add-opening-row" style="margin-top:7px">' +
+            '<button class="btn btn-ghost btn-sm" data-action="flip-opening" data-wall="' + esc(obj.id) + '" data-opening="' + esc(o.id) + '" data-open-prop="swing" title="Cambiar el lado hacia el que abre la hoja">' + icon('rotate', 12) + 'Girar hoja</button>' +
+            '<button class="btn btn-ghost btn-sm" data-action="flip-opening" data-wall="' + esc(obj.id) + '" data-opening="' + esc(o.id) + '" data-open-prop="hinge" title="Cambiar el lado de la bisagra">' + icon('duplicate', 12) + 'Invertir bisagra</button></div>';
+        } else {
+          actions = '<div class="field" style="margin:6px 0 0"><label>Antepecho</label><div class="input-row"><input class="input" type="number" min="0" step="50" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="sill" value="' + unitSizeInput(o.sill || 0) + '"><span class="input-unit">' + esc(sizeU) + '</span></div></div>';
+        }
         return '<div class="opening-row">' +
-          '<div class="opening-head"><strong><span class="dot"></span>' + (o.type === 'window' ? 'Ventana' : o.type === 'garage' ? 'Portón' : o.type === 'pass' ? 'Paso' : 'Puerta') +
-          ' <span class="badge-soft">' + Math.round(o.width) + ' mm</span></strong>' +
+          '<div class="opening-head"><strong><span class="dot"></span>' + typeLabel +
+          ' <span class="badge-soft">' + unitSizeInput(o.width) + ' ' + esc(sizeU) + '</span></strong>' +
           '<button class="icon-mini" data-action="delete-opening" data-wall="' + esc(obj.id) + '" data-opening="' + esc(o.id) + '" title="Eliminar abertura">' + icon('trash', 12) + '</button></div>' +
           '<div class="mini-grid" style="grid-template-columns:1fr 1fr 1fr">' +
-          '<input class="input" type="number" min="300" step="50" title="Ancho (mm)" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="width" value="' + Math.round(o.width) + '">' +
-          '<input class="input" type="number" min="300" step="50" title="Alto (mm)" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="height" value="' + Math.round(o.height) + '">' +
+          '<input class="input" type="number" min="300" step="50" title="Ancho (' + sizeU + ')" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="width" value="' + unitSizeInput(o.width) + '">' +
+          '<input class="input" type="number" min="300" step="50" title="Alto (' + sizeU + ')" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="height" value="' + unitSizeInput(o.height) + '">' +
           '<input class="input" type="number" min="0" max="100" step="1" title="Posición (%)" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="t" value="' + fnum(o.t * 100, 1) + '">' +
-          '</div><div class="opening-meta">Ancho · alto · posición sobre el muro (%)</div></div>';
+          '</div><div class="opening-meta">Ancho · alto (' + sizeU + ') · posición (%)</div>' + actions + '</div>';
       }).join('');
       body =
         '<div class="section"><div class="section-title">Geometría</div><div class="field-grid">' +
-        field('Longitud', '<div class="input-row"><input class="input" type="number" min="0.2" step="0.05" data-entity="wall" data-id="' + esc(obj.id) + '" data-field="length" value="' + fnum(len / 1000, 2) + '"><span class="input-unit">m</span></div>') +
-        field('Espesor', '<div class="input-row"><input class="input" type="number" min="80" max="400" step="10" data-entity="wall" data-id="' + esc(obj.id) + '" data-field="thickness" value="' + Math.round(obj.thickness) + '"><span class="input-unit">mm</span></div>') +
-        field('Altura', '<div class="input-row"><input class="input" type="number" min="2000" max="4000" step="50" data-entity="wall" data-id="' + esc(obj.id) + '" data-field="height" value="' + Math.round(obj.height) + '"><span class="input-unit">mm</span></div>') +
+        field('Longitud', '<div class="input-row"><input class="input" type="number" min="0.2" step="0.05" data-entity="wall" data-id="' + esc(obj.id) + '" data-field="length" value="' + unitLenInput(len) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
+        field('Espesor', '<div class="input-row"><input class="input" type="number" min="80" max="400" step="10" data-entity="wall" data-id="' + esc(obj.id) + '" data-field="thickness" value="' + unitSizeInput(obj.thickness) + '"><span class="input-unit">' + sizeU + '</span></div>') +
+        field('Altura', '<div class="input-row"><input class="input" type="number" min="2000" max="4000" step="50" data-entity="wall" data-id="' + esc(obj.id) + '" data-field="height" value="' + unitSizeInput(obj.height) + '"><span class="input-unit">' + sizeU + '</span></div>') +
         field('Ángulo', '<input class="input" readonly value="' + fnum(ED.Geo.radToDeg(ED.Geo.wallAngle(obj)), 1) + '°">') +
         '</div></div>' +
         '<div class="section"><div class="section-title">Aberturas <span class="count">' + (obj.openings || []).length + '</span></div>' +
@@ -1133,22 +1212,22 @@
         '<button class="btn btn-ghost btn-sm" data-action="add-opening" data-wall="' + esc(obj.id) + '" data-type="window">' + icon('window', 12) + 'Ventana</button></div></div>' +
         '<div class="section"><div class="section-title">Ubicación</div>' +
         readLine('Nivel', levelName(obj.level)) + readLine('Capa', layer.name) +
-        readLine('Inicio', 'X ' + fnum(obj.a.x / 1000, 2) + ' · Y ' + fnum(obj.a.y / 1000, 2)) +
-        readLine('Fin', 'X ' + fnum(obj.b.x / 1000, 2) + ' · Y ' + fnum(obj.b.y / 1000, 2)) + '</div>' +
+        readLine('Inicio', 'X ' + unitLen(obj.a.x) + ' · Y ' + unitLen(obj.a.y)) +
+        readLine('Fin', 'X ' + unitLen(obj.b.x) + ' · Y ' + unitLen(obj.b.y)) + '</div>' +
         actionsHtml('wall', obj.id, false);
     } else if (kind === 'item') {
       var def = ED.Library && ED.Library.get ? ED.Library.get(obj.libId) : null;
-      sub = (def ? def.name : obj.libId) + ' · ' + Math.round(obj.w) + ' × ' + Math.round(obj.d) + ' mm';
+      sub = (def ? def.name : obj.libId) + ' · ' + unitSizeInput(obj.w) + ' × ' + unitSizeInput(obj.d) + ' ' + unitSizeLabel();
       body =
         '<div class="section"><div class="field"><label>Nombre</label><input class="input" data-entity="item" data-id="' + esc(obj.id) + '" data-field="name" value="' + esc(obj.name || (def && def.name) || '') + '"></div></div>' +
         '<div class="section"><div class="section-title">Posición y giro</div><div class="field-grid">' +
-        field('X', '<div class="input-row"><input class="input" type="number" step="0.05" data-entity="item" data-id="' + esc(obj.id) + '" data-field="x" value="' + fnum(obj.x / 1000, 2) + '"><span class="input-unit">m</span></div>') +
-        field('Y', '<div class="input-row"><input class="input" type="number" step="0.05" data-entity="item" data-id="' + esc(obj.id) + '" data-field="y" value="' + fnum(obj.y / 1000, 2) + '"><span class="input-unit">m</span></div>') +
+        field('X', '<div class="input-row"><input class="input" type="number" step="0.05" data-entity="item" data-id="' + esc(obj.id) + '" data-field="x" value="' + unitLenInput(obj.x) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
+        field('Y', '<div class="input-row"><input class="input" type="number" step="0.05" data-entity="item" data-id="' + esc(obj.id) + '" data-field="y" value="' + unitLenInput(obj.y) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
         field('Rotación', '<div class="input-row"><input class="input" type="number" step="1" data-entity="item" data-id="' + esc(obj.id) + '" data-field="rotation" value="' + fnum(obj.rotation, 1) + '"><span class="input-unit">°</span></div>') +
         field('Nivel', '<input class="input" readonly value="' + esc(levelName(obj.level)) + '">') +
         '</div></div>' +
         '<div class="section"><div class="section-title">Dimensiones</div>' +
-        readLine('Ancho', fnum(obj.w / 1000, 2) + ' m') + readLine('Fondo', fnum(obj.d / 1000, 2) + ' m') + readLine('Alto', fnum(obj.h / 1000, 2) + ' m') +
+        readLine('Ancho', unitLen(obj.w)) + readLine('Fondo', unitLen(obj.d)) + readLine('Alto', unitLen(obj.h)) +
         readLine('Capa', layer.name) + '</div>' +
         '<div class="prop-actions"><button class="btn btn-ghost btn-sm" data-action="rotate-item" data-id="' + esc(obj.id) + '" data-dir="-1">' + icon('rotate', 12) + '−90°</button>' +
         '<button class="btn btn-ghost btn-sm" data-action="rotate-item" data-id="' + esc(obj.id) + '" data-dir="1">' + icon('rotate', 12) + '+90°</button>' +
@@ -1156,7 +1235,7 @@
         actionsHtml('item', obj.id, false);
     } else if (kind === 'room') {
       var area = ED.Geo.polygonArea(obj.polygon);
-      sub = fnum(area / 1e6, 2) + ' m² · ' + obj.polygon.length + ' vértices';
+      sub = unitArea(area) + ' · ' + obj.polygon.length + ' vértices';
       var finishes = [['wood', 'Madera'], ['tile', 'Baldosa'], ['carpet', 'Alfombra'], ['marble', 'Mármol'], ['concrete', 'Concreto'], ['grass', 'Césped']];
       body =
         '<div class="section"><div class="field"><label>Nombre del ambiente</label><input class="input" data-entity="room" data-id="' + esc(obj.id) + '" data-field="name" value="' + esc(obj.name || '') + '"></div>' +
@@ -1166,26 +1245,26 @@
         field('Color', '<div class="color-row"><input type="color" data-entity="room" data-id="' + esc(obj.id) + '" data-field="color" value="' + esc(obj.color || '#e9e1d1') + '"></div>') +
         '</div></div>' +
         '<div class="section"><div class="section-title">Superficie</div>' +
-        readLine('Área', fnum(area / 1e6, 2) + ' m²') + readLine('Perímetro', fnum(ED.Geo.polygonPerimeter(obj.polygon) / 1000, 2) + ' m') +
+        readLine('Área', unitArea(area)) + readLine('Perímetro', unitLen(ED.Geo.polygonPerimeter(obj.polygon))) +
         readLine('Nivel', levelName(obj.level)) + readLine('Capa', layer.name) + '</div>' +
         actionsHtml('room', obj.id, false);
     } else if (kind === 'text') {
-      sub = 'Anotación · ' + Math.round(obj.size) + ' mm';
+      sub = 'Anotación · ' + unitSizeInput(obj.size) + ' ' + unitSizeLabel();
       body =
         '<div class="section"><div class="field"><label>Texto</label><textarea class="textarea" data-entity="text" data-id="' + esc(obj.id) + '" data-field="text">' + esc(obj.text || '') + '</textarea></div>' +
         '<div class="field-grid">' +
-        field('Tamaño', '<div class="input-row"><input class="input" type="number" min="100" max="1200" step="50" data-entity="text" data-id="' + esc(obj.id) + '" data-field="size" value="' + Math.round(obj.size) + '"><span class="input-unit">mm</span></div>') +
+        field('Tamaño', '<div class="input-row"><input class="input" type="number" min="100" max="1200" step="50" data-entity="text" data-id="' + esc(obj.id) + '" data-field="size" value="' + unitSizeInput(obj.size) + '"><span class="input-unit">' + unitSizeLabel() + '</span></div>') +
         field('Rotación', '<div class="input-row"><input class="input" type="number" step="1" data-entity="text" data-id="' + esc(obj.id) + '" data-field="rotation" value="' + fnum(obj.rotation, 1) + '"><span class="input-unit">°</span></div>') +
         '</div></div>' +
-        '<div class="section"><div class="section-title">Ubicación</div>' + readLine('X', fnum(obj.x / 1000, 2) + ' m') + readLine('Y', fnum(obj.y / 1000, 2) + ' m') + readLine('Capa', layer.name) + '</div>' +
+        '<div class="section"><div class="section-title">Ubicación</div>' + readLine('X', unitLen(obj.x)) + readLine('Y', unitLen(obj.y)) + readLine('Capa', layer.name) + '</div>' +
         actionsHtml('text', obj.id, false);
     } else if (kind === 'dim') {
       var dlen = ED.Geo.dist(obj.a, obj.b);
-      sub = fnum(dlen / 1000, 2) + ' m';
+      sub = unitLen(dlen);
       body =
         '<div class="section"><div class="field-grid">' +
-        field('Distancia', '<input class="input" readonly value="' + fnum(dlen / 1000, 2) + ' m">') +
-        field('Separación', '<div class="input-row"><input class="input" type="number" step="0.05" data-entity="dim" data-id="' + esc(obj.id) + '" data-field="offset" value="' + fnum(obj.offset / 1000, 2) + '"><span class="input-unit">m</span></div>') +
+        field('Distancia', '<input class="input" readonly value="' + unitLen(dlen) + '">') +
+        field('Separación', '<div class="input-row"><input class="input" type="number" step="0.05" data-entity="dim" data-id="' + esc(obj.id) + '" data-field="offset" value="' + unitLenInput(obj.offset) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
         '</div><div class="field"><label>Texto personalizado (opcional)</label><input class="input" data-entity="dim" data-id="' + esc(obj.id) + '" data-field="text" value="' + esc(obj.text || '') + '" placeholder="Automático"></div></div>' +
         '<div class="section"><div class="section-title">Ubicación</div>' + readLine('Nivel', levelName(obj.level)) + readLine('Capa', layer.name) + '</div>' +
         actionsHtml('dim', obj.id, false);
@@ -1306,11 +1385,13 @@
       App.store.act('Editar abertura', function () {
         var len = ED.Geo.wallLength(wall);
         if (of === 'width') {
-          op.width = ED.Geo.clamp(ov, 300, Math.max(300, len - 100));
+          op.width = ED.Geo.clamp(parseSizeInput(ov), 300, Math.max(300, len - 100));
           var half = (op.width / 2) / len;
           op.t = ED.Geo.clamp(op.t, half, 1 - half);
         } else if (of === 'height') {
-          op.height = ED.Geo.clamp(ov, 300, 3500);
+          op.height = ED.Geo.clamp(parseSizeInput(ov), 300, 3500);
+        } else if (of === 'sill') {
+          op.sill = Math.max(0, parseSizeInput(ov));
         } else if (of === 't') {
           var halfT = ((op.width || 900) / 2) / len;
           op.t = ED.Geo.clamp(ov / 100, halfT, 1 - halfT);
@@ -1335,10 +1416,10 @@
     var value = typeof raw === 'string' ? raw : raw;
     App.store.act('Editar ' + kindLabel(kind).toLowerCase(), function () {
       if (kind === 'wall') {
-        if (fieldName === 'thickness') obj.thickness = ED.Geo.clamp(n(value, 150), 80, 500);
-        else if (fieldName === 'height') obj.height = ED.Geo.clamp(n(value, 2700), 2000, 4500);
+        if (fieldName === 'thickness') obj.thickness = ED.Geo.clamp(parseSizeInput(value), 80, 500);
+        else if (fieldName === 'height') obj.height = ED.Geo.clamp(parseSizeInput(value), 2000, 4500);
         else if (fieldName === 'length') {
-          var newLen = Math.max(100, n(value, 1) * 1000);
+          var newLen = Math.max(100, parseLenInput(value));
           var ang = ED.Geo.wallAngle(obj);
           obj.b = ED.Geo.polar(obj.a, ang, newLen);
           (obj.openings || []).forEach(function (o) {
@@ -1347,8 +1428,8 @@
           });
         }
       } else if (kind === 'item') {
-        if (fieldName === 'x') obj.x = n(value, 0) * 1000;
-        else if (fieldName === 'y') obj.y = n(value, 0) * 1000;
+        if (fieldName === 'x') obj.x = parseLenInput(value);
+        else if (fieldName === 'y') obj.y = parseLenInput(value);
         else if (fieldName === 'rotation') obj.rotation = ED.Geo.normDeg(n(value, 0));
         else if (fieldName === 'name') obj.name = String(value);
       } else if (kind === 'room') {
@@ -1357,10 +1438,10 @@
         else if (fieldName === 'color') obj.color = String(value);
       } else if (kind === 'text') {
         if (fieldName === 'text') obj.text = String(value);
-        else if (fieldName === 'size') obj.size = ED.Geo.clamp(n(value, 300), 60, 3000);
+        else if (fieldName === 'size') obj.size = ED.Geo.clamp(parseSizeInput(value), 60, 3000);
         else if (fieldName === 'rotation') obj.rotation = ED.Geo.normDeg(n(value, 0));
       } else if (kind === 'dim') {
-        if (fieldName === 'offset') obj.offset = n(value, 0) * 1000;
+        if (fieldName === 'offset') obj.offset = parseLenInput(value);
         else if (fieldName === 'text') obj.text = String(value) || null;
       }
     });
@@ -1382,6 +1463,7 @@
     else if (action === 'rotate-item') rotateItem(btn.getAttribute('data-id'), Number(btn.getAttribute('data-dir')) || 1);
     else if (action === 'add-opening') addOpening(btn.getAttribute('data-wall'), btn.getAttribute('data-type'));
     else if (action === 'delete-opening') deleteOpening(btn.getAttribute('data-wall'), btn.getAttribute('data-opening'));
+    else if (action === 'flip-opening') flipOpening(btn.getAttribute('data-wall'), btn.getAttribute('data-opening'), btn.getAttribute('data-open-prop'));
     else if (action === 'new-sheet') addSheet();
     else if (action === 'sheet-export') { var sh = getSelectedSheet(); if (sh) exportPDF([sh]); }
     else if (action === 'sheet-duplicate') duplicateSheet();
@@ -1452,6 +1534,21 @@
     });
     refreshProps();
     App.editor.render();
+  }
+
+  function flipOpening(wallId, openingId, prop) {
+    var wall = App.store.find('wall', wallId);
+    if (!wall) return;
+    var op = null;
+    (wall.openings || []).forEach(function (o) { if (o.id === openingId) op = o; });
+    if (!op) return;
+    App.store.act('Girar abertura', function () {
+      if (prop === 'hinge') op.hinge = op.hinge === -1 ? 1 : -1;
+      else op.swing = op.swing === -1 ? 1 : -1;
+    });
+    refreshProps();
+    App.editor.render();
+    toast(prop === 'hinge' ? 'Bisagra invertida.' : 'Sentido de apertura girado.', 'success', 1600);
   }
 
   // ================================================================== biblioteca
@@ -1605,9 +1702,9 @@
   function showTextModal(point) {
     var body = '<div class="field"><label>Texto de la anotación</label><input class="input" id="textValue" autofocus value="TEXTO"></div>' +
       '<div class="field-grid">' +
-      '<div class="field"><label>Tamaño</label><select class="select" id="textSize"><option value="200">200 mm</option><option value="300" selected>300 mm</option><option value="450">450 mm</option><option value="600">600 mm</option></select></div>' +
+      '<div class="field"><label>Tamaño</label><select class="select" id="textSize"><option value="200">' + unitSizeInput(200) + ' ' + unitSizeLabel() + '</option><option value="300" selected>' + unitSizeInput(300) + ' ' + unitSizeLabel() + '</option><option value="450">' + unitSizeInput(450) + ' ' + unitSizeLabel() + '</option><option value="600">' + unitSizeInput(600) + ' ' + unitSizeLabel() + '</option></select></div>' +
       '<div class="field"><label>Rotación</label><input class="input" id="textRot" type="number" value="0" step="15"></div></div>' +
-      '<div class="modal-note">' + icon('info', 15) + '<div>El texto se colocará en X ' + fnum(point.x / 1000, 2) + ' m · Y ' + fnum(point.y / 1000, 2) + ' m.</div></div>';
+      '<div class="modal-note">' + icon('info', 15) + '<div>El texto se colocará en X ' + unitLen(point.x) + ' · Y ' + unitLen(point.y) + '.</div></div>';
     var footer = '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="textAdd">Insertar texto</button>';
     var m = openModal({ title: 'Insertar texto', subtitle: 'Anotación de plano', body: body, footer: footer, narrow: true });
     function add() {
@@ -1686,9 +1783,12 @@
       '<div class="field full"><label>Descripción</label><input class="input" name="description" value="' + esc(m.description || '') + '"></div>' +
       '<div class="field full"><label>Notas generales del proyecto</label><textarea class="textarea" name="notes">' + esc(m.notes || '') + '</textarea></div>' +
       '<div class="field"><label>Norte (grados)</label><input class="input" name="northAngle" type="number" step="1" value="' + n(s.northAngle, 0) + '"></div>' +
-      '<div class="field"><label>Separación de rejilla</label><div class="input-row"><input class="input" name="grid" type="number" min="50" step="50" value="' + n(s.grid, 250) + '"><span class="input-unit">mm</span></div></div>' +
-      '<div class="field"><label>Espesor de muro por defecto</label><div class="input-row"><input class="input" name="wallThickness" type="number" min="80" step="10" value="' + n(s.wallThickness, 150) + '"><span class="input-unit">mm</span></div></div>' +
-      '<div class="field"><label>Altura de muro por defecto</label><div class="input-row"><input class="input" name="wallHeight" type="number" min="2000" step="50" value="' + n(s.wallHeight, 2700) + '"><span class="input-unit">mm</span></div></div>' +
+      '<div class="field"><label>Sistema de unidades</label><select class="select" name="units">' +
+      '<option value="m"' + (ED.Geo.normalizeUnit(s.units) === 'm' ? ' selected' : '') + '>Métrico (m · m²)</option>' +
+      '<option value="ft"' + (ED.Geo.normalizeUnit(s.units) === 'ft' ? ' selected' : '') + '>Imperial (ft · ft²)</option></select></div>' +
+      '<div class="field"><label>Separación de rejilla</label><div class="input-row"><input class="input" name="grid" type="number" min="50" step="50" value="' + unitSizeInput(s.grid) + '"><span class="input-unit">' + unitSizeLabel() + '</span></div></div>' +
+      '<div class="field"><label>Espesor de muro por defecto</label><div class="input-row"><input class="input" name="wallThickness" type="number" min="80" step="10" value="' + unitSizeInput(s.wallThickness) + '"><span class="input-unit">' + unitSizeLabel() + '</span></div></div>' +
+      '<div class="field"><label>Altura de muro por defecto</label><div class="input-row"><input class="input" name="wallHeight" type="number" min="2000" step="50" value="' + unitSizeInput(s.wallHeight) + '"><span class="input-unit">' + unitSizeLabel() + '</span></div></div>' +
       '</div><div class="modal-note">' + icon('info', 15) + '<div>Estos datos alimentan los cajetines de las láminas. Se guardan en el proyecto y también en el autoguardado.</div></div>';
     var footer = '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="infoSave">Guardar datos</button>';
     var modal = openModal({ title: 'Datos del proyecto', subtitle: 'Información para cajetines y portada', body: body, footer: footer, wide: true });
@@ -1698,6 +1798,7 @@
         return el ? el.value : '';
       };
       App.store.act('Editar datos del proyecto', function () {
+        var oldUnit = s.units;
         m.name = val('name').trim() || 'Proyecto sin nombre';
         m.client = val('client').trim();
         m.location = val('location').trim();
@@ -1710,14 +1811,17 @@
         m.description = val('description').trim();
         m.notes = val('notes').trim();
         s.northAngle = n(val('northAngle'), 0);
-        s.grid = Math.max(50, n(val('grid'), 250));
-        s.wallThickness = Math.max(80, n(val('wallThickness'), 150));
-        s.wallHeight = Math.max(2000, n(val('wallHeight'), 2700));
+        s.grid = Math.max(50, ED.Geo.parseSizeInput(val('grid'), oldUnit) || 250);
+        s.wallThickness = Math.max(80, ED.Geo.parseSizeInput(val('wallThickness'), oldUnit) || 150);
+        s.wallHeight = Math.max(2000, ED.Geo.parseSizeInput(val('wallHeight'), oldUnit) || 2700);
+        s.units = ED.Geo.normalizeUnit(val('units'));
       });
       App.editor.setSnap({ gridSize: s.grid });
+      updateUnitsUI();
       refreshHeader();
       App.editor.render();
       if (App.view === 'sheets') scheduleSheetPreviews(120);
+      if (App.view === '3d') schedule3D();
       modal.close();
       toast('Datos del proyecto actualizados.', 'success', 2400);
     });
@@ -1729,15 +1833,17 @@
     levels.forEach(function (l) { nextElev = Math.max(nextElev, n(l.elevation, 0) + n(l.height, 2800)); });
     var body = '<div class="field"><label>Nombre del nivel</label><input class="input" id="lvlName" value="Nivel ' + (levels.length + 1) + '"></div>' +
       '<div class="field-grid">' +
-      '<div class="field"><label>Elevación</label><div class="input-row"><input class="input" id="lvlElev" type="number" step="0.05" value="' + fnum(nextElev / 1000, 2) + '"><span class="input-unit">m</span></div></div>' +
-      '<div class="field"><label>Altura libre</label><div class="input-row"><input class="input" id="lvlHeight" type="number" step="0.05" value="2.80"><span class="input-unit">m</span></div></div>' +
+      '<div class="field"><label>Elevación</label><div class="input-row"><input class="input" id="lvlElev" type="number" step="0.05" value="' + unitLenInput(nextElev) + '"><span class="input-unit">' + unitLenLabel() + '</span></div></div>' +
+      '<div class="field"><label>Altura libre</label><div class="input-row"><input class="input" id="lvlHeight" type="number" step="0.05" value="' + unitLenInput(2800) + '"><span class="input-unit">' + unitLenLabel() + '</span></div></div>' +
       '</div><div class="modal-note">' + icon('info', 15) + '<div>El nivel se apila automáticamente en la vista 3D según su elevación.</div></div>';
     var footer = '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="lvlAdd">Añadir nivel</button>';
     var m = openModal({ title: 'Añadir nivel', subtitle: 'Planta adicional del proyecto', body: body, footer: footer, narrow: true });
     $('#lvlAdd', m.root).addEventListener('click', function () {
       var name = ($('#lvlName', m.root).value || '').trim() || ('Nivel ' + (levels.length + 1));
-      var elev = n(($('#lvlElev', m.root).value), nextElev / 1000) * 1000;
-      var height = Math.max(1500, n(($('#lvlHeight', m.root).value), 2.8) * 1000);
+      var elev = parseLenInput(($('#lvlElev', m.root).value || 0));
+      if (!isFinite(elev)) elev = nextElev;
+      var height = Math.max(1500, parseLenInput(($('#lvlHeight', m.root).value || 0)));
+      if (!isFinite(height) || height <= 0) height = 2800;
       var id = 'l' + Date.now().toString(36);
       while (App.store.levels().some(function (l) { return l.id === id; })) id += 'x';
       App.store.act('Añadir nivel', function () {
@@ -1770,11 +1876,16 @@
       '<div class="help-copy"><p><strong>Flujo recomendado.</strong> Dibuja el perímetro con la herramienta Muro, inserta puertas y ventanas sobre los muros, y pulsa <strong>Detectar ambientes</strong> para etiquetar los recintos. Amuebla desde la biblioteca y comprueba el resultado en 3D.</p>' +
       '<p><strong>Láminas y PDF.</strong> En la vista Láminas puedes escoger tamaño, orientación, escala y uno de los cuatro cajetines. El PDF se genera vectorial, con el plano nítido a cualquier zoom.</p>' +
       '<p><strong>DWG/DXF.</strong> El navegador no escribe el formato binario propietario DWG; EngDraft exporta DXF R12, el formato de intercambio de AutoCAD. Abre el DXF en AutoCAD y usa <em>Guardar como → DWG</em> si necesitas ese formato.</p>' +
+      '<p><strong>Unidades.</strong> El botón del sistema de unidades en la barra de estado alterna entre métrico (m · m²) e imperial (ft · ft²). También puedes cambiarlo en Datos del proyecto. Las cotas, áreas, propiedades y láminas se actualizan.</p>' +
+      '<p><strong>Puertas y ventanas.</strong> Selecciona un muro y edita sus aberturas: ancho, alto, posición, antepecho, sentido de apertura y bisagra. Los botones Girar hoja e Invertir bisagra cambian el dibujo en 2D y 3D.</p>' +
       '<p><strong>Privacidad.</strong> Todo se dibuja y se guarda en tu equipo. La aplicación funciona sin conexión y no envía datos a ningún servidor.</p>' +
-      '<p><span class="badge-soft">ENGDRAFT 1.0</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .engdraft para conservar copias.</p></div>';
+      '<p><strong>Manual completo.</strong> El manual de uso incluye tutorial paso a paso, buenas prácticas, ejercicios, preguntas frecuentes y checklist de entrega: <a href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">abrir manual en PDF</a>.</p>' +
+      '<p><strong>Autor:</strong> ' + AUTHOR + '.</p>' +
+      '<p><span class="badge-soft">ENGDRAFT 1.1</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .engdraft para conservar copias.</p></div>';
     openModal({
       title: 'Ayuda y atajos', subtitle: 'Todo lo necesario para empezar', body: body,
-      footer: '<button class="btn btn-ghost" data-close>Cerrar</button>', wide: true
+      footer: '<a class="btn btn-ghost" href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">Manual PDF</a>' +
+        '<button class="btn btn-primary" data-close>Cerrar</button>', wide: true
     });
   }
 

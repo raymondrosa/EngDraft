@@ -47,7 +47,7 @@
 
     p.settings = p.settings || {};
     var s = p.settings;
-    s.units = s.units || 'm';
+    s.units = ED.Geo.normalizeUnit(s.units);
     s.grid = s.grid || 250;
     s.wallThickness = s.wallThickness || 150;
     s.wallHeight = s.wallHeight || 2700;

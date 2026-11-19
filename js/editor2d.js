@@ -77,6 +77,10 @@
     this.fitToContent();
   }
 
+  Editor2D.prototype._units = function () {
+    return (this.store.project.settings && this.store.project.settings.units) || 'm';
+  };
+
   Editor2D.prototype._emitStatus = function () {
     var text = this.statusText();
     call(this.callbacks.onStatus, [text]);
@@ -472,7 +476,7 @@
       ctx.font = '600 ' + size.toFixed(1) + 'px "Segoe UI", system-ui, sans-serif';
       var label = (room.name || 'Ambiente').toUpperCase();
       var tw = ctx.measureText(label).width;
-      var areaTxt = Geo.formatArea(area);
+      var areaTxt = Geo.formatArea(area, self._units());
       ctx.font = '500 9px "Bahnschrift", "Consolas", monospace';
       var aw = ctx.measureText(areaTxt).width;
       var padX = 7, boxW = Math.max(tw, aw) + padX * 2, boxH = 31;
@@ -700,7 +704,7 @@
         ctx.stroke();
       });
       var mid = self.worldToScreen(g.mid);
-      var text = dim.text || Geo.formatLength(g.len);
+      var text = dim.text || Geo.formatLength(g.len, self._units());
       var ang = Math.atan2(pb.y - pa.y, pb.x - pa.x);
       if (ang > Math.PI / 2 || ang < -Math.PI / 2) ang += Math.PI;
       ctx.save();
@@ -964,7 +968,7 @@
         self._strokePoly(pts, C.selection, 2, [7, 4]);
         pts.forEach(function (p) { self._drawHandle(p, C.selection); });
         var c = self.worldToScreen(Geo.polygonCentroid(obj.polygon));
-        self._labelChip(obj.name + ' · ' + Geo.formatArea(Geo.polygonArea(obj.polygon)), c.x, c.y - 10);
+        self._labelChip(obj.name + ' · ' + Geo.formatArea(Geo.polygonArea(obj.polygon), self._units()), c.x, c.y - 10);
       } else if (sel.kind === 'dim') {
         var g = self._dimGeometry(obj);
         var pa = self.worldToScreen(g.pa), pb = self.worldToScreen(g.pb);
@@ -1005,7 +1009,7 @@
       var s = this.worldToScreen(start), e2 = this.worldToScreen(end);
       ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e2.x, e2.y); ctx.stroke();
       this._drawHandle(start, C.selection);
-      var label = Geo.formatLength(len) + '  ·  ' + Geo.formatDeg(Geo.angle(start, end));
+      var label = Geo.formatLength(len, this._units()) + '  ·  ' + Geo.formatDeg(Geo.angle(start, end));
       var mid = { x: (s.x + e2.x) / 2, y: (s.y + e2.y) / 2 };
       this._labelChip(label, mid.x, mid.y - 16);
       ctx.restore();
@@ -1061,7 +1065,7 @@
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
       ctx.setLineDash([]);
       var len3 = Geo.dist(this.drawing.start, this.cursor);
-      if (len3 > 1) this._labelChip(Geo.formatLength(len3), (a.x + b.x) / 2, (a.y + b.y) / 2 - 14);
+      if (len3 > 1) this._labelChip(Geo.formatLength(len3, this._units()), (a.x + b.x) / 2, (a.y + b.y) / 2 - 14);
       ctx.restore();
     }
   };
@@ -1147,8 +1151,11 @@
     ctx.fillText('N', cx, cy + 3.5);
     ctx.restore();
 
-    // Escala gráfica
-    var nice = [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
+    // Escala gráfica (métrica o imperial)
+    var imperial = Geo.isImperial(this._units());
+    var nice = imperial
+      ? [304.8, 609.6, 1524, 3048, 6096, 15240, 30480]
+      : [500, 1000, 2000, 5000, 10000, 20000, 50000, 100000];
     var step = nice[0];
     for (var i = 0; i < nice.length; i++) {
       if (nice[i] * this.view.zoom >= 65) { step = nice[i]; break; }
@@ -1159,7 +1166,8 @@
     ctx.save();
     ctx.font = '600 9.5px "Bahnschrift", "Consolas", monospace';
     ctx.fillStyle = 'rgba(30,42,53,0.72)';
-    ctx.fillText(Geo.formatLength(step, 'm', step >= 1000 ? 0 : 1), x0, y0 - 8);
+    var stepLabel = imperial ? Geo.formatLength(step, 'ft') : (step >= 1000 ? (step / 1000) + ' m' : (step / 1000).toFixed(1) + ' m');
+    ctx.fillText(stepLabel, x0, y0 - 8);
     var seg = px / 2;
     ctx.fillStyle = '#2a3742'; ctx.fillRect(x0, y0, seg, 6);
     ctx.fillStyle = '#f5f3ec'; ctx.fillRect(x0 + seg, y0, seg, 6);
@@ -1601,7 +1609,7 @@
     }
     this.store.touch();
     this._emitCursor(raw);
-    call(this.callbacks.onStatus, ['Mover · ' + Geo.formatLength(Geo.dist(d.startWorld, raw))]);
+    call(this.callbacks.onStatus, ['Mover · ' + Geo.formatLength(Geo.dist(d.startWorld, raw), this._units())]);
     this.requestRender();
   };
 
