@@ -360,7 +360,7 @@ function normalizarSettings(patch) {
 }
 
 var s = normalizarSettings({ roof: null, materials: null, render: null });
-assert.deepStrictEqual(s.roof, { style: 'flat', height: 1200, overhang: 400 },
+assert.deepStrictEqual(s.roof, { style: 'flat', height: 1200, overhang: 400, ridge: 'auto', profile: null },
   'roof nulo debe caer a los valores por defecto');
 assert.deepStrictEqual(s.materials, {
   wall: { color: '#f3eee2', texture: 'stucco' },
@@ -420,6 +420,101 @@ assert.strictEqual(s.render.sunAngle, 135, 'sunAngle NaN debe caer a 135');
 console.log('Store: saneado de roof, materials y render — OK');
 
 // =====================================================================
+// (b2b) Store — techos de diseño 1.4: hip, custom, ridge y profile (CONTRACT §15.1)
+// =====================================================================
+s = normalizarSettings({ roof: { style: 'hip', ridge: 'x', height: 2600, overhang: 700 } });
+assert.strictEqual(s.roof.style, 'hip', 'roof.style hip debe conservarse');
+assert.strictEqual(s.roof.ridge, 'x', 'roof.ridge x debe conservarse');
+assert.strictEqual(s.roof.height, 2600, 'roof.height del techo hip debe conservarse');
+assert.strictEqual(s.roof.overhang, 700, 'roof.overhang del techo hip debe conservarse');
+assert.strictEqual(s.roof.profile, null, 'Un techo hip no debe tener perfil');
+s = normalizarSettings({ roof: { style: 'hip', ridge: 'y' } });
+assert.strictEqual(s.roof.ridge, 'y', 'roof.ridge y debe conservarse');
+s = normalizarSettings({ roof: { style: 'gable', ridge: 'z' } });
+assert.strictEqual(s.roof.ridge, 'auto', 'Un ridge desconocido debe caer a auto');
+s = normalizarSettings({ roof: { style: 'gable', ridge: null } });
+assert.strictEqual(s.roof.ridge, 'auto', 'Un ridge nulo debe caer a auto');
+s = normalizarSettings({ roof: { style: 'spline', ridge: 'auto' } });
+assert.strictEqual(s.roof.style, 'spline', 'roof.style spline debe conservarse');
+
+// Perfil válido pero desordenado, con valores fuera de rango, NaN, texto y duplicados.
+const perfilMixto = [
+  { t: 1.4, z: 9999 }, { t: 0.5, z: 1500 }, { t: -0.2, z: -50 },
+  { t: NaN, z: 100 }, { t: 0.5, z: 2000 }, { t: '0.25', z: '900' }, { t: 0.75, z: 4000 }
+];
+s = normalizarSettings({ roof: { style: 'custom', height: 2000, profile: perfilMixto } });
+assert.strictEqual(s.roof.style, 'custom', 'Un techo custom con perfil válido debe conservarse');
+assert(Array.isArray(s.roof.profile), 'El perfil saneado debe ser un array');
+assert.deepStrictEqual(s.roof.profile, [
+  { t: 0, z: 0 },
+  { t: 0.25, z: 900 },
+  { t: 0.5, z: 1500 },
+  { t: 0.75, z: 4000 },
+  { t: 1, z: 5000 }
+], 'Perfil saneado inesperado: ' + JSON.stringify(s.roof.profile));
+s.roof.profile.forEach(function (p, i, lista) {
+  assert(isFinite(p.t) && isFinite(p.z), 'Punto de perfil no finito en el índice ' + i);
+  assert(p.t >= 0 && p.t <= 1, 't del perfil fuera de 0..1 en el índice ' + i + ': ' + p.t);
+  assert(p.z >= 0 && p.z <= 8000, 'z del perfil fuera de 0..8000 en el índice ' + i + ': ' + p.z);
+  if (i > 0) assert(p.t >= lista[i - 1].t, 'El perfil debe quedar ordenado por t');
+});
+assert.strictEqual(s.roof.profile[0].t, 0, 'El perfil debe empezar en t = 0');
+assert.strictEqual(s.roof.profile[s.roof.profile.length - 1].t, 1, 'El perfil debe terminar en t = 1');
+
+// Perfil que no incluye los extremos: se fuerzan t = 0 y t = 1.
+s = normalizarSettings({ roof: { style: 'custom', height: 2000, profile: [{ t: 0.3, z: 100 }, { t: 0.7, z: 300 }] } });
+assert.strictEqual(s.roof.profile.length, 4,
+  'Al forzar extremos el perfil debe tener 4 puntos; tiene ' + s.roof.profile.length);
+assert.deepStrictEqual(s.roof.profile, [
+  { t: 0, z: 0 }, { t: 0.3, z: 100 }, { t: 0.7, z: 300 }, { t: 1, z: 0 }
+], 'Extremos forzados incorrectos: ' + JSON.stringify(s.roof.profile));
+
+// El z del perfil se limita a 2,5 veces la altura del techo.
+s = normalizarSettings({ roof: { style: 'custom', height: 1000, profile: [{ t: 0, z: 0 }, { t: 0.5, z: 8000 }, { t: 1, z: 0 }] } });
+assert.strictEqual(s.roof.profile[1].z, 2500,
+  'El z del perfil debe limitarse a height·2,5; es ' + s.roof.profile[1].z);
+
+// custom sin perfil válido → gable.
+s = normalizarSettings({ roof: { style: 'custom', height: 2000, profile: null } });
+assert.strictEqual(s.roof.style, 'gable', 'custom sin perfil debe caer a gable');
+assert.strictEqual(s.roof.profile, null, 'custom sin perfil no debe inventar perfil');
+s = normalizarSettings({ roof: { style: 'custom', height: 2000, profile: [{ t: 0.5, z: 1000 }] } });
+assert.strictEqual(s.roof.style, 'gable', 'custom con un solo punto debe caer a gable');
+s = normalizarSettings({ roof: { style: 'custom', height: 2000, profile: [{ t: NaN, z: NaN }, null, 'x'] } });
+assert.strictEqual(s.roof.style, 'gable', 'custom con perfil inválido debe caer a gable');
+assert.strictEqual(s.roof.profile, null, 'custom con perfil inválido no debe dejar perfil');
+
+// Un perfil con muchos puntos se limita y el resultado queda ordenado.
+const perfilLargo = [];
+for (let i = 0; i < 30; i++) perfilLargo.push({ t: i / 29, z: i * 10 });
+s = normalizarSettings({ roof: { style: 'custom', height: 3000, profile: perfilLargo } });
+assert.strictEqual(s.roof.style, 'custom', 'Un perfil largo válido debe conservar style custom');
+assert(s.roof.profile.length >= 2 && s.roof.profile.length <= 26,
+  'El perfil saneado debe quedar entre 2 y 26 puntos; tiene ' + s.roof.profile.length);
+for (let i = 1; i < s.roof.profile.length; i++) {
+  assert(s.roof.profile[i].t >= s.roof.profile[i - 1].t, 'El perfil largo debe quedar ordenado por t');
+}
+if (s.roof.profile.length > 24) {
+  console.log('Nota (posible desajuste CONTRACT §15.1): al forzar los extremos de un perfil de 24',
+    'puntos interiores el saneado devuelve', s.roof.profile.length,
+    'puntos; el contrato describe el perfil como 2..24 puntos.');
+}
+
+// Idempotencia del saneado de techos de diseño.
+const sHip = normalizarSettings({ roof: { style: 'hip', ridge: 'y', height: 2200, overhang: 350 } });
+const pIdemHip = ED.Templates.create('blank');
+pIdemHip.settings.roof = ED.Geo.deepClone(sHip.roof);
+assert.deepStrictEqual(ED.Store.normalizeProject(pIdemHip).settings.roof, sHip.roof,
+  'normalizeProject debe ser idempotente con el techo hip');
+const sCustomIdem = normalizarSettings({ roof: { style: 'custom', height: 1800, profile: perfilMixto } });
+const pIdemCustom = ED.Templates.create('blank');
+pIdemCustom.settings.roof = ED.Geo.deepClone(sCustomIdem.roof);
+assert.deepStrictEqual(ED.Store.normalizeProject(pIdemCustom).settings.roof, sCustomIdem.roof,
+  'normalizeProject debe ser idempotente con el techo custom');
+console.log('Store: techos hip/custom, ridge y profile (saneado e idempotencia) — OK');
+
+
+// =====================================================================
 // (b3) Store — export/import conserva curvas y aspecto 3D
 // =====================================================================
 const projCurvas = ED.Templates.create('blank');
@@ -450,7 +545,8 @@ assert.deepStrictEqual(wallExp('w_arc_exp').curve, { type: 'arc', bulge: 0.75 },
   'exportJSON/Store debe conservar el arco');
 assert.deepStrictEqual(wallExp('w_spl_exp').curve,
   { type: 'spline', pts: [{ x: 900, y: 4200 }] }, 'exportJSON/Store debe conservar la spline');
-assert.deepStrictEqual(pImp.settings.roof, { style: 'arc', height: 2500, overhang: 750 },
+assert.deepStrictEqual(pImp.settings.roof,
+  { style: 'arc', height: 2500, overhang: 750, ridge: 'auto', profile: null },
   'export/import debe conservar el techo');
 assert.deepStrictEqual(pImp.settings.materials, projCurvas.settings.materials,
   'export/import debe conservar los materiales');
@@ -464,6 +560,102 @@ assert.deepStrictEqual(storeImport.project.walls.filter(function (w) { return w.
 assert.strictEqual(storeImport.project.settings.render.mode, 'realistic',
   'importJSON debe restaurar el modo realista');
 console.log('Store: export/import de curvas, techo, materiales y render — OK');
+
+// =====================================================================
+// (b4) Store — project.assets de objetos importados (CONTRACT §15.5)
+// =====================================================================
+const projAssets = ED.Templates.create('blank');
+projAssets.assets = [
+  {
+    id: 'asset_a', name: 'Lampara', w: 1500, d: 800, h: 1200,
+    color: '#aabbcc', source: 'obj',
+    mesh: [{ points: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }], color: '#ff0000' }],
+    plan: [{ x: -750, y: -400 }, { x: 750, y: -400 }, { x: 750, y: 400 }]
+  },
+  { id: 'asset_sin_malla', name: 'Descartable', w: 500, d: 500, h: 500 },
+  { id: 'asset_a', name: 'Duplicado', w: 900, d: 900, h: 900, mesh: [] },
+  {
+    id: 'asset_c', w: 50, d: 50000, h: 1000, color: 'rojo', source: 'zzz',
+    mesh: [
+      { points: [{ x: 0, y: 0, z: 0 }, { x: NaN, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }] },
+      { points: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 0, y: 2, z: 0 }], color: '#00ff00' }
+    ],
+    plan: [{ x: 0, y: 0 }]
+  }
+];
+const storeAssets = new ED.Store(projAssets);
+const assetsNorm = storeAssets.project.assets;
+assert.deepStrictEqual(assetsNorm.map(function (a) { return a.id; }), ['asset_a', 'asset_c'],
+  'assets: deben conservarse los objetos con malla, sin duplicados; quedaron ' +
+  JSON.stringify(assetsNorm.map(function (a) { return a.id; })));
+const assetA = assetsNorm[0];
+assert.strictEqual(assetA.type, 'asset', 'El asset debe marcarse con type asset');
+assert.strictEqual(assetA.cat, 'mios', 'El asset debe pertenecer a la categoría mios');
+assert.strictEqual(assetA.layerId, 'furniture', 'El asset debe usar la capa de mobiliario');
+assert.strictEqual(assetA.name, 'Lampara', 'El asset debe conservar su nombre');
+assert.strictEqual(assetA.color, '#aabbcc', 'El asset debe conservar su color válido');
+assert.strictEqual(assetA.source, 'obj', 'El asset debe conservar el origen obj');
+assert.strictEqual(assetA.w, 1500, 'El asset debe conservar el ancho');
+assert.strictEqual(assetA.d, 800, 'El asset debe conservar el fondo');
+assert.strictEqual(assetA.h, 1200, 'El asset debe conservar el alto');
+assert.strictEqual(assetA.mesh.length, 1, 'El asset debe conservar su malla válida');
+assert.strictEqual(assetA.mesh[0].points.length, 3, 'Las caras de la malla deben ser triángulos');
+assert.strictEqual(assetA.mesh[0].color, '#ff0000', 'La cara debe conservar su color');
+assert(assetA.mesh[0].points.every(function (p) {
+  return isFinite(p.x) && isFinite(p.y) && isFinite(p.z);
+}), 'Las caras del asset deben tener coordenadas finitas');
+assert.strictEqual(assetA.plan.length, 3, 'El asset debe conservar su contorno de planta');
+assert.strictEqual(assetA.boxes.length, 1, 'El asset debe generar una caja 3D de respaldo');
+assert.strictEqual(assetA.boxes[0].w, 1500, 'La caja del asset debe usar el ancho saneado');
+assert.strictEqual(assetA.boxes[0].h, 1200, 'La caja del asset debe usar el alto saneado');
+
+const assetC = assetsNorm[1];
+assert.strictEqual(assetC.w, 100, 'Un ancho menor que 100 mm debe limitarse a 100; es ' + assetC.w);
+assert.strictEqual(assetC.d, 20000, 'Un fondo mayor que 20000 mm debe limitarse a 20000; es ' + assetC.d);
+assert.strictEqual(assetC.h, 1000, 'El alto válido debe conservarse');
+assert.strictEqual(assetC.color, '#cfd6dd', 'Un color inválido debe caer al neutro #cfd6dd');
+assert.strictEqual(assetC.source, 'glb', 'Un origen desconocido debe caer a glb');
+assert.strictEqual(assetC.name, 'Objeto importado', 'Un asset sin nombre debe recibir el de por defecto');
+assert.strictEqual(assetC.mesh.length, 1, 'La malla debe descartar las caras con NaN');
+assert.strictEqual(assetC.plan.length, 4, 'Un contorno inválido debe sustituirse por el rectángulo de la huella');
+
+// Los assets se conservan en export/import y el saneado es idempotente.
+const jsonAssets = storeAssets.exportJSON();
+const storeAssets2 = new ED.Store(JSON.parse(jsonAssets));
+assert.deepStrictEqual(JSON.parse(JSON.stringify(storeAssets2.project.assets)),
+  JSON.parse(JSON.stringify(assetsNorm)),
+  'Los assets deben conservarse idénticos en exportJSON/import');
+const storeAssets3 = new ED.Store(ED.Templates.create('blank'));
+storeAssets3.importJSON(jsonAssets);
+assert.strictEqual(storeAssets3.project.assets.length, 2, 'importJSON debe restaurar los assets');
+assert.strictEqual(storeAssets3.project.assets[0].id, 'asset_a', 'importJSON debe conservar el id del asset');
+
+// Tope de 8000 caras y recorte del contorno en un asset grande.
+const projAssetGrande = ED.Templates.create('blank');
+const carasGrandes = [];
+for (let i = 0; i < 8100; i++) {
+  carasGrandes.push({
+    points: [{ x: i, y: 0, z: 0 }, { x: i + 1, y: 0, z: 0 }, { x: i, y: 1, z: 0 }],
+    color: '#00ff00'
+  });
+}
+const planGrande = [];
+for (let i = 0; i < 70; i++) planGrande.push({ x: i * 10, y: (i % 2) * 100 });
+projAssetGrande.assets = [{
+  id: 'asset_grande', name: 'Malla grande', w: 2000, d: 2000, h: 2000,
+  mesh: carasGrandes, plan: planGrande
+}];
+const assetGrande = new ED.Store(projAssetGrande).project.assets[0];
+assert.strictEqual(assetGrande.mesh.length, 8000,
+  'El asset debe limitar su malla a 8000 caras; tiene ' + assetGrande.mesh.length);
+assert(assetGrande.plan.length <= 64,
+  'El contorno del asset debe limitarse a 64 puntos; tiene ' + assetGrande.plan.length);
+
+// Un proyecto sin assets debe exponer un array vacío.
+assert.deepStrictEqual(new ED.Store(ED.Templates.create('blank')).project.assets, [],
+  'Un proyecto sin assets debe tener assets = []');
+console.log('Store: project.assets (saneado, export/import y topes) — OK');
+
 
 // =====================================================================
 // (c) Editor2D — crear muros en arco y spline

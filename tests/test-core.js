@@ -226,6 +226,68 @@ Object.keys(requeridos).forEach(function (cat) {
 console.log('Biblioteca 1.2:', lib.list().length, 'ítems;',
   'plantas', conteoCat.plantas, '· jardines', conteoCat.jardines, '· vías', conteoCat.vias, '— OK');
 
+// ---------------------------------------------------------------------------
+// Biblioteca 1.4: ED.Library.registerCustom (CONTRACT §15.5)
+// ---------------------------------------------------------------------------
+assert(typeof lib.registerCustom === 'function', 'Falta ED.Library.registerCustom');
+const catMios = lib.categories.filter(function (c) { return c.id === 'mios'; })[0];
+assert(catMios, 'La biblioteca debe incluir la categoría "mios"');
+assert.strictEqual(catMios.name, 'Mis objetos', 'La categoría mios debe llamarse "Mis objetos"');
+const totalAntesCustom = lib.list().length;
+const custom = lib.registerCustom({
+  id: 'asset_test_1',
+  name: '  Silla importada  ',
+  w: 800, d: 700, h: 900, color: '#aabbcc',
+  plan: [{ t: 'rect', x: -400, y: -350, w: 800, h: 700, r: 20, fill: '#aabbcc' }],
+  boxes: [{ x: -400, y: -350, z: 0, w: 800, d: 700, h: 900, color: '#aabbcc' }],
+  mesh: [
+    { points: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }], color: '#ff0000' },
+    { points: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 0, z: 0 }] } // cara de 2 puntos: se descarta
+  ],
+  source: 'glb'
+});
+assert(custom, 'registerCustom debe devolver el objeto registrado');
+assert.strictEqual(custom.id, 'asset_test_1', 'registerCustom debe conservar el id saneado');
+assert.strictEqual(custom.cat, 'mios', 'El objeto personalizado debe ir a la categoría mios');
+assert.strictEqual(custom.name, 'Silla importada', 'El nombre debe recortarse');
+assert(Array.isArray(custom.mesh) && custom.mesh.length === 1,
+  'La malla del objeto personalizado debe descartar caras inválidas; tiene ' + (custom.mesh && custom.mesh.length));
+assert.strictEqual(custom.source, 'glb', 'registerCustom debe conservar el origen');
+assert.strictEqual(lib.get('asset_test_1'), custom, 'El objeto debe quedar accesible con Library.get');
+assert.strictEqual(lib.list('mios').filter(function (d) { return d.id === 'asset_test_1'; }).length, 1,
+  'El objeto personalizado debe aparecer una vez en la categoría mios');
+assert.strictEqual(lib.list().filter(function (d) { return d.id === 'asset_test_1'; }).length, 1,
+  'El objeto personalizado debe aparecer una sola vez en la biblioteca');
+assert.strictEqual(lib.list().length, totalAntesCustom + 1,
+  'registerCustom debe añadir exactamente un ítem; hay ' + lib.list().length);
+
+// Registrar el mismo id otra vez actualiza el objeto sin duplicarlo.
+const customV2 = lib.registerCustom({
+  id: 'asset_test_1', name: 'Silla v2', w: 900, d: 800, h: 1000
+});
+assert(customV2, 'registerCustom debe poder actualizar un objeto existente');
+assert.strictEqual(customV2.name, 'Silla v2', 'La segunda llamada debe actualizar el nombre');
+assert.strictEqual(customV2.cat, 'mios', 'La actualización debe conservar la categoría mios');
+assert.strictEqual(customV2.w, 900, 'La actualización debe conservar las dimensiones nuevas');
+assert(Array.isArray(customV2.plan) && customV2.plan.length >= 1,
+  'Sin planta, registerCustom debe generar una planta por defecto');
+assert(Array.isArray(customV2.boxes) && customV2.boxes.length >= 1,
+  'Sin cajas, registerCustom debe generar una caja por defecto');
+assert.strictEqual(lib.list().length, totalAntesCustom + 1,
+  'Volver a registrar el mismo id no debe duplicar el ítem');
+assert.strictEqual(lib.list('mios').filter(function (d) { return d.id === 'asset_test_1'; }).length, 1,
+  'La categoría mios no debe duplicar el objeto actualizado');
+
+// Entradas inválidas devuelven null sin registrar nada.
+assert.strictEqual(lib.registerCustom(null), null, 'registerCustom(null) debe devolver null');
+assert.strictEqual(lib.registerCustom({ id: '' }), null, 'registerCustom sin id debe devolver null');
+assert.strictEqual(lib.registerCustom({ id: '@@@' }), null,
+  'registerCustom con id no saneable debe devolver null');
+assert.strictEqual(lib.list().length, totalAntesCustom + 1,
+  'Los registros inválidos no deben añadir ítems');
+console.log('Biblioteca 1.4: registerCustom añade a mios sin duplicar — OK');
+
+
 
 for (const id of ['blank', 'casa1', 'casa2', 'demo']) {
   const p = ED.Templates.create(id);
@@ -257,7 +319,8 @@ console.log('Demo:', demo.walls.length, 'muros,', demo.rooms.length, 'ambientes,
 
 // Aspecto 3D por defecto del proyecto (CONTRACT §13.3): la demo debe seguir válida
 // y saneada también en techo, materiales y modo de renderizado.
-assert.deepStrictEqual(demo.settings.roof, { style: 'flat', height: 1200, overhang: 400 },
+assert.deepStrictEqual(demo.settings.roof,
+  { style: 'flat', height: 1200, overhang: 400, ridge: 'auto', profile: null },
   'La demo debe tener techo plano por defecto (1200 mm / alero 400 mm)');
 assert.deepStrictEqual(demo.settings.materials, {
   wall: { color: '#f3eee2', texture: 'stucco' },
