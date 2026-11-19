@@ -11,7 +11,7 @@
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
-  <div id="app">
+  <div id="app" data-rail="expanded" data-inspector="open">
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
@@ -81,7 +81,15 @@
     </header>
 
     <div class="app-body">
-      <aside class="toolrail" id="toolrail" aria-label="Herramientas"></aside>
+      <aside class="toolrail" id="toolrail" aria-label="Herramientas">
+        <div class="rail-head">
+          <span class="rail-title">Opciones</span>
+          <button id="btnRailToggle" class="rail-toggle" type="button" title="Mostrar u ocultar el menú de opciones" aria-expanded="true" aria-label="Alternar menú de opciones">
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M12.5 5 7.5 10l5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="rail-list" id="toolList"></div>
+      </aside>
 
       <main class="stage">
         <div class="stage-head">
@@ -112,6 +120,7 @@
 
           <section id="view3d" class="view view-3d" aria-label="Vista 3D">
             <canvas id="canvas3d"></canvas>
+            <div class="view3d-flight" id="view3dFlight" hidden>Vuelo de dron</div>
             <div class="view3d-hint" id="view3dHint">Arrastra para orbitar · clic derecho o dos dedos para desplazar · rueda para acercar</div>
             <div class="view3d-loading" id="view3dLoading">Preparando la maqueta…</div>
           </section>
@@ -154,15 +163,23 @@
       </main>
 
       <aside class="inspector" id="inspector">
+        <div class="inspector-head">
+          <span class="inspector-title">Ajustes</span>
+          <button id="btnInspectorToggle" class="inspector-toggle" type="button" title="Ocultar panel de ajustes" aria-expanded="true" aria-label="Ocultar ajustes">
+            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M7.5 5 12.5 10l-5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
         <div class="inspector-tabs" id="inspectorTabs">
           <button data-tab="props" class="active">Propiedades</button>
           <button data-tab="library">Biblioteca</button>
           <button data-tab="layers">Capas</button>
+          <button data-tab="scene">Escena</button>
         </div>
         <div class="inspector-body">
           <div class="panel active" id="panelProps"></div>
           <div class="panel" id="panelLibrary"></div>
           <div class="panel" id="panelLayers"></div>
+          <div class="panel" id="panelScene"></div>
         </div>
         <div class="inspector-foot" id="inspectorFoot">
           <span class="kbd">V</span> seleccionar
@@ -171,6 +188,9 @@
           <span class="kbd">?</span> ayuda
         </div>
       </aside>
+      <button id="btnInspectorReopen" class="inspector-reopen" type="button" title="Mostrar el panel de ajustes" aria-label="Mostrar ajustes" hidden>
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M12.5 5 7.5 10l5 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
     </div>
   </div>
 

@@ -43,10 +43,10 @@ project = {
     name: "Residencia Aurora",        // nombre del proyecto
     client: "Familia Pérez",
     location: "Av. Central 123, Ciudad",
-    engineer: "Ing. Ana Martínez",
-    license: "CIP-12345",
+    engineer: "Ing. Proyecto",        // datos de ejemplo genéricos en las plantillas
+    license: "***",
     phone: "+591 700 00000",
-    email: "ana@estudio.com",
+    email: "contacto@estudio.com",
     date: "2026-11-18",               // ISO yyyy-mm-dd
     revision: "A",
     description: "Vivienda unifamiliar de dos niveles",
@@ -434,3 +434,96 @@ Debe abrir en AutoCAD/LibreCAD. La UI lo etiqueta "DWG/DXF (AutoCAD)".
 | `js/sheets.js` | Equipo láminas |
 | `js/library.js`, `js/templates.js` | Equipo biblioteca |
 | `README.md`, `CONTRACT.md` | Lead |
+
+---
+
+## 13. Ampliación 1.2 — curvas, techos, materiales, render y disposición de paneles
+
+### 13.1 Muros curvos (modelo de datos)
+
+`wall.curve` es opcional:
+
+```js
+{ type: 'arc', bulge: 0.35 }        // bulge = tan(barrido/4), convención DXF
+{ type: 'spline', pts: [{x,y}, …] } // puntos intermedios ABSOLUTOS entre wall.a y wall.b (máx. 32)
+```
+
+- Muro recto = sin `curve`. `a` y `b` son siempre los extremos; nivel, capa, espesor y altura no cambian.
+- `bulge` positivo = arco antihorario de `a`→`b`; `|bulge|=1` es media circunferencia; sagitta = (cuerda/2)·`|bulge|`. Se sanea a ±4.
+- `spline`: la curva pasa por todos los puntos (Catmull-Rom). Con `pts` vacío equivale a una recta.
+- **Los muros curvos no admiten aberturas** en esta versión: `normalizeProject` vacía `openings` si hay `curve`. El editor lo avisa.
+
+### 13.2 `EngDraft.Geo` — API de curvas
+
+```js
+Geo.wallIsCurved(wall) -> boolean
+Geo.wallPath(wall, {samples}) -> [{x,y}, …]   // eje: recta 2 puntos; curva muestreada
+Geo.catmullRomPath(points, samplesPerSegment) -> polilínea que pasa por los puntos
+Geo.arcFromBulge(a, b, bulge) -> { center, radius, startAngle, endAngle, sweep }
+Geo.bulgeFromPoint(a, b, point) -> bulge firmado    // para editar el arco con el ratón
+Geo.wallLength(wall) -> longitud del eje (curva o recta)
+Geo.wallPointAt(wall, t) -> punto a fracción de longitud (0..1)
+Geo.distToWall(point, wall) -> { dist, t, point }  // hit-test
+Geo.wallPolygon(wall, extendEnds) -> 4 puntos (recta) o banda de 2N puntos (curva)
+Geo.wallAngle(wall) -> ángulo de la cuerda a→b
+```
+
+### 13.3 `project.settings` nuevos
+
+```js
+roof:      { style: 'flat'|'gable'|'arc'|'spline',  // defecto "flat"
+             height: 1200,                           // mm, 200..8000
+             overhang: 400 },                        // mm, 0..2500
+materials: {
+  wall:   { color: '#f3eee2', texture: 'stucco'|'brick'|'wood'|'stone'|'smooth' },
+  roof:   { color: '#b49a7c', texture: 'tile'|'shingle'|'metal'|'wood'|'concrete'|'smooth' },
+  trim:   { color: '#fdfaf2' },
+  ground: { color: '#c9d3ab', texture: 'grass'|'paving'|'gravel'|'smooth' }
+},
+render:    { mode: 'schematic'|'realistic',         // defecto "schematic"
+             shadows: true, textures: true, sunAngle: 135 }  // sunAngle 0..360
+```
+
+`store.normalizeProject` sanea colores (`#rgb`/`#rrggbb`), texturas (lista blanca), números y aplica los defaults.
+
+### 13.4 `EngDraft.View3D` — ampliación
+
+```js
+view.setOptions({ …actuales,
+  renderMode: "schematic"|"realistic",
+  materials: { wall:{color,texture}, roof:{color,texture}, trim:{color}, ground:{color,texture} },
+  roofStyle: "flat"|"gable"|"arc"|"spline", roofHeight, roofOverhang,
+  roofColor, roofTexture, shadows:bool, textures:bool, sunAngle:number })
+view.getRenderInfo() -> { mode, textures, faces }
+view.startFlight(opts) -> inicia animación de vuelo de dron en bucle (~14 s); no bloquea
+view.stopFlight()
+view.isFlying() -> boolean
+```
+
+Requisitos: muros curvos extruidos como pared continua (sin huecos), techos gable/arc/spline sobre `wallBounds`, colores de pared/techo y texturas procedurales (sin imágenes ni red), modo realista con cielo/sol/sombras y variación de color. `startFlight` mueve la cámara por una trayectoria cinematográfica alrededor de la maqueta; cualquier `pointerdown` del usuario detiene el vuelo. Debe funcionar con canvas falso en Node.
+
+### 13.5 `EngDraft.Library` — nuevas categorías
+
+Categorías nuevas: `plantas` (Plantas), `jardines` (Jardines), `vias` (Vías y accesos). Mínimos:
+- `plantas`: palmera, árbol, arbusto, seto, macizo floral, planta ornamental (≥5).
+- `jardines`: césped, jardín/jardinera, sendero, fuente, roca decorativa (≥4).
+- `vias`: carretera recta, carretera curva 90°, entrada recta, entrada curva, acera, estacionamiento (≥5).
+
+Cada ítem mantiene el formato actual (`id/name/cat/tags/w/d/h/color/plan[]/boxes[]`). Las curvas 3D se aproximan con varios `boxes`. Deben verse bien en planta (miniaturas SVG) y en 3D. No se renombran ids existentes.
+
+### 13.6 Disposición de paneles y controles nuevos
+
+- **Menú lateral colapsable (izquierda):** `#app[data-rail="expanded"|"compact"]`; botón `#btnRailToggle`. Persistencia `localStorage["engdraft.ui.rail"]` (defecto `expanded`). Expandido: icono + etiqueta + tecla por herramienta. Compacto: como la versión anterior.
+- **Panel de ajustes colapsable (derecha):** `#app[data-inspector="open"|"closed"]`; botones `#btnInspectorToggle` (cerrar) y `#btnInspectorReopen` (reabrir, oculto si está abierto). Persistencia `localStorage["engdraft.ui.inspector"]` (defecto `open`).
+- **Nueva pestaña `Escena`** (`data-tab="scene"`, `#panelScene`): modo de render, techo (estilo/altura/color/textura), paredes, suelo, sombras/sol y botón de vuelo de dron.
+- **Acciones del escenario 3D:** además de las actuales, botones **Realista** y **Vuelo**.
+- **Parámetros URL de apoyo** (verificación, no usuario final): `?view=3d|sheets`, `?font=`, `?dialog=grid|help|scene`, `?render=realistic`, `?roof=flat|gable|arc|spline`, `?flight=1`.
+- Español en todo texto visible, sin emojis.
+
+### 13.7 Pruebas esperadas de la ampliación
+
+- Geometría: longitud/polígono de arco y spline, `bulgeFromPoint`, `distToWall`, robustez con valores inválidos.
+- Store: saneado de `wall.curve`, `roof`, `materials`, `render`; export/import los conserva; muros curvos sin aberturas.
+- Biblioteca: todos los ítems con `plan` y `boxes` válidos; las 3 categorías nuevas existen con sus mínimos.
+- View3D: proyecto con muros curvos, 4 estilos de techo, modo realista y `startFlight()/stopFlight()` sin excepciones con canvas falso.
+- Láminas y DXF: un proyecto con muro curvo se exporta sin `NaN` y el DXF abre (estructura válida).
