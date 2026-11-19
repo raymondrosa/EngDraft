@@ -97,6 +97,110 @@ const store2 = new ED.Store(JSON.parse(json));
 assert(store2.project.meta.name === demo.meta.name);
 console.log('Store/undo/autosave: OK');
 
+// Rejilla configurable: valores por defecto y saneado en project.settings
+const demoGrid = ED.Templates.demo().settings;
+assert.strictEqual(demoGrid.grid, 250, 'grid por defecto debe ser 250 mm; es ' + demoGrid.grid);
+assert.strictEqual(demoGrid.gridMajor, 4, 'gridMajor por defecto debe ser 4; es ' + demoGrid.gridMajor);
+assert.strictEqual(demoGrid.gridOriginX, 0, 'gridOriginX por defecto debe ser 0; es ' + demoGrid.gridOriginX);
+assert.strictEqual(demoGrid.gridOriginY, 0, 'gridOriginY por defecto debe ser 0; es ' + demoGrid.gridOriginY);
+assert.strictEqual(demoGrid.snapStep, 0, 'snapStep por defecto debe ser 0 (heredar rejilla); es ' + demoGrid.snapStep);
+assert.strictEqual(demoGrid.gridAdaptive, true, 'gridAdaptive por defecto debe ser true');
+assert.strictEqual(demoGrid.gridStyle, 'lines', 'gridStyle por defecto debe ser lines');
+assert.strictEqual(demoGrid.showAxes, true, 'showAxes por defecto debe ser true');
+
+function normalizedSettings(settings) {
+  const p = ED.Templates.demo();
+  p.settings = Object.assign({}, p.settings, settings);
+  return ED.Store.normalizeProject(p).settings;
+}
+
+let ns = normalizedSettings({
+  units: 'imperial', grid: 'basura', gridMajor: 0, gridOriginX: 'x', gridOriginY: 1e12,
+  snapStep: -5, gridAdaptive: 'si', gridStyle: 'zigzag', showAxes: 0
+});
+assert.strictEqual(ns.units, 'ft', 'units "imperial" debe normalizarse a "ft"; quedó ' + ns.units);
+assert.strictEqual(ns.grid, 250, 'grid no numérico debe caer a 250 mm; quedó ' + ns.grid);
+assert.strictEqual(ns.gridMajor, 2, 'gridMajor=0 debe limitarse al mínimo 2; quedó ' + ns.gridMajor);
+assert.strictEqual(ns.gridOriginX, 0, 'gridOriginX no numérico debe caer a 0; quedó ' + ns.gridOriginX);
+assert.strictEqual(ns.gridOriginY, 1e7, 'gridOriginY debe limitarse a 1e7 mm; quedó ' + ns.gridOriginY);
+assert.strictEqual(ns.snapStep, 0, 'snapStep negativo debe caer a 0 (heredar); quedó ' + ns.snapStep);
+assert.strictEqual(ns.gridAdaptive, true, 'gridAdaptive solo se desactiva con false');
+assert.strictEqual(ns.gridStyle, 'lines', 'gridStyle desconocido debe caer a "lines"; quedó ' + ns.gridStyle);
+assert.strictEqual(ns.showAxes, true, 'showAxes solo se oculta con false');
+
+ns = normalizedSettings({ grid: 0, gridMajor: 99, gridOriginY: -1e12, snapStep: 0 });
+assert.strictEqual(ns.grid, 5, 'grid=0 debe limitarse al mínimo 5 mm; quedó ' + ns.grid);
+assert.strictEqual(ns.gridMajor, 50, 'gridMajor=99 debe limitarse a 50; quedó ' + ns.gridMajor);
+assert.strictEqual(ns.gridOriginY, -1e7, 'gridOriginY negativo debe limitarse a -1e7 mm; quedó ' + ns.gridOriginY);
+ns = normalizedSettings({ grid: -250, gridMajor: 2.6, snapStep: 999999 });
+assert.strictEqual(ns.grid, 5, 'grid negativo debe limitarse al mínimo 5 mm; quedó ' + ns.grid);
+assert.strictEqual(ns.gridMajor, 3, 'gridMajor=2.6 debe redondearse a 3; quedó ' + ns.gridMajor);
+assert.strictEqual(ns.snapStep, 100000, 'snapStep debe limitarse a 100000 mm; quedó ' + ns.snapStep);
+ns = normalizedSettings({ grid: 1e9, gridMajor: NaN, gridOriginX: -1e12, gridStyle: 'dots' });
+assert.strictEqual(ns.grid, 100000, 'grid=1e9 debe limitarse a 100000 mm; quedó ' + ns.grid);
+assert.strictEqual(ns.gridMajor, 4, 'gridMajor=NaN debe caer al valor por defecto 4; quedó ' + ns.gridMajor);
+assert.strictEqual(ns.gridOriginX, -1e7, 'gridOriginX debe limitarse a -1e7 mm; quedó ' + ns.gridOriginX);
+assert.strictEqual(ns.gridStyle, 'dots', 'gridStyle "dots" debe conservarse');
+
+// Un JSON con basura no debe romper la carga y debe quedar sin NaN.
+const basura = JSON.parse(JSON.stringify(ED.Templates.demo()));
+basura.settings = {
+  units: 'm', grid: -5, gridMajor: 'x', gridOriginX: null, gridOriginY: 'y',
+  snapStep: -1, gridAdaptive: null, gridStyle: 'x', showAxes: false
+};
+const storeBasura = new ED.Store(basura);
+const sBasura = storeBasura.project.settings;
+assert.strictEqual(sBasura.grid, 5, 'Importar grid negativo debe sanear a 5 mm; quedó ' + sBasura.grid);
+assert.strictEqual(sBasura.gridMajor, 4, 'Importar gridMajor no numérico debe sanear a 4; quedó ' + sBasura.gridMajor);
+assert.strictEqual(sBasura.gridOriginX, 0, 'Importar gridOriginX null debe sanear a 0; quedó ' + sBasura.gridOriginX);
+assert.strictEqual(sBasura.gridOriginY, 0, 'Importar gridOriginY texto debe sanear a 0; quedó ' + sBasura.gridOriginY);
+assert.strictEqual(sBasura.snapStep, 0, 'Importar snapStep negativo debe sanear a 0; quedó ' + sBasura.snapStep);
+assert.strictEqual(sBasura.gridStyle, 'lines', 'Importar gridStyle inválido debe sanear a lines');
+assert.strictEqual(sBasura.showAxes, false, 'showAxes=false debe conservarse al importar');
+['grid', 'gridMajor', 'gridOriginX', 'gridOriginY', 'snapStep'].forEach(function (k) {
+  assert(isFinite(sBasura[k]), 'La rejilla importada deja NaN en settings.' + k + ': ' + sBasura[k]);
+});
+
+// Los ajustes de rejilla deben sobrevivir a exportJSON/importJSON.
+const projGrid = ED.Templates.demo();
+projGrid.settings.grid = 500;
+projGrid.settings.gridMajor = 5;
+projGrid.settings.gridOriginX = -1250;
+projGrid.settings.gridOriginY = 800;
+projGrid.settings.snapStep = 100;
+projGrid.settings.gridAdaptive = false;
+projGrid.settings.gridStyle = 'dots';
+projGrid.settings.showAxes = false;
+const storeGrid = new ED.Store(projGrid);
+const jsonGrid = storeGrid.exportJSON();
+const storeGrid2 = new ED.Store(JSON.parse(jsonGrid));
+const s2 = storeGrid2.project.settings;
+assert.strictEqual(s2.grid, 500, 'grid no sobrevive a export/import: ' + s2.grid);
+assert.strictEqual(s2.gridMajor, 5, 'gridMajor no sobrevive a export/import: ' + s2.gridMajor);
+assert.strictEqual(s2.gridOriginX, -1250, 'gridOriginX no sobrevive a export/import: ' + s2.gridOriginX);
+assert.strictEqual(s2.gridOriginY, 800, 'gridOriginY no sobrevive a export/import: ' + s2.gridOriginY);
+assert.strictEqual(s2.snapStep, 100, 'snapStep no sobrevive a export/import: ' + s2.snapStep);
+assert.strictEqual(s2.gridAdaptive, false, 'gridAdaptive no sobrevive a export/import');
+assert.strictEqual(s2.gridStyle, 'dots', 'gridStyle no sobrevive a export/import');
+assert.strictEqual(s2.showAxes, false, 'showAxes no sobrevive a export/import');
+
+const storeGrid3 = new ED.Store(ED.Templates.demo());
+const importado = storeGrid3.importJSON(jsonGrid);
+assert.strictEqual(importado.settings.grid, 500, 'importJSON no restaura grid');
+assert.strictEqual(storeGrid3.project.settings.snapStep, 100, 'importJSON no restaura snapStep');
+storeGrid.saveLocal();
+const recargado = storeGrid.loadLocal();
+assert(recargado, 'El autoguardado con rejilla configurable no es recuperable');
+assert.strictEqual(recargado.settings.grid, 500, 'El autoguardado pierde grid');
+assert.strictEqual(recargado.settings.gridStyle, 'dots', 'El autoguardado pierde gridStyle');
+assert.deepStrictEqual(
+  ED.Store.normalizeProject(ED.Store.normalizeProject(JSON.parse(jsonGrid))).settings.grid,
+  500,
+  'normalizeProject debe ser idempotente con la rejilla'
+);
+assert.throws(function () { storeGrid3.importJSON('{"levels":[]}'); }, /niveles/i, 'Importar un proyecto sin niveles debe lanzar Error');
+console.log('Rejilla configurable (settings): defaults, saneado y persistencia — OK');
+
 // DXF
 const dxf = ED.DXF.create(demo, { levels: 'all' });
 assert(dxf.startsWith('0\r\nSECTION') || dxf.startsWith('999'), 'DXF sin cabecera');
