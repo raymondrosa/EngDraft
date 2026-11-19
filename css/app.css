@@ -245,16 +245,19 @@ svg { display: block; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.rail-toggle {
+/* Botón de plegado de la cabecera del rail (ojo: las filas de toggles de la
+   sección Dibujo usan .rail-toggle dentro de .rail-toggle-row; se delimitan
+   con .rail-head para que no hereden el tamaño del botón de plegado). */
+.rail-head .rail-toggle {
   width: 26px; height: 26px; flex: 0 0 26px;
   display: grid; place-items: center;
   border-radius: 6px;
   color: #9babba;
   transition: background 0.14s ease, color 0.14s ease;
 }
-.rail-toggle:hover { background: #1f2b36; color: var(--amber); }
-.rail-toggle svg { width: 16px; height: 16px; transition: transform 0.16s ease; }
-.rail-toggle:focus-visible,
+.rail-head .rail-toggle:hover { background: #1f2b36; color: var(--amber); }
+.rail-head .rail-toggle svg { width: 16px; height: 16px; transition: transform 0.16s ease; }
+.rail-head .rail-toggle:focus-visible,
 .tool-btn:focus-visible,
 .inspector-toggle:focus-visible,
 .inspector-reopen:focus-visible { outline: 2px solid var(--amber-line); outline-offset: 1px; }
@@ -268,7 +271,12 @@ svg { display: block; }
   padding: 1px 2px 2px 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* Con muchas secciones el rail siempre desplaza: barra fina para que los
+     controles compactos (68px) conserven su ancho. */
+  scrollbar-width: thin;
 }
+.rail-list::-webkit-scrollbar { width: 6px; }
+.rail-list::-webkit-scrollbar-thumb { border-width: 1px; }
 .tool-btn {
   position: relative;
   flex: 0 0 auto;
@@ -329,11 +337,11 @@ svg { display: block; }
 #app[data-rail="compact"] .toolrail { padding: 8px 0 10px; align-items: center; }
 #app[data-rail="compact"] .rail-head { height: 30px; margin-bottom: 4px; padding: 0; border-bottom: 0; justify-content: center; }
 #app[data-rail="compact"] .rail-title { display: none; }
-#app[data-rail="compact"] .rail-toggle { width: 30px; height: 28px; flex-basis: 30px; }
-#app[data-rail="compact"] .rail-toggle svg { transform: rotate(180deg); }
+#app[data-rail="compact"] .rail-head .rail-toggle { width: 30px; height: 28px; flex-basis: 30px; }
+#app[data-rail="compact"] .rail-head .rail-toggle svg { transform: rotate(180deg); }
 #app[data-rail="compact"] .rail-list { align-items: center; gap: 4px; padding: 0; }
 #app[data-rail="compact"] .tool-btn {
-  width: 62px;
+  width: 60px;
   height: 46px;
   min-height: 46px;
   flex-direction: column;
@@ -343,11 +351,248 @@ svg { display: block; }
   text-align: center;
 }
 #app[data-rail="compact"] .tool-btn svg { width: 22px; height: 22px; flex: 0 0 22px; }
-#app[data-rail="compact"] .tool-btn small { max-width: 62px; font-size: var(--fs-10); line-height: 1.1; letter-spacing: -0.01em; }
+#app[data-rail="compact"] .tool-btn small { max-width: 58px; font-size: var(--fs-10); line-height: 1.1; letter-spacing: -0.01em; }
 #app[data-rail="compact"] .tool-btn .key { display: none; }
-#app[data-rail="compact"] .tool-btn.active::before { left: -3px; top: 10px; bottom: 10px; }
+#app[data-rail="compact"] .tool-btn.active::before { left: -2px; top: 10px; bottom: 10px; }
 #app[data-rail="compact"] .tool-sep { width: 30px; margin: 3px 0; }
 #app[data-rail="compact"] .rail-foot { width: 100%; align-items: center; padding-top: 6px; border-top: 0; }
+
+/* ============ Secciones del rail: Dibujo, Vista, Vistas y Sistema ======== */
+/* El rail deja de ser solo herramientas: agrupa también los controles que
+   antes flotaban sobre el lienzo. Cada .rail-section es un bloque con título
+   y sus controles; el scroll interno lo resuelve .rail-list. */
+.rail-section {
+  flex: 0 0 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 3px 0 5px;
+}
+.rail-section + .rail-section {
+  border-top: 1px solid #1f2a36;
+  margin-top: 1px;
+  padding-top: 6px;
+}
+.rail-section-title {
+  flex: 0 0 auto;
+  padding: 1px 4px 0;
+  font-size: var(--fs-10);
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: #7f8e9c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Fila de toggles Rejilla / Snap / Orto (activo = .on) */
+.rail-toggle-row { display: flex; align-items: stretch; gap: 4px; width: 100%; min-width: 0; }
+.rail-toggle-row .rail-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 0 6px;
+  border: 1px solid #2a3744;
+  border-radius: 6px;
+  background: #131c25;
+  color: #a9b6c2;
+  font-size: var(--fs-10);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+/* En modo expandido los toggles se leen por su texto; el icono aparece solo
+   en el rail compacto (ahí no caben las etiquetas). Los TOGGLE_ICONS que
+   genera app.js no traen atributo stroke: se lo damos aquí para que el
+   trazo se vea en compacto. */
+.rail-toggle-row .rail-toggle svg { display: none; stroke: currentColor; fill: none; }
+.rail-toggle-row .rail-toggle span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rail-toggle-row .rail-toggle:hover { color: #e1e8ee; border-color: #3b4b5b; background: #18232d; }
+.rail-toggle-row .rail-toggle.on {
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-color: rgba(245, 166, 35, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(245, 166, 35, 0.1);
+}
+
+/* Chip de rejilla del rail: icono + valor + caret (abre Configurar rejilla) */
+.rail-section .rail-grid-chip {
+  width: 100%;
+  height: 28px;
+  display: flex; align-items: center; justify-content: flex-start; gap: 6px;
+  padding: 0 9px;
+  border: 1px solid #2a3744;
+  border-radius: 6px;
+  background: #131c25;
+  color: #b8c4d0;
+  font-size: var(--fs-10);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.rail-section .rail-grid-chip svg { width: 14px; height: 14px; flex: 0 0 14px; opacity: 0.8; }
+.rail-section .rail-grid-chip svg.grid-chip-caret { width: 10px; height: 10px; margin-left: auto; opacity: 0.7; }
+.rail-section .rail-grid-chip b { font: 600 var(--fs-10) var(--mono); letter-spacing: 0.02em; color: #cfdae4; }
+.rail-section .rail-grid-chip:hover { color: var(--amber); border-color: rgba(245, 166, 35, 0.4); background: #18222c; }
+.rail-section .rail-grid-chip:hover b { color: var(--amber); }
+
+/* Fila de acciones: Ajustar / Zoom + / Zoom − */
+.rail-action-row { display: flex; align-items: stretch; gap: 4px; width: 100%; min-width: 0; }
+.rail-action {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 29px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 0 6px;
+  border: 1px solid #2a3744;
+  border-radius: 6px;
+  background: #131c25;
+  color: #b8c4d0;
+  font-size: var(--fs-10);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease, transform 0.1s ease;
+}
+.rail-action svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.rail-action span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Los botones de zoom traen <b>+</b> / <b>−</b> como glifo */
+.rail-action b { font: 700 var(--fs-15) var(--mono); line-height: 1; }
+.rail-action:hover { color: #f1f5f8; border-color: #3b4b5b; background: #18232d; }
+.rail-action:active { transform: translateY(1px); }
+
+/* Botones de las vistas generadas (Planta / Frontal / laterales / secciones) */
+.rail-view-btn {
+  flex: 0 0 auto;
+  width: 100%;
+  height: 29px;
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #aab8c5;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  transition: color 0.14s ease, background 0.14s ease, border-color 0.14s ease;
+}
+.rail-view-btn span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* La abreviatura (P/F/LD/LI/ST/SL) solo se usa en el rail compacto. */
+.rail-view-abbr { display: none; }
+.rail-view-btn:hover { color: #e1e8ee; background: #1b2631; }
+.rail-view-btn.active {
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-color: rgba(245, 166, 35, 0.26);
+  box-shadow: inset 0 0 0 1px rgba(245, 166, 35, 0.08);
+}
+
+/* Chips de Sistema: unidades e idioma */
+.rail-chip {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 26px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 0 8px;
+  border: 1px solid #2a3744;
+  border-radius: 6px;
+  background: #131c25;
+  color: #b8c4d0;
+  font-size: var(--fs-10);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.rail-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rail-chip:hover { color: var(--amber); border-color: rgba(245, 166, 35, 0.4); background: #18222c; }
+.lang-opt { color: #93a2b1; }
+.lang-opt.active { color: var(--amber); font-weight: 700; }
+.lang-sep { color: #5f6e7d; }
+
+/* El pie del rail (Ajustar vista) vive ahora dentro de la sección Herramientas */
+.rail-section .rail-foot { margin-top: 2px; padding-top: 6px; border-top: 1px solid #1f2a36; }
+
+/* Foco accesible de los controles del rail */
+.rail-toggle-row .rail-toggle:focus-visible,
+.rail-action:focus-visible,
+.rail-view-btn:focus-visible,
+.rail-chip:focus-visible { outline: 2px solid var(--amber-line); outline-offset: 1px; }
+
+/* Rail compacto: controles reducidos a icono / abreviatura, sin recortes.
+   Anchos ≤60px porque la barra fina de scroll del .rail-list deja ~62px. */
+#app[data-rail="compact"] .rail-section { width: 100%; align-items: center; gap: 3px; padding: 4px 0; }
+#app[data-rail="compact"] .rail-section-title { display: none; }
+#app[data-rail="compact"] .rail-toggle-row { flex-direction: column; align-items: center; gap: 3px; }
+#app[data-rail="compact"] .rail-toggle-row .rail-toggle { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; }
+#app[data-rail="compact"] .rail-toggle-row .rail-toggle svg { display: block; width: 15px; height: 15px; flex: 0 0 15px; }
+#app[data-rail="compact"] .rail-toggle-row .rail-toggle span { display: none; }
+#app[data-rail="compact"] .rail-section .rail-grid-chip { width: 38px; height: 26px; justify-content: center; padding: 0; gap: 0; }
+#app[data-rail="compact"] .rail-section .rail-grid-chip b,
+#app[data-rail="compact"] .rail-section .rail-grid-chip .grid-chip-caret { display: none; }
+#app[data-rail="compact"] .rail-section .rail-grid-chip svg { width: 15px; height: 15px; flex-basis: 15px; opacity: 0.85; }
+#app[data-rail="compact"] .rail-action-row { flex-direction: column; align-items: center; gap: 3px; }
+#app[data-rail="compact"] .rail-action { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; gap: 0; }
+#app[data-rail="compact"] .rail-action svg { width: 15px; height: 15px; flex-basis: 15px; }
+#app[data-rail="compact"] .rail-action span { display: none; }
+#app[data-rail="compact"] .rail-view-btn { width: 44px; height: 26px; justify-content: center; padding: 0; gap: 0; }
+#app[data-rail="compact"] .rail-view-btn span { display: none; }
+#app[data-rail="compact"] .rail-view-btn .rail-view-abbr { display: block; font: 700 var(--fs-10) var(--mono); letter-spacing: 0.02em; }
+#app[data-rail="compact"] #btnUnitsRail { width: 48px; flex: 0 0 48px; padding: 0 2px; font-size: var(--fs-10); letter-spacing: 0; }
+#app[data-rail="compact"] #btnUnitsRail span { display: block; overflow: hidden; text-overflow: ellipsis; }
+/* Si app.js añade data-unit="m|ft" al botón, en compacto se muestra solo la
+   unidad y el resto del texto se oculta. */
+#app[data-rail="compact"] #btnUnitsRail[data-unit] span { display: none; }
+#app[data-rail="compact"] #btnUnitsRail[data-unit]::before { content: attr(data-unit); font-weight: 700; }
+#app[data-rail="compact"] #langToggle { width: 48px; flex: 0 0 48px; padding: 0 2px; gap: 1px; }
+#app[data-rail="compact"] .rail-section .rail-foot { width: 100%; align-items: center; padding-top: 5px; border-top: 0; }
+
+/* En ventanas ≤1200 el rail se ve compacto aunque el estado lógico sea
+   "expanded": se replican aquí las reglas compactas de los controles nuevos. */
+@media (max-width: 1200px) {
+  #app[data-rail="expanded"] .rail-section { width: 100%; align-items: center; gap: 3px; padding: 4px 0; }
+  #app[data-rail="expanded"] .rail-section-title { display: none; }
+  #app[data-rail="expanded"] .rail-toggle-row { flex-direction: column; align-items: center; gap: 3px; }
+  #app[data-rail="expanded"] .rail-toggle-row .rail-toggle { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; }
+  #app[data-rail="expanded"] .rail-toggle-row .rail-toggle svg { display: block; width: 15px; height: 15px; flex: 0 0 15px; }
+  #app[data-rail="expanded"] .rail-toggle-row .rail-toggle span { display: none; }
+  #app[data-rail="expanded"] .rail-section .rail-grid-chip { width: 38px; height: 26px; justify-content: center; padding: 0; gap: 0; }
+  #app[data-rail="expanded"] .rail-section .rail-grid-chip b,
+  #app[data-rail="expanded"] .rail-section .rail-grid-chip .grid-chip-caret { display: none; }
+  #app[data-rail="expanded"] .rail-section .rail-grid-chip svg { width: 15px; height: 15px; flex-basis: 15px; opacity: 0.85; }
+  #app[data-rail="expanded"] .rail-action-row { flex-direction: column; align-items: center; gap: 3px; }
+  #app[data-rail="expanded"] .rail-action { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; gap: 0; }
+  #app[data-rail="expanded"] .rail-action svg { width: 15px; height: 15px; flex-basis: 15px; }
+  #app[data-rail="expanded"] .rail-action span { display: none; }
+  #app[data-rail="expanded"] .rail-view-btn { width: 44px; height: 26px; justify-content: center; padding: 0; gap: 0; }
+  #app[data-rail="expanded"] .rail-view-btn span { display: none; }
+  #app[data-rail="expanded"] .rail-view-btn .rail-view-abbr { display: block; font: 700 var(--fs-10) var(--mono); letter-spacing: 0.02em; }
+  #app[data-rail="expanded"] #btnUnitsRail { width: 48px; flex: 0 0 48px; padding: 0 2px; font-size: var(--fs-10); letter-spacing: 0; }
+  #app[data-rail="expanded"] #btnUnitsRail span { display: block; overflow: hidden; text-overflow: ellipsis; }
+  #app[data-rail="expanded"] #btnUnitsRail[data-unit] span { display: none; }
+  #app[data-rail="expanded"] #btnUnitsRail[data-unit]::before { content: attr(data-unit); font-weight: 700; }
+  #app[data-rail="expanded"] #langToggle { width: 48px; flex: 0 0 48px; padding: 0 2px; gap: 1px; }
+  #app[data-rail="expanded"] .rail-section .rail-foot { width: 100%; align-items: center; padding-top: 5px; border-top: 0; }
+}
+
+/* El rail pierde ~28px útiles a 168px: se afinan gaps y paddings de las filas
+   para que "Rejilla", "Ajustar" y los chips sigan entrando sin recortes. */
+@media (max-width: 1400px) and (min-width: 1201px) {
+  #app[data-rail="expanded"] .rail-toggle-row { gap: 3px; }
+  #app[data-rail="expanded"] .rail-toggle-row .rail-toggle { padding: 0 4px; }
+  #app[data-rail="expanded"] .rail-action-row { gap: 3px; }
+  #app[data-rail="expanded"] .rail-action { padding: 0 4px; gap: 4px; }
+  #app[data-rail="expanded"] .rail-action svg { width: 13px; height: 13px; flex-basis: 13px; }
+  #app[data-rail="expanded"] .rail-action { font-size: var(--fs-10); }
+  #app[data-rail="expanded"] .rail-view-btn { padding: 0 6px; font-size: var(--fs-10); letter-spacing: -0.01em; }
+  #app[data-rail="expanded"] .rail-chip { padding: 0 5px; }
+}
 
 /* Escenario */
 .stage { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; background: var(--bg-deep); }
@@ -397,6 +642,34 @@ svg { display: block; }
 .stage-action-group .stage-action:hover { background: #23303d; }
 .stage-action-group .stage-action.active { background: var(--amber-soft); color: var(--amber); }
 
+/* Chip de la vista activa en stage-head (Planta / Frontal / Sección …) */
+.view-mode-chip {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border: 1px solid #2a3642;
+  border-radius: 14px;
+  background: #161f28;
+  color: #cbd6e1;
+  font-size: var(--fs-11);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+.view-mode-chip::before {
+  content: "";
+  flex: 0 0 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(72, 201, 216, 0.14);
+}
+.view-mode-chip[hidden] { display: none; }
+html[data-font="grande"] .view-mode-chip,
+html[data-font="xl"] .view-mode-chip { height: 28px; }
+
 .views { position: relative; flex: 1 1 auto; min-height: 0; }
 .view { position: absolute; inset: 0; display: none; overflow: hidden; }
 .view.active { display: block; }
@@ -406,6 +679,21 @@ svg { display: block; }
 
 /* 2D */
 #planCanvas { width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+/* Vista generada (frontal, laterales y secciones): ocupa el stage 2D cuando
+   está visible y convive con el canvas del plano (que se oculta). */
+#viewsCanvas,
+.views-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+}
+#viewsCanvas[hidden],
+.views-canvas[hidden] { display: none; }
+#planCanvas[hidden] { display: none; }
 .canvas-toggles {
   position: absolute; top: 12px; left: 12px;
   display: flex; align-items: center; gap: 2px;
@@ -1071,11 +1359,11 @@ svg { display: block; }
   #app[data-rail="expanded"] .toolrail { padding: 8px 0 10px; align-items: center; }
   #app[data-rail="expanded"] .rail-head { height: 30px; margin-bottom: 4px; padding: 0; border-bottom: 0; justify-content: center; }
   #app[data-rail="expanded"] .rail-title { display: none; }
-  #app[data-rail="expanded"] .rail-toggle { width: 30px; height: 28px; flex-basis: 30px; }
-  #app[data-rail="expanded"] .rail-toggle svg { transform: rotate(180deg); }
+  #app[data-rail="expanded"] .rail-head .rail-toggle { width: 30px; height: 28px; flex-basis: 30px; }
+  #app[data-rail="expanded"] .rail-head .rail-toggle svg { transform: rotate(180deg); }
   #app[data-rail="expanded"] .rail-list { align-items: center; gap: 4px; padding: 0; }
   #app[data-rail="expanded"] .tool-btn {
-    width: 62px;
+    width: 60px;
     height: 46px;
     min-height: 46px;
     flex-direction: column;
@@ -1085,9 +1373,9 @@ svg { display: block; }
     text-align: center;
   }
   #app[data-rail="expanded"] .tool-btn svg { width: 22px; height: 22px; flex: 0 0 22px; }
-  #app[data-rail="expanded"] .tool-btn small { max-width: 62px; font-size: var(--fs-10); line-height: 1.1; letter-spacing: -0.01em; }
+  #app[data-rail="expanded"] .tool-btn small { max-width: 58px; font-size: var(--fs-10); line-height: 1.1; letter-spacing: -0.01em; }
   #app[data-rail="expanded"] .tool-btn .key { display: none; }
-  #app[data-rail="expanded"] .tool-btn.active::before { left: -3px; top: 10px; bottom: 10px; }
+  #app[data-rail="expanded"] .tool-btn.active::before { left: -2px; top: 10px; bottom: 10px; }
   #app[data-rail="expanded"] .tool-sep { width: 30px; margin: 3px 0; }
   #app[data-rail="expanded"] .rail-foot { width: 100%; align-items: center; padding-top: 6px; border-top: 0; }
 }
@@ -1282,6 +1570,149 @@ svg { display: block; }
   cursor: pointer;
 }
 
+/* ===================== Modal "Diseñar techo" (1.4) ====================== */
+/* Lienzo interactivo del perfil del techo: mismo lenguaje visual que el
+   lienzo del plano (.grid-preview). Se limita a 556px de ancho para conservar
+   la relación 580:230 del canvas (~220px de alto) y que el dibujo no se
+   deforme; en ventanas estrechas se adapta al ancho disponible. */
+.roof-designer {
+  display: block;
+  width: min(100%, 556px);
+  aspect-ratio: 580 / 230;
+  height: auto;
+  margin: 8px auto 10px;
+  border: 1px solid #2a3744;
+  border-radius: 8px;
+  background: var(--paper);
+  cursor: crosshair;
+  touch-action: none;
+  outline: none;
+}
+.roof-designer:hover { border-color: #3b4b5b; }
+.roof-designer:focus-visible { border-color: var(--amber-line); box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.1); }
+.roof-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 14px;
+  margin: 8px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid #263340;
+  border-radius: 7px;
+  background: #10171f;
+  color: #9eacbb;
+  font-size: var(--fs-10);
+  line-height: 1.45;
+}
+.roof-legend strong, .roof-legend b { color: #c6d1db; font-weight: 600; }
+.roof-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.roof-legend i {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 3px;
+  background: var(--amber);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+.roof-legend i.alt { background: var(--cyan); }
+.roof-legend i.neutral { background: #7c8d9d; }
+/* La fila de presets va justo antes del lienzo: separa del bloque anterior */
+#roofPresets { margin-bottom: 2px; }
+.modal-body .roof-designer + .field-grid,
+.modal-body .roof-designer + .section { margin-top: 2px; }
+
+/* =================== Modal "Importar objeto" (1.4) ====================== */
+/* Zona de arrastre / selector de archivo .glb / .gltf / .obj */
+.import-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 22px 16px;
+  border: 1.5px dashed #3a4a5b;
+  border-radius: 10px;
+  background: #0f161d;
+  color: #a6b4c2;
+  font-size: var(--fs-12);
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+.import-drop:hover,
+.import-drop.over,
+.import-drop.dragover,
+.import-drop.is-over {
+  border-color: var(--amber-line);
+  background: #141e27;
+  color: #d3dde6;
+}
+.import-drop:focus-within { border-color: var(--amber-line); box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.09); }
+.import-drop svg { width: 32px; height: 32px; color: var(--amber); opacity: 0.95; }
+.import-drop b { font-size: var(--fs-13); font-weight: 650; color: #e1e8ee; }
+.import-drop span { font-size: var(--fs-11); color: #93a2b1; }
+.import-drop input[type="file"] { display: none; }
+/* Nota sobre formatos recomendados (GLB / OBJ) */
+.import-format-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 10px 11px;
+  border: 1px solid #2b3946;
+  border-radius: 7px;
+  background: #10171f;
+  color: #a6b4c2;
+  font-size: var(--fs-11);
+  line-height: 1.5;
+}
+.import-format-hint svg { flex: 0 0 15px; width: 15px; height: 15px; color: var(--amber); margin-top: 1px; }
+.import-format-hint strong { color: #c6d1db; font-weight: 600; }
+/* Resumen del objeto importado: badges de triángulos y dimensiones */
+.import-stats { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.import-stats:empty { display: none; margin: 0; }
+.import-stats .badge-soft {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: #1d2833;
+  color: #b8c4d0;
+  font: 600 var(--fs-10) var(--mono);
+  letter-spacing: 0.04em;
+}
+.import-stats .badge-soft strong { color: var(--amber); font-weight: 700; }
+/* Vista previa del objeto: caja con canvas centrado y estado vacío */
+.import-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 180px;
+  max-height: 300px;
+  margin: 10px 0;
+  overflow: hidden;
+  border: 1px solid #2a3744;
+  border-radius: 8px;
+  background: #0d141b;
+}
+.import-preview canvas { display: block; max-width: 100%; max-height: 280px; }
+.import-preview:empty::after {
+  content: "Sin vista previa";
+  color: #6d7d8c;
+  font-size: var(--fs-11);
+  letter-spacing: 0.02em;
+}
+
+/* Con el entorno en ventanas bajas los lienzos de los modales se comprimen */
+@media (max-height: 760px) {
+  .roof-designer { width: min(100%, 430px); }
+  .import-preview { min-height: 140px; max-height: 220px; }
+  .import-drop { padding: 16px 12px; }
+}
+
 /* ================= Escala de letra: ajustes de la barra de estado ======== */
 /* Con letra grande/xl la barra crece lo necesario y libera espacio ocultando
    el autor y el texto de la rejilla (el chip mantiene su icono). */
@@ -1335,8 +1766,9 @@ html[data-font="xl"] .inspector-tabs button {
 
 /* Movimiento reducido: los paneles se pliegan sin animación. */
 @media (prefers-reduced-motion: reduce) {
-  .toolrail, .inspector, .rail-toggle svg, .inspector-toggle svg,
-  .tool-btn, .inspector-reopen { transition: none; }
+  .toolrail, .inspector, .rail-head .rail-toggle svg, .inspector-toggle svg,
+  .tool-btn, .inspector-reopen, .rail-toggle-row .rail-toggle,
+  .rail-action, .rail-view-btn, .rail-chip { transition: none; }
 }
 
 /* ============ Controles rápidos de la vista 3D (techo, modo, materiales) ==== */
@@ -1411,3 +1843,20 @@ html[data-font="xl"] .view3d-tools { gap: 6px; padding: 5px 7px; }
 }
 
 
+
+/* ==== 1.4 · sistema fijo en el rail + rejilla compacta de vistas ==== */
+.rail-head { flex-wrap: wrap; }
+.rail-head-tools { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 7px; }
+.rail-head-tools .rail-chip { flex: 1 1 auto; justify-content: center; }
+.rail-view-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.rail-view-grid .rail-view-btn { min-height: 26px; padding: 2px 6px; font-size: var(--fs-10); }
+.rail-view-grid .rail-view-btn span { white-space: normal; line-height: 1.15; text-align: center; }
+[data-rail="compact"] .rail-head-tools { flex-direction: column; gap: 4px; margin-top: 6px; }
+[data-rail="compact"] .rail-head-tools .rail-chip { width: 100%; }
+[data-rail="compact"] .rail-view-grid { grid-template-columns: 1fr; }
+
+/* Ajuste cabecera del rail con chips de unidades/idioma (1.4) */
+#app .rail-head,
+#app[data-rail="expanded"] .rail-head { height: auto; min-height: 30px; flex-wrap: wrap; justify-content: space-between; }
+#app[data-rail="compact"] .rail-head { height: 30px; flex-wrap: nowrap; }
+#app[data-rail="compact"] .rail-head-tools { display: none; }
