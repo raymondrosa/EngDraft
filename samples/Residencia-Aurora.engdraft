@@ -4,10 +4,10 @@
     "name": "Residencia Aurora",
     "client": "Familia Mendoza",
     "location": "Calle Los Nogales 245, Santa Cruz",
-    "engineer": "Ing. Ana Martínez",
-    "license": "CIP 12-3456",
+    "engineer": "Ing. Proyecto",
+    "license": "***",
     "phone": "+591 700 12345",
-    "email": "ana.martinez@estudioaurora.com",
+    "email": "contacto@estudioaurora.com",
     "date": "2026-11-18",
     "revision": "A",
     "description": "Vivienda unifamiliar de dos niveles",
@@ -20,7 +20,42 @@
     "wallHeight": 2700,
     "floorHeight": 2800,
     "northAngle": 0,
-    "autoDim": true
+    "autoDim": true,
+    "gridMajor": 4,
+    "gridOriginX": 0,
+    "gridOriginY": 0,
+    "snapStep": 0,
+    "gridAdaptive": true,
+    "gridStyle": "lines",
+    "showAxes": true,
+    "roof": {
+      "style": "flat",
+      "height": 1200,
+      "overhang": 400
+    },
+    "materials": {
+      "wall": {
+        "color": "#f3eee2",
+        "texture": "stucco"
+      },
+      "roof": {
+        "color": "#b49a7c",
+        "texture": "tile"
+      },
+      "trim": {
+        "color": "#fdfaf2"
+      },
+      "ground": {
+        "color": "#c9d3ab",
+        "texture": "grass"
+      }
+    },
+    "render": {
+      "mode": "schematic",
+      "shadows": true,
+      "textures": true,
+      "sunAngle": 135
+    }
   },
   "layers": [
     {
@@ -82,7 +117,7 @@
   ],
   "walls": [
     {
-      "id": "w_1aae",
+      "id": "w_1yya",
       "type": "wall",
       "level": "l0",
       "layerId": "walls",
@@ -98,7 +133,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_2nya",
+          "id": "o_2mfy",
           "type": "window",
           "t": 0.14166666666666666,
           "width": 1800,
@@ -108,7 +143,7 @@
           "hinge": 1
         },
         {
-          "id": "o_34uc",
+          "id": "o_3kxr",
           "type": "door",
           "t": 0.4791666666666667,
           "width": 1000,
@@ -118,7 +153,7 @@
           "hinge": 1
         },
         {
-          "id": "o_4r02",
+          "id": "o_4npf",
           "type": "window",
           "t": 0.7916666666666666,
           "width": 1500,
@@ -130,7 +165,7 @@
       ]
     },
     {
-      "id": "w_567w",
+      "id": "w_5ucr",
       "type": "wall",
       "level": "l0",
       "layerId": "walls",
@@ -146,7 +181,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_6uk8",
+          "id": "o_6kf6",
           "type": "window",
           "t": 0.24444444444444444,
           "width": 1400,
@@ -156,7 +191,7 @@
           "hinge": 1
         },
         {
-          "id": "o_7wms",
+          "id": "o_7ew0",
           "type": "window",
           "t": 0.7555555555555555,
           "width": 1400,
@@ -168,7 +203,7 @@
       ]
     },
     {
-      "id": "w_872s",
+      "id": "w_8g69",
       "type": "wall",
       "level": "l0",
       "layerId": "walls",
@@ -184,7 +219,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_9bdk",
+          "id": "o_9rhb",
           "type": "window",
           "t": 0.18333333333333332,
           "width": 1500,
@@ -194,7 +229,7 @@
           "hinge": 1
         },
         {
-          "id": "o_asct",
+          "id": "o_ak02",
           "type": "window",
           "t": 0.5,
           "width": 1200,
@@ -204,7 +239,7 @@
           "hinge": 1
         },
         {
-          "id": "o_b1kj",
+          "id": "o_bdin",
           "type": "window",
           "t": 0.775,
           "width": 1500,
@@ -216,7 +251,7 @@
       ]
     },
     {
-      "id": "w_cofu",
+      "id": "w_ci6p",
       "type": "wall",
       "level": "l0",
       "layerId": "walls",
@@ -232,7 +267,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_d9nt",
+          "id": "o_ddjb",
           "type": "window",
           "t": 0.2777777777777778,
           "width": 1400,
@@ -242,7 +277,7 @@
           "hinge": 1
         },
         {
-          "id": "o_efv0",
+          "id": "o_ehnp",
           "type": "window",
           "t": 0.7777777777777778,
           "width": 1400,
@@ -254,7 +289,7 @@
       ]
     },
     {
-      "id": "w_f5dj",
+      "id": "w_fm2g",
       "type": "wall",
       "level": "l0",
       "layerId": "walls",
@@ -270,7 +305,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_g0z8",
+          "id": "o_ggs3",
           "type": "door",
           "t": 0.24444444444444444,
           "width": 950,
@@ -280,7 +315,7 @@
           "hinge": 1
         },
         {
-          "id": "o_h0a3",
+          "id": "o_hylt",
           "type": "door",
           "t": 0.7777777777777778,
           "width": 900,
@@ -292,7 +327,7 @@
       ]
     },
     {
-      "id": "w_icuh",
+      "id": "w_ia0b",
       "type": "wall",
       "level": "l0",
       "layerId": "walls",
@@ -308,7 +343,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_j1k7",
+          "id": "o_jsgt",
           "type": "door",
           "t": 0.24444444444444444,
           "width": 950,
@@ -318,7 +353,7 @@
           "hinge": 1
         },
         {
-          "id": "o_k2hh",
+          "id": "o_k7fg",
           "type": "door",
           "t": 0.7555555555555555,
           "width": 900,
@@ -330,7 +365,7 @@
       ]
     },
     {
-      "id": "w_lpjk",
+      "id": "w_lr97",
       "type": "wall",
       "level": "l0",
       "layerId": "walls",
@@ -346,7 +381,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_mso1",
+          "id": "o_m82w",
           "type": "door",
           "t": 0.7333333333333333,
           "width": 900,
@@ -358,7 +393,7 @@
       ]
     },
     {
-      "id": "w_n26m",
+      "id": "w_ns3e",
       "type": "wall",
       "level": "l0",
       "layerId": "walls",
@@ -374,7 +409,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_osld",
+          "id": "o_oqer",
           "type": "door",
           "t": 0.46,
           "width": 900,
@@ -386,7 +421,7 @@
       ]
     },
     {
-      "id": "w_pd2y",
+      "id": "w_p503",
       "type": "wall",
       "level": "l0",
       "layerId": "walls",
@@ -402,7 +437,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_qh39",
+          "id": "o_qzey",
           "type": "door",
           "t": 0.4,
           "width": 850,
@@ -414,7 +449,7 @@
       ]
     },
     {
-      "id": "w_1t0iu",
+      "id": "w_1toos",
       "type": "wall",
       "level": "l1",
       "layerId": "walls",
@@ -430,7 +465,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_1ud3z",
+          "id": "o_1u2ts",
           "type": "window",
           "t": 0.18333333333333332,
           "width": 1500,
@@ -440,7 +475,7 @@
           "hinge": 1
         },
         {
-          "id": "o_1vwqu",
+          "id": "o_1v36v",
           "type": "window",
           "t": 0.4791666666666667,
           "width": 1200,
@@ -450,7 +485,7 @@
           "hinge": 1
         },
         {
-          "id": "o_1w43z",
+          "id": "o_1w3n3",
           "type": "window",
           "t": 0.7916666666666666,
           "width": 1500,
@@ -462,7 +497,7 @@
       ]
     },
     {
-      "id": "w_1xmyy",
+      "id": "w_1xlwf",
       "type": "wall",
       "level": "l1",
       "layerId": "walls",
@@ -478,7 +513,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_1y6z0",
+          "id": "o_1ybqg",
           "type": "window",
           "t": 0.24444444444444444,
           "width": 1500,
@@ -488,7 +523,7 @@
           "hinge": 1
         },
         {
-          "id": "o_1zv4m",
+          "id": "o_1z2nx",
           "type": "window",
           "t": 0.7555555555555555,
           "width": 1500,
@@ -500,7 +535,7 @@
       ]
     },
     {
-      "id": "w_20e7u",
+      "id": "w_20z65",
       "type": "wall",
       "level": "l1",
       "layerId": "walls",
@@ -516,7 +551,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_211ge",
+          "id": "o_21dmc",
           "type": "window",
           "t": 0.18333333333333332,
           "width": 1400,
@@ -526,7 +561,7 @@
           "hinge": 1
         },
         {
-          "id": "o_226ti",
+          "id": "o_224it",
           "type": "window",
           "t": 0.4791666666666667,
           "width": 1000,
@@ -536,7 +571,7 @@
           "hinge": 1
         },
         {
-          "id": "o_2312k",
+          "id": "o_236ti",
           "type": "window",
           "t": 0.7916666666666666,
           "width": 1500,
@@ -548,7 +583,7 @@
       ]
     },
     {
-      "id": "w_24m35",
+      "id": "w_24sqt",
       "type": "wall",
       "level": "l1",
       "layerId": "walls",
@@ -564,7 +599,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_25y5a",
+          "id": "o_250v4",
           "type": "window",
           "t": 0.28888888888888886,
           "width": 1400,
@@ -574,7 +609,7 @@
           "hinge": 1
         },
         {
-          "id": "o_2681m",
+          "id": "o_26pr7",
           "type": "window",
           "t": 0.7777777777777778,
           "width": 1400,
@@ -586,7 +621,7 @@
       ]
     },
     {
-      "id": "w_27mk4",
+      "id": "w_27byi",
       "type": "wall",
       "level": "l1",
       "layerId": "walls",
@@ -602,7 +637,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_286qv",
+          "id": "o_289xq",
           "type": "door",
           "t": 0.26666666666666666,
           "width": 950,
@@ -612,7 +647,7 @@
           "hinge": 1
         },
         {
-          "id": "o_293lq",
+          "id": "o_29iib",
           "type": "door",
           "t": 0.8,
           "width": 850,
@@ -624,7 +659,7 @@
       ]
     },
     {
-      "id": "w_2akuz",
+      "id": "w_2aue5",
       "type": "wall",
       "level": "l1",
       "layerId": "walls",
@@ -640,7 +675,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_2bk56",
+          "id": "o_2bhe2",
           "type": "door",
           "t": 0.24444444444444444,
           "width": 950,
@@ -650,7 +685,7 @@
           "hinge": 1
         },
         {
-          "id": "o_2crl3",
+          "id": "o_2c6xj",
           "type": "door",
           "t": 0.7555555555555555,
           "width": 900,
@@ -662,7 +697,7 @@
       ]
     },
     {
-      "id": "w_2duf4",
+      "id": "w_2dqhj",
       "type": "wall",
       "level": "l1",
       "layerId": "walls",
@@ -678,7 +713,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_2ek1n",
+          "id": "o_2ec3f",
           "type": "door",
           "t": 0.7111111111111111,
           "width": 900,
@@ -690,7 +725,7 @@
       ]
     },
     {
-      "id": "w_2fzyk",
+      "id": "w_2fw1r",
       "type": "wall",
       "level": "l1",
       "layerId": "walls",
@@ -706,7 +741,7 @@
       "height": 2700,
       "openings": [
         {
-          "id": "o_2g4pi",
+          "id": "o_2gnqt",
           "type": "door",
           "t": 0.46,
           "width": 900,
@@ -720,7 +755,7 @@
   ],
   "rooms": [
     {
-      "id": "r_rln8",
+      "id": "r_rams",
       "type": "room",
       "level": "l0",
       "layerId": "rooms",
@@ -747,7 +782,7 @@
       "color": "#ece4d4"
     },
     {
-      "id": "r_smuv",
+      "id": "r_sdql",
       "type": "room",
       "level": "l0",
       "layerId": "rooms",
@@ -774,7 +809,7 @@
       "color": "#f1e4cc"
     },
     {
-      "id": "r_tpjk",
+      "id": "r_t8so",
       "type": "room",
       "level": "l0",
       "layerId": "rooms",
@@ -801,7 +836,7 @@
       "color": "#e7dfcf"
     },
     {
-      "id": "r_u6p2",
+      "id": "r_u0pj",
       "type": "room",
       "level": "l0",
       "layerId": "rooms",
@@ -828,7 +863,7 @@
       "color": "#e7dfcf"
     },
     {
-      "id": "r_vr9j",
+      "id": "r_vvgj",
       "type": "room",
       "level": "l0",
       "layerId": "rooms",
@@ -855,7 +890,7 @@
       "color": "#e8e5dd"
     },
     {
-      "id": "r_w22g",
+      "id": "r_wy4v",
       "type": "room",
       "level": "l0",
       "layerId": "rooms",
@@ -882,7 +917,7 @@
       "color": "#d9e9ea"
     },
     {
-      "id": "r_2h03f",
+      "id": "r_2hsqr",
       "type": "room",
       "level": "l1",
       "layerId": "rooms",
@@ -909,7 +944,7 @@
       "color": "#e8dfcf"
     },
     {
-      "id": "r_2ik4x",
+      "id": "r_2i4kq",
       "type": "room",
       "level": "l1",
       "layerId": "rooms",
@@ -936,7 +971,7 @@
       "color": "#dbe9ea"
     },
     {
-      "id": "r_2j2yf",
+      "id": "r_2j3qp",
       "type": "room",
       "level": "l1",
       "layerId": "rooms",
@@ -963,7 +998,7 @@
       "color": "#e6dfd2"
     },
     {
-      "id": "r_2k7jc",
+      "id": "r_2k0q8",
       "type": "room",
       "level": "l1",
       "layerId": "rooms",
@@ -990,7 +1025,7 @@
       "color": "#e6dfd2"
     },
     {
-      "id": "r_2lwqk",
+      "id": "r_2lga1",
       "type": "room",
       "level": "l1",
       "layerId": "rooms",
@@ -1019,7 +1054,7 @@
   ],
   "items": [
     {
-      "id": "i_xyvx",
+      "id": "i_x0bz",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1033,7 +1068,7 @@
       "name": "Alfombra"
     },
     {
-      "id": "i_ya21",
+      "id": "i_y6qe",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1047,7 +1082,7 @@
       "name": "Sofá 3 puestos"
     },
     {
-      "id": "i_z6gj",
+      "id": "i_zggf",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1061,7 +1096,7 @@
       "name": "Mesa de centro"
     },
     {
-      "id": "i_10owu",
+      "id": "i_10nqe",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1075,7 +1110,7 @@
       "name": "Mueble de TV"
     },
     {
-      "id": "i_11sei",
+      "id": "i_11x1r",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1089,7 +1124,7 @@
       "name": "Televisor"
     },
     {
-      "id": "i_12r0g",
+      "id": "i_12g0b",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1103,7 +1138,7 @@
       "name": "Mesa de comedor 6"
     },
     {
-      "id": "i_13248",
+      "id": "i_13qs7",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1117,7 +1152,7 @@
       "name": "Planta"
     },
     {
-      "id": "i_147g3",
+      "id": "i_142jp",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1131,7 +1166,7 @@
       "name": "Consola"
     },
     {
-      "id": "i_15dxu",
+      "id": "i_150u2",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1145,7 +1180,7 @@
       "name": "Mesón de cocina"
     },
     {
-      "id": "i_16rjh",
+      "id": "i_16t9c",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1159,7 +1194,7 @@
       "name": "Refrigerador"
     },
     {
-      "id": "i_17as1",
+      "id": "i_1728h",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1173,7 +1208,7 @@
       "name": "Estufa"
     },
     {
-      "id": "i_18h03",
+      "id": "i_18xd3",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1187,7 +1222,7 @@
       "name": "Isla de cocina"
     },
     {
-      "id": "i_19t0c",
+      "id": "i_196f4",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1201,7 +1236,7 @@
       "name": "Mesa de comedor 4"
     },
     {
-      "id": "i_1a15c",
+      "id": "i_1aka9",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1215,7 +1250,7 @@
       "name": "Cama 2 plazas"
     },
     {
-      "id": "i_1bwfl",
+      "id": "i_1b2gz",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1229,7 +1264,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_1crr5",
+      "id": "i_1ckg4",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1243,7 +1278,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_1dbay",
+      "id": "i_1dsmj",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1257,7 +1292,7 @@
       "name": "Ropero"
     },
     {
-      "id": "i_1etof",
+      "id": "i_1eokm",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1271,7 +1306,7 @@
       "name": "Alfombra"
     },
     {
-      "id": "i_1fmlb",
+      "id": "i_1fe0w",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1285,7 +1320,7 @@
       "name": "Cama queen"
     },
     {
-      "id": "i_1gfwx",
+      "id": "i_1gb4r",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1299,7 +1334,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_1hr3i",
+      "id": "i_1h215",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1313,7 +1348,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_1i3kx",
+      "id": "i_1ieoz",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1327,7 +1362,7 @@
       "name": "Ropero"
     },
     {
-      "id": "i_1jl03",
+      "id": "i_1jfa7",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1341,7 +1376,7 @@
       "name": "Escritorio"
     },
     {
-      "id": "i_1k1m4",
+      "id": "i_1kkl6",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1355,7 +1390,7 @@
       "name": "Inodoro"
     },
     {
-      "id": "i_1lsg5",
+      "id": "i_1lrt1",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1369,7 +1404,7 @@
       "name": "Lavamanos"
     },
     {
-      "id": "i_1m3aj",
+      "id": "i_1me7l",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1383,7 +1418,7 @@
       "name": "Ducha"
     },
     {
-      "id": "i_1n22b",
+      "id": "i_1ns2m",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1397,7 +1432,7 @@
       "name": "Toallero"
     },
     {
-      "id": "i_1obfx",
+      "id": "i_1odnp",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1411,7 +1446,7 @@
       "name": "Escalera"
     },
     {
-      "id": "i_1p2v7",
+      "id": "i_1p45x",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1425,7 +1460,7 @@
       "name": "Planta"
     },
     {
-      "id": "i_1qw14",
+      "id": "i_1q0d8",
       "type": "item",
       "level": "l0",
       "layerId": "furniture",
@@ -1439,7 +1474,7 @@
       "name": "Consola"
     },
     {
-      "id": "i_2mi0d",
+      "id": "i_2mr3g",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1453,7 +1488,7 @@
       "name": "Cama king"
     },
     {
-      "id": "i_2nb9i",
+      "id": "i_2nraw",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1467,7 +1502,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_2oook",
+      "id": "i_2o7u8",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1481,7 +1516,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_2ppxi",
+      "id": "i_2p0m7",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1495,7 +1530,7 @@
       "name": "Ropero"
     },
     {
-      "id": "i_2q5ja",
+      "id": "i_2qvyt",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1509,7 +1544,7 @@
       "name": "Cómoda"
     },
     {
-      "id": "i_2r0st",
+      "id": "i_2r1gr",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1523,7 +1558,7 @@
       "name": "Alfombra"
     },
     {
-      "id": "i_2scms",
+      "id": "i_2sg6i",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1537,7 +1572,7 @@
       "name": "Bañera"
     },
     {
-      "id": "i_2tegd",
+      "id": "i_2t9vr",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1551,7 +1586,7 @@
       "name": "Ducha"
     },
     {
-      "id": "i_2ul5u",
+      "id": "i_2ugh1",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1565,7 +1600,7 @@
       "name": "Lavamanos"
     },
     {
-      "id": "i_2vwqa",
+      "id": "i_2vynt",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1579,7 +1614,7 @@
       "name": "Inodoro"
     },
     {
-      "id": "i_2wc0i",
+      "id": "i_2wux2",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1593,7 +1628,7 @@
       "name": "Toallero"
     },
     {
-      "id": "i_2x3k8",
+      "id": "i_2xljm",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1607,7 +1642,7 @@
       "name": "Cama 2 plazas"
     },
     {
-      "id": "i_2yp6e",
+      "id": "i_2yhrh",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1621,7 +1656,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_2znwt",
+      "id": "i_2zjhj",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1635,7 +1670,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_30uvu",
+      "id": "i_30b83",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1649,7 +1684,7 @@
       "name": "Ropero"
     },
     {
-      "id": "i_3143i",
+      "id": "i_312kz",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1663,7 +1698,7 @@
       "name": "Escritorio"
     },
     {
-      "id": "i_32ka3",
+      "id": "i_327zd",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1677,7 +1712,7 @@
       "name": "Cama queen"
     },
     {
-      "id": "i_33obk",
+      "id": "i_33p9n",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1691,7 +1726,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_34b3e",
+      "id": "i_34eov",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1705,7 +1740,7 @@
       "name": "Mesa de noche"
     },
     {
-      "id": "i_355i5",
+      "id": "i_35e8z",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1719,7 +1754,7 @@
       "name": "Ropero"
     },
     {
-      "id": "i_36ygt",
+      "id": "i_364j0",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1733,7 +1768,7 @@
       "name": "Estantería"
     },
     {
-      "id": "i_37y9u",
+      "id": "i_37pjd",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1747,7 +1782,7 @@
       "name": "Escalera"
     },
     {
-      "id": "i_38thq",
+      "id": "i_38gy0",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1761,7 +1796,7 @@
       "name": "Planta"
     },
     {
-      "id": "i_391rk",
+      "id": "i_3962p",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1775,7 +1810,7 @@
       "name": "Consola"
     },
     {
-      "id": "i_3aga5",
+      "id": "i_3axnf",
       "type": "item",
       "level": "l1",
       "layerId": "furniture",
@@ -1792,7 +1827,7 @@
   "texts": [],
   "dims": [
     {
-      "id": "d_1r5eq",
+      "id": "d_1rijp",
       "type": "dim",
       "level": "l0",
       "layerId": "dimensions",
@@ -1807,7 +1842,7 @@
       "offset": -900
     },
     {
-      "id": "d_1szjj",
+      "id": "d_1snab",
       "type": "dim",
       "level": "l0",
       "layerId": "dimensions",
@@ -1822,7 +1857,7 @@
       "offset": 900
     },
     {
-      "id": "d_3bvtm",
+      "id": "d_3bzqb",
       "type": "dim",
       "level": "l1",
       "layerId": "dimensions",
@@ -1837,7 +1872,7 @@
       "offset": -900
     },
     {
-      "id": "d_3c2ar",
+      "id": "d_3cgxh",
       "type": "dim",
       "level": "l1",
       "layerId": "dimensions",
@@ -1854,7 +1889,7 @@
   ],
   "sheets": [
     {
-      "id": "s_3dodk",
+      "id": "s_3dx4f",
       "name": "Planta baja",
       "size": "A3",
       "orientation": "landscape",
@@ -1872,7 +1907,7 @@
       "imageDataUrl": null
     },
     {
-      "id": "s_3edae",
+      "id": "s_3eqkx",
       "name": "Planta alta",
       "size": "A3",
       "orientation": "landscape",
@@ -1890,7 +1925,7 @@
       "imageDataUrl": null
     },
     {
-      "id": "s_3f6ku",
+      "id": "s_3fv93",
       "name": "Notas y cuadros",
       "size": "A3",
       "orientation": "landscape",
@@ -1908,7 +1943,7 @@
       "imageDataUrl": null
     },
     {
-      "id": "s_3g0bz",
+      "id": "s_3gew2",
       "name": "Portada",
       "size": "A3",
       "orientation": "landscape",

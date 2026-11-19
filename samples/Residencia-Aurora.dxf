@@ -1,7 +1,7 @@
 999
 EngDraft — Residencia Aurora
 999
-DXF ASCII R12 · unidades milimetros · exportado 2026-11-18T23:17:56.808Z
+DXF ASCII · unidades milimetros · exportado 2026-11-19T15:28:41.686Z
 0
 SECTION
 2
@@ -29,7 +29,7 @@ $LUPREC
 9
 $EXTMIN
 10
--650
+-575
 20
 -450
 30
@@ -37,7 +37,7 @@ $EXTMIN
 9
 $EXTMAX
 10
-12500
+28725
 20
 9800
 30
@@ -17178,7 +17178,6 @@ A-LEVEL
 230
 1
 Escala 1:1  mm  Residencia Aurora
-
 0
 ENDSEC
 0

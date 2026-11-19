@@ -19,13 +19,13 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>
 endobj
 7 0 obj
-<< /Title (Residencia Aurora) /Subject (L\341minas de planos \227 Residencia Aurora) /Producer (EngDraft 1.0) /Creator (EngDraft - Lamina y PDF vectorial) /CreationDate (D:20261118191756-04'00') /ModDate (D:20261118191756-04'00') >>
+<< /Title (Residencia Aurora) /Subject (L\341minas de planos \227 Residencia Aurora) /Producer (EngDraft 1.0) /Creator (EngDraft - Lamina y PDF vectorial) /CreationDate (D:20261119112841-04'00') /ModDate (D:20261119112841-04'00') >>
 endobj
 8 0 obj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 1190.5512 841.8898] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents 9 0 R >>
 endobj
 9 0 obj
-<<  /Length 42971 >>
+<<  /Length 42956 >>
 stream
 q
 1 J 1 j
@@ -2634,7 +2634,7 @@ BT
 /F1 7.0866 Tf
 0.6784 0.6941 0.7098 rg
 1 0 0 1 224.2205 45.8646 Tm
-(INGENIERO: Ing. Ana Mart\355nez   \267   LIC. CIP 12-3456) Tj
+(INGENIERO: Ing. Proyecto   \267   LIC. ***) Tj
 ET
 BT
 /F2 4.5354 Tf
@@ -2763,7 +2763,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 1190.5512 841.8898] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents 11 0 R >>
 endobj
 11 0 obj
-<<  /Length 38652 >>
+<<  /Length 38637 >>
 stream
 q
 1 J 1 j
@@ -5090,7 +5090,7 @@ BT
 /F2 6.6614 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 40.252 68.4206 Tm
-(Ing. Ana Mart\355nez) Tj
+(Ing. Proyecto) Tj
 ET
 BT
 /F2 4.3937 Tf
@@ -5102,7 +5102,7 @@ BT
 /F2 6.6614 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 40.252 38.5774 Tm
-(CIP 12-3456) Tj
+(***) Tj
 ET
 BT
 /F2 4.5354 Tf
@@ -5233,7 +5233,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 1190.5512 841.8898] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents 13 0 R >>
 endobj
 13 0 obj
-<<  /Length 44420 >>
+<<  /Length 44422 >>
 stream
 q
 1 J 1 j
@@ -5848,7 +5848,7 @@ BT
 /F1 5.6693 Tf
 0.2 0.2549 0.302 rg
 1 0 0 1 51.0236 728.0504 Tm
-(Todas las cotas de los planos est\341n expresadas en metros \(m\) y las superficies en metros cuadrados \(m\262\).) Tj
+(Las cotas y superficies se expresan en el sistema de unidades seleccionado en el proyecto \(m\351trico o imperial\).) Tj
 ET
 BT
 /F2 5.5276 Tf
@@ -5860,7 +5860,7 @@ BT
 /F1 5.6693 Tf
 0.2 0.2549 0.302 rg
 1 0 0 1 51.0236 720.6803 Tm
-(Los muros se ejecutar\341n en alba\361iler\355a de 150 mm de espesor, salvo que el plano indique otra dimensi\363n.) Tj
+(Los muros se ejecutar\341n en alba\361iler\355a de 150 mm \(6"\) de espesor, salvo que el plano indique otra dimensi\363n.) Tj
 ET
 BT
 /F2 5.5276 Tf
@@ -5872,7 +5872,7 @@ BT
 /F1 5.6693 Tf
 0.2 0.2549 0.302 rg
 1 0 0 1 504 757.5307 Tm
-(Las puertas interiores tendr\341n 0,90 \327 2,10 m; las ventanas ser\341n de aluminio con vidrio simple de 4 mm, salvo detalle en contra.) Tj
+(Las puertas interiores tendr\341n 0,90 \327 2,10 m \(3'-0" \327 7'-0"\); las ventanas ser\341n de aluminio con vidrio simple de 4 mm \(5/32"\), salvo detalle en contra.) Tj
 ET
 BT
 /F2 5.5276 Tf
@@ -7391,7 +7391,7 @@ BT
 /F2 5.9528 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 541.9729 189.9751 Tm
-(Ing. Ana Mart\355nez) Tj
+(Ing. Proyecto) Tj
 ET
 0.2835 w
 [] 0 d
@@ -7410,7 +7410,7 @@ BT
 /F2 5.9528 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 541.9729 168.9987 Tm
-(CIP 12-3456) Tj
+(***) Tj
 ET
 0.2835 w
 [] 0 d
@@ -7486,7 +7486,7 @@ BT
 /F2 5.9528 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 541.9729 85.0932 Tm
-(ana.martinez@estudioaurora.com) Tj
+(contacto@estudioaurora.com) Tj
 ET
 0.7087 w
 [] 0 d
@@ -7904,7 +7904,7 @@ BT
 /F4 6.9449 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 949.6063 649.0035 Tm
-(Ing. Ana Mart\355nez) Tj
+(Ing. Proyecto) Tj
 ET
 0.2835 w
 [] 0 d
@@ -7923,7 +7923,7 @@ BT
 /F4 6.9449 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 949.6063 621.2041 Tm
-(CIP 12-3456) Tj
+(***) Tj
 ET
 0.2835 w
 [] 0 d
@@ -7961,7 +7961,7 @@ BT
 /F4 6.9449 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 949.6063 565.6054 Tm
-(ana.martinez@estudioaurora.com) Tj
+(contacto@estudioaurora.com) Tj
 ET
 0.2835 w
 [] 0 d
@@ -8334,7 +8334,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 1190.5512 841.8898] /Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R /F4 6 0 R >> >> /Contents 15 0 R >>
 endobj
 15 0 obj
-<<  /Length 49870 >>
+<<  /Length 49836 >>
 stream
 q
 1 J 1 j
@@ -10796,7 +10796,7 @@ BT
 /F2 7.2283 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 628.8945 464.6697 Tm
-(Ing. Ana Mart\355nez) Tj
+(Ing. Proyecto) Tj
 ET
 0.2835 w
 [] 0 d
@@ -10815,7 +10815,7 @@ BT
 /F2 7.2283 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 628.8945 442.7928 Tm
-(CIP 12-3456) Tj
+(***) Tj
 ET
 0.2835 w
 [] 0 d
@@ -10891,7 +10891,7 @@ BT
 /F2 7.2283 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 628.8945 355.2856 Tm
-(ana.martinez@estudioaurora.com) Tj
+(contacto@estudioaurora.com) Tj
 ET
 0.7087 w
 [] 0 d
@@ -11330,7 +11330,7 @@ BT
 /F2 6.2362 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 668.2961 100.885 Tm
-(Ing. Ana Mart\355nez) Tj
+(Ing. Proyecto) Tj
 ET
 0.4252 w
 [] 0 d
@@ -11348,7 +11348,7 @@ BT
 /F2 6.2362 Tf
 0.1412 0.1922 0.2392 rg
 1 0 0 1 960.1512 100.885 Tm
-(CIP 12-3456) Tj
+(***) Tj
 ET
 0.4252 w
 [] 0 d
@@ -11525,14 +11525,14 @@ xref
 0000000540 00000 n 
 0000000788 00000 n 
 0000000955 00000 n 
-0000043980 00000 n 
-0000044149 00000 n 
-0000082856 00000 n 
-0000083025 00000 n 
-0000127500 00000 n 
-0000127669 00000 n 
+0000043965 00000 n 
+0000044134 00000 n 
+0000082826 00000 n 
+0000082995 00000 n 
+0000127472 00000 n 
+0000127641 00000 n 
 trailer
 << /Size 16 /Root 1 0 R /Info 7 0 R >>
 startxref
-177594
+177532
 %%EOF
