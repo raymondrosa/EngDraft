@@ -566,9 +566,12 @@ svg { display: block; }
 .status-center { font: 500 9.5px var(--mono); color: #95a3b1; letter-spacing: 0.01em; }
 .status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px rgba(74, 222, 128, 0.4); }
 .status-sep { width: 1px; height: 11px; background: #26323e; }
+.status-author { color: #5f6e7d; font-size: 9px; letter-spacing: 0.01em; }
 .status-left span:last-child { color: #a3b0bd; }
 .status-help { width: 17px; height: 17px; border-radius: 50%; border: 1px solid #33404d; color: #8492a0; font: 600 9px var(--mono); display: grid; place-items: center; }
 .status-help:hover { color: var(--amber); border-color: rgba(245, 166, 35, 0.4); }
+.status-units { height: 18px; padding: 0 7px; border: 1px solid #33404d; border-radius: 4px; background: #131c25; color: #a9b6c2; font: 600 9px var(--mono); letter-spacing: 0.02em; }
+.status-units:hover { color: var(--amber); border-color: rgba(245, 166, 35, 0.4); }
 
 /* ============================== Modales ================================= */
 #modalRoot { position: relative; z-index: 100; }
@@ -678,6 +681,7 @@ svg { display: block; }
 /* ============================== Responsive ============================== */
 @media (max-width: 1380px) {
   .inspector { width: 292px; flex-basis: 292px; }
+  .status-author { display: none; }
   .brand-text span { display: none; }
   .topbar { gap: 12px; }
 }
