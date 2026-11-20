@@ -688,3 +688,64 @@ project.assets = [
 ### 16.2 Vistas 2D sin distorsión
 - El renderizador de vistas (`app.js`) usa una **única escala uniforme** para geometría y para el grosor de línea: `lineWidth = width(mm) * zoom`, con límites 0.5–6 px. El ancho de línea del contrato está en mm y nunca se multiplica por un factor fijo (causa de la deformación visual corregida en 1.5).
 - El canvas de vistas se redibuja al cambiar el tamaño del contenedor (`ResizeObserver`), al redimensionar la ventana, al girar la pantalla (`orientationchange`) y con `visualViewport`, manteniendo la proporción de píxeles (`devicePixelRatio`) sin estirar el dibujo.
+
+---
+
+## 17. Ampliación 1.6 — aberturas tipadas, snaps avanzados, vigas, líneas/curvas, escalado, vistas editables y JSON
+
+### 17.1 Tipos de aberturas (puertas y ventanas)
+Cada `wall.openings[i]` mantiene `type` (`door`|`window`|`garage`|`pass`) y añade `subtype`:
+- `door`: `single` (una hoja), `double` (dos hojas), `sliding` (corrediza). Por defecto `single`.
+- `window`: `fixed` (fija), `sliding` (corrediza), `double` (doble hoja), `awning` (proyectante). Por defecto `fixed`.
+- `garage`: `sectional` (seccional), `sliding` (corrediza). Por defecto `sectional`.
+- `pass`: sin subtipo.
+- `store.normalizeProject` valida el subtipo según el tipo y lo corrige al valor por defecto; al cambiar `type` se reasigna el subtipo si no es válido.
+- 2D (`editor2d`): símbolos diferenciados (doble hoja con dos abanicos, corrediza con hojas paralelas y sentido de deslizamiento, ventana fija con parteluces, proyectante con hoja inclinada, garaje seccional/corredizo).
+- 3D (`view3d`): hojas/paneles según subtipo (doble hoja, corrediza superpuesta, ventana fija con junquillos, proyectante inclinada, garaje seccional con líneas horizontales o corredizo).
+- Vistas (`views`): alzados y secciones dibujan el panel correspondiente (dos hojas, corredera solapada, parteluces, etc.).
+- UI: en Propiedades del muro, cada abertura incluye un selector **Tipo de hoja/ventana** con las opciones del tipo; al crearla se usa el subtipo por defecto. Los botones existentes de girar hoja e invertir bisagra se mantienen.
+
+### 17.2 Snaps avanzados (todas las herramientas)
+`Editor2D.snap` añade modos independientes, activos por defecto:
+`endpoint`, `midpoint`, `center`, `quadrant`, `tangent`, `perpendicular`.
+- `endpoint`: extremos de muros, líneas, aristas de ambientes y esquinas de muebles.
+- `midpoint`: punto medio de muros, líneas y aristas de ambientes.
+- `center`: centro de arcos de muro/curva, centro de ambientes y de muebles.
+- `quadrant`: puntos a 0°/90°/180°/270° de arcos de muro/curva.
+- `tangent`: puntos de tangencia desde el último punto de referencia de dibujo hacia arcos (si no hay referencia, no aplica).
+- `perpendicular`: pie de perpendicular desde el punto de referencia al segmento o muro recto.
+- El resultado de `snapPoint()` devuelve `{point, type, snapped}` con `type` legible (EXTREMO, MEDIO, CENTRO, CUADRANTE, TANGENTE, PERPENDICULAR, REJILLA) y el editor dibuja el marcador con su etiqueta.
+- UI: en el menú izquierdo, sección Dibujo, fila de chips de snaps con estado `.on`; se guardan en `localStorage 'engdraft.snaps'`. El toggle maestro **Snap** sigue existiendo.
+- Deben respetarse en muros, arcos, splines, líneas, curvas y al mover/escalar objetos.
+
+### 17.3 Estructura de techo con vigas
+`settings.roof.structure = { material:'none'|'steel'|'concrete'|'wood', spacing: mm, depth: mm, width: mm }`
+- Saneado: material en lista; `spacing` 300..3000 (por defecto 800), `depth` 80..600 (200), `width` 60..400 (120).
+- 3D: vigas en la cara interior del techo, paralelas entre sí y perpendiculares a la cumbrera (o al eje largo), separadas por `spacing`, con canto `depth` y ancho `width`; colores/materiales: acero gris oscuro, hormigón gris claro, madera marrón. Deben verse desde el interior (twoSided/culling correcto) y respetar el tipo de techo (plano, aguas, cuatro aguas, arco, spline, custom).
+- Secciones (`views`): dibujan las vigas cortadas bajo el techo con su canto y relleno según material.
+- UI: en Escena → Techo, selector **Estructura** (Sin vigas / Acero / Hormigón / Madera) y campos **Separación**, **Canto** y **Ancho** (unidades del proyecto). Se guarda en el proyecto y se deshace con Ctrl+Z.
+
+### 17.4 Herramientas de línea, curva y escalado
+- Nuevas entidades `project.lines`: `{ id, type:'line'|'curve', level, layerId, a, b, curve, color, width, style }`.
+  - `line`: segmento recto; la herramienta **Línea (L)** dibuja segmentos encadenados con vista previa y termina con Esc/Enter/doble clic.
+  - `curve`: arco definido por extremos y bulge (como muro en arco); la herramienta **Curva (C)** usa tres clics (inicio, fin y curvatura) con vista previa.
+  - Se dibujan en el editor 2D, se seleccionan/borran con las herramientas normales, se acotan y se exportan en DXF como LINE/LWPOLYLINE.
+- Herramienta **Escalar**: con una o varias entidades seleccionadas, activa el modo, haz clic en el punto base y luego mueve el cursor o escribe un factor (0.1..20) y Enter para aplicar. Esc cancela. Escala posiciones y tamaños 2D (muros, muebles, ambientes, textos, cotas, líneas y curvas) de forma uniforme alrededor del punto base, con una sola operación de deshacer. El estado muestra el factor actual.
+- Atajos y botones en el menú izquierdo: Línea (L), Curva (C), Escalar (X). Los nombres/etiquetas se traducen en ES/EN.
+
+### 17.5 Vistas editables
+- `ED.Views.build()` añade a cada primitiva un campo opcional `src: { kind:'wall'|'opening'|'item'|'roof'|'room', id, wallId, openingId }` cuando corresponda (sin romper la API existente).
+- En el canvas de vistas, al hacer clic:
+  - sobre un muro → selecciona el muro y muestra sus Propiedades (espesor, altura, longitud, aberturas);
+  - sobre una abertura → selecciona la abertura y muestra un panel con tipo, subtipo, ancho, alto, antepecho, posición y acciones de giro;
+  - sobre un mueble → selecciona el mueble y permite editar posición, giro y dimensiones;
+  - sobre el techo → abre la pestaña Escena en la sección Techo.
+- La primitiva seleccionada se resalta con un trazo ámbar; al editar un valor se actualiza el proyecto y la vista se vuelve a dibujar.
+- Se permite también arrastrar una abertura seleccionada en la vista para cambiar su posición a lo largo del muro (horizontal) y su antepecho (vertical), con actualización en vivo.
+- El chip de vista muestra "Vista generada · clic para editar".
+
+### 17.6 Guardado y apertura en JSON
+- El botón **Guardar** y el atajo Ctrl+S descargan `Nombre-Proyecto.json` (MIME `application/json`), con el mismo contenido del proyecto (metadatos, niveles, muros, aberturas, líneas, techos, assets, láminas).
+- Abrir acepta `.json` y sigue aceptando `.engdraft` por compatibilidad; arrastrar y soltar ambos.
+- Las muestras incluyen `Residencia-Aurora.json` además del `.engdraft` histórico.
+- Textos de ayuda, README y diálogo de archivos actualizados.

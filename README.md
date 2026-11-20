@@ -27,6 +27,14 @@ Todos los datos se dibujan y se guardan en tu equipo. No se envía nada a ningú
 ### Plano 2D
 - Muros encadenados con espesor y altura editables, uniones automáticas y snapping a extremos, medios, vértices y rejilla.
 - **Muros en arco (C) y muro spline (K)**: el arco se define con tres clics (inicio, fin y curvatura con el ratón) y el spline con clics sucesivos que la curva atraviesa; puedes cambiar la flecha o mover los puntos de control arrastrando sus manejadores, y **Quitar curva** devuelve el muro a recto. Los muros curvos no admiten puertas ni ventanas en esta versión y el editor lo avisa.
+- **Puertas y ventanas tipadas**: hoja simple, doble hoja o corrediza en puertas; fija, corrediza, doble hoja o proyectante en ventanas; portón seccional o corredizo en garajes. El dibujo 2D, el 3D y las vistas cambian según el tipo, y el selector está en Propiedades del muro.
+- **Snaps avanzados**: extremo, medio, centro, cuadrante, tangente y perpendicular, activables por separado desde la sección **Dibujo** del menú izquierdo. El cursor indica el tipo de punto capturado en todas las herramientas.
+- **Líneas, curvas y escalado**: herramientas **Línea (L)** y **Curva (B)** para geometría de referencia encadenada, y **Escalar (X)** para ampliar o reducir la selección alrededor de un punto base (con factor por arrastre o numérico).
+- **Niveles**: añade plantas con **+** y elimina el nivel activo con **−** (confirmación y deshacer).
+
+![Aberturas tipadas y selector de hoja](docs/aberturas-tipadas.png)
+
+![Snaps extremo, medio, centro, cuadrante, tangente y perpendicular](docs/barra-snaps.png)
 - **Interfaz despejada**: el **menú de opciones** de la izquierda y el **panel de ajustes** de la derecha se pliegan con sus botones y el estado se recuerda en el navegador. El menú izquierdo reúne las herramientas, los toggles **Rejilla/Snap/Orto**, **Ajustar** y el zoom, las **vistas generadas**, el **selector de unidades** y el **idioma ES/EN**; el lienzo queda libre de controles flotantes. La pestaña **Escena** del panel derecho reúne el render, el techo, los materiales y el vuelo de dron.
 - **Rejilla configurable**: separación de líneas, línea maestra, origen desplazado y un **paso de ajuste independiente** para dibujar con dimensiones exactas (por ejemplo rejilla de 25 cm y ajuste fino de 5 cm). Estilos de líneas o puntos, rejilla adaptativa al zoom y ejes del origen. Se abre con `Shift+G` o con el botón **Rejilla** del menú izquierdo; la configuración se guarda en el proyecto y se puede deshacer con `Ctrl+Z`.
 - **Letra más legible**: escala tipográfica de la interfaz y control **Aa** en la barra de estado con tres tamaños (Normal, Grande y Muy grande). La preferencia queda recordada en este navegador.
@@ -50,6 +58,9 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 - El menú izquierdo, sección **Vistas**, cambia el área 2D entre la **planta** editable y dibujos de **solo lectura** generados desde el proyecto: **frontal**, **lateral derecho**, **lateral izquierdo**, **sección transversal** y **sección longitudinal**.
 - Los alzados muestran muros, huecos de puertas y ventanas, vidrios, antepechos, losas, terreno, techo (con todos los estilos, incluidos cuatro aguas y perfil propio) y etiquetas de nivel; las secciones cortan los muros con relleno y trama, dibujan la geometría posterior en líneas tenues y permiten mover la **posición del corte**.
 - La vista generada se puede ampliar con la rueda o los botones de zoom, arrastrar para desplazarla, ajustar al ancho con **Ajustar** y volver al editor con **Volver a planta**. Se dibujan con primitivas vectoriales propias (sin librerías) y respetan las unidades del proyecto.
+- **Vistas editables:** haz clic en un muro, una abertura, un mueble o el techo dentro de la vista para seleccionarlo y editarlo en Propiedades (o abrir Escena para el techo). La entidad se resalta en ámbar y la vista se actualiza al cambiar los valores.
+
+![Abertura seleccionada y editable en la vista frontal](docs/vistas-editables.png)
 - **Sin deformación:** el grosor de líneas, marcos y muros se escala con la misma proporción que la geometría (no con un factor fijo), y el dibujo se recalcula al cambiar el tamaño de la ventana, la orientación o el modo de pantalla. En móvil se puede ampliar con pinza de dos dedos, doble toque o los botones de zoom.
 
 ![Vista frontal generada desde la planta](docs/vistas-secciones.png)
@@ -74,8 +85,11 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 
 ### Vista 3D
 - Renderizador propio sobre Canvas 2D (sin WebGL ni librerías externas): perspectiva orbital, iluminación, sombras suaves y cielo.
-- Muros con huecos reales de puertas y ventanas, vidrios, dinteles y antepechos; los **muros en arco y spline** se extruyen como pared continua, sin huecos ni cortes.
+- Muros con huecos reales de puertas y ventanas, vidrios, dinteles y antepechos; puertas dobles y corredizas, ventanas fijas, corredizas, dobles y proyectantes, y portones seccionales o corredizos. Los **muros en arco y spline** se extruyen como pared continua, sin huecos ni cortes.
 - **Seis estilos de techo**: plano, a dos aguas, **cuatro aguas (poliforme)**, arco, spline y **Mi diseño** (perfil propio dibujado por el usuario), con altura/flecha, alero y orientación de cumbrera ajustables. Las cubiertas se generan sobre la planta del nivel superior y respetan los muros curvos.
+- **Vigas interiores del techo**: estructura de **acero, hormigón o madera** con separación, canto y ancho configurables desde Escena → Techo; se ven en la cara interior del 3D y en las secciones.
+
+![Vigas interiores de madera bajo el techo](docs/vigas-techo.png)
 - **Controles rápidos en la propia vista 3D**: selector **Techo** (sin techo, plano, a dos aguas, cuatro aguas, arco, spline o Mi diseño), selector **Modo** (esquemático/realista) y botón **Colores y texturas** que abre los materiales de paredes, techo y suelo.
 - **Diseñador de techo**: lienzo interactivo para arrastrar los puntos del perfil, añadir o quitar puntos y partir de los presets; se abre desde Escena, desde el botón **Diseñar techo** de la vista 2D o eligiendo **Mi diseño** en el selector rápido.
 - **Modo realista**: cielo con sol, sombras, colores por material (paredes, techo, marcos y suelo) y **texturas procedurales** de estuco, ladrillo, madera, piedra, teja, metal, césped y pavimento, sin imágenes ni red. El modo esquemático conserva la paleta de planos.
@@ -100,7 +114,7 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 ### Modos de pantalla
 - En el menú izquierdo, sección **Pantalla**, eliges **Automático**, **Computadora**, **Tableta** o **Celular**. La preferencia se recuerda en el navegador.
 - **Automático** detecta el tamaño de la ventana y adapta la interfaz: en tableta el menú es más estrecho y los controles más grandes; en celular el menú de opciones y el panel de ajustes pasan a ser **paneles deslizantes** que se abren con los botones de la barra superior, y el plano ocupa toda la pantalla. Los modos manuales fuerzan ese tamaño aunque cambies la ventana.
-- El render 3D, el editor 2D y las vistas y secciones se redibujan al cambiar de tamaño, orientación o modo de pantalla, sin deformarse.
+- El render 3D, el editor 2D y las vistas y secciones se redibujan al cambiar de tamaño, orientación o modo de pantalla, sin deformarse. En tableta y celular puedes hacer **zoom con dos dedos** en el plano 2D y en la vista 3D (y pinza/doble toque en las vistas generadas).
 
 ![Modo celular: plano a toda pantalla y botones de menú y ajustes](docs/pantalla-movil.png)
 
@@ -135,7 +149,7 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 ![Lámina de planta](docs/lamina-planta.png)
 
 ### Archivos
-- **Guardar / abrir** proyectos `.engdraft` (JSON legible) con todos los niveles, objetos, capas, láminas, diseño de techo y **objetos importados** (malla, huella y dimensiones).
+- **Guardar / abrir** proyectos **`.json`** (formato recomendado en 1.6) con todos los niveles, objetos, capas, láminas, diseño de techo y **objetos importados** (malla, huella y dimensiones). También se abren los antiguos `.engdraft`.
 - Arrastrar y soltar un `.engdraft` o `.json` sobre la aplicación también lo abre.
 - Autoguardado en el navegador.
 - Exportar **DXF ASCII** en milímetros para AutoCAD, LibreCAD, BricsCAD y otros CAD. Sin curvas se genera **R12**; si el plano incluye muros en arco o spline se declara **R2000** para que las `LWPOLYLINE` de las curvas se lean bien.
@@ -212,6 +226,7 @@ node tests/test-sheets.js    # previews Canvas (incluye planta con curvas) y PDF
 node tests/test-view3d.js    # renderizador 3D: presets, techos (incl. cuatro aguas y perfil), mallas y vuelo
 node tests/test-views.js     # vistas frontal/laterales y secciones generadas desde el proyecto
 node tests/test-import.js    # importación de OBJ y GLB (triángulos, bounds, límites y errores)
+node tests/test-16.js        # ampliación 1.6: aberturas, vigas, líneas, snaps, escalado, vistas, niveles y JSON
 node tests/make-samples.js   # regenera las muestras
 ```
 
@@ -238,6 +253,17 @@ Las pruebas de navegador se hicieron contra Microsoft Edge (Chromium) servido po
 
 ---
 
-**EngDraft 1.5** · HTML + CSS + JavaScript clásico · sin dependencias externas · funciona offline.
+**EngDraft 1.6** · HTML + CSS + JavaScript clásico · sin dependencias externas · funciona offline.
+
+---
+
+## Donativos
+
+EngDraft es gratuito y se mantiene con contribuciones voluntarias. Si quieres apoyar su desarrollo:
+
+[**Donar con PayPal**](https://www.paypal.com/ncp/payment/K6KXFVTEDKY96)
+
+![Ayuda de EngDraft con el enlace de donativos](docs/donativos.png)
+
 
 **Autor:** Prof. Raymond Rosa Ávila.

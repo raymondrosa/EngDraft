@@ -108,6 +108,7 @@
           <section id="view2d" class="view view-2d active" aria-label="Editor de planta">
             <canvas id="planCanvas"></canvas>
             <canvas id="viewsCanvas" class="views-canvas" hidden></canvas>
+            <div class="views-hint" id="viewsHint" hidden>Haz clic en un muro, hueco o mueble para editarlo</div>
           </section>
 
           <section id="view3d" class="view view-3d" aria-label="Vista 3D">
@@ -206,7 +207,7 @@
     <div class="drop-card">
       <svg viewBox="0 0 48 48" width="40" height="40" fill="none"><path d="M24 6v24m0 0 8-8m-8 8-8-8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 30v6a4 4 0 0 0 4 4h24a4 4 0 0 0 4-4v-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
       <h3>Abre un proyecto EngDraft</h3>
-      <p>Suelta aquí un archivo <strong>.engdraft</strong> o <strong>.json</strong></p>
+      <p>Suelta aquí un archivo <strong>.json</strong> (o el antiguo <strong>.engdraft</strong>)</p>
     </div>
   </div>
   <input type="file" id="fileInput" accept=".engdraft,.json,application/json" hidden>
