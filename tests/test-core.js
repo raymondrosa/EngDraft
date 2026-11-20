@@ -320,7 +320,7 @@ console.log('Demo:', demo.walls.length, 'muros,', demo.rooms.length, 'ambientes,
 // Aspecto 3D por defecto del proyecto (CONTRACT §13.3): la demo debe seguir válida
 // y saneada también en techo, materiales y modo de renderizado.
 assert.deepStrictEqual(demo.settings.roof,
-  { style: 'flat', height: 1200, overhang: 400, ridge: 'auto', profile: null },
+  { style: 'flat', height: 1200, overhang: 400, ridge: 'auto', profile: null, structure: { material: 'none', spacing: 800, depth: 200, width: 120 } },
   'La demo debe tener techo plano por defecto (1200 mm / alero 400 mm)');
 assert.deepStrictEqual(demo.settings.materials, {
   wall: { color: '#f3eee2', texture: 'stucco' },

@@ -16,6 +16,7 @@ const out = path.join(root, 'samples');
 fs.mkdirSync(out, { recursive: true });
 
 fs.writeFileSync(path.join(out, 'Residencia-Aurora.engdraft'), JSON.stringify(project, null, 2));
+fs.writeFileSync(path.join(out, 'Residencia-Aurora.json'), JSON.stringify(project, null, 2));
 const pdf = ED.Sheets.createPDFBytes(project, project.sheets);
 fs.writeFileSync(path.join(out, 'Residencia-Aurora-planos.pdf'), Buffer.from(pdf));
 const dxf = ED.DXF.create(project, { levels: 'all' });
@@ -23,5 +24,6 @@ fs.writeFileSync(path.join(out, 'Residencia-Aurora.dxf'), dxf, 'utf8');
 
 console.log('Muestras generadas:');
 console.log(' - samples/Residencia-Aurora.engdraft');
+console.log(' - samples/Residencia-Aurora.json (formato recomendado 1.6)');
 console.log(' - samples/Residencia-Aurora-planos.pdf (' + (pdf.length / 1024).toFixed(1) + ' KB)');
 console.log(' - samples/Residencia-Aurora.dxf (' + (dxf.length / 1024).toFixed(1) + ' KB)');

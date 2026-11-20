@@ -360,7 +360,7 @@ function normalizarSettings(patch) {
 }
 
 var s = normalizarSettings({ roof: null, materials: null, render: null });
-assert.deepStrictEqual(s.roof, { style: 'flat', height: 1200, overhang: 400, ridge: 'auto', profile: null },
+assert.deepStrictEqual(s.roof, { style: 'flat', height: 1200, overhang: 400, ridge: 'auto', profile: null, structure: { material: 'none', spacing: 800, depth: 200, width: 120 } },
   'roof nulo debe caer a los valores por defecto');
 assert.deepStrictEqual(s.materials, {
   wall: { color: '#f3eee2', texture: 'stucco' },
@@ -546,7 +546,7 @@ assert.deepStrictEqual(wallExp('w_arc_exp').curve, { type: 'arc', bulge: 0.75 },
 assert.deepStrictEqual(wallExp('w_spl_exp').curve,
   { type: 'spline', pts: [{ x: 900, y: 4200 }] }, 'exportJSON/Store debe conservar la spline');
 assert.deepStrictEqual(pImp.settings.roof,
-  { style: 'arc', height: 2500, overhang: 750, ridge: 'auto', profile: null },
+  { style: 'arc', height: 2500, overhang: 750, ridge: 'auto', profile: null, structure: { material: 'none', spacing: 800, depth: 200, width: 120 } },
   'export/import debe conservar el techo');
 assert.deepStrictEqual(pImp.settings.materials, projCurvas.settings.materials,
   'export/import debe conservar los materiales');
