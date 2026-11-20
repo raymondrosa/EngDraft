@@ -6,6 +6,8 @@
     booted: false,
     view: '2d',
     viewMode: 'plan',
+    devicePref: 'auto',
+    device: 'desktop',
     viewsData: null,
     viewsZoom: 1,
     viewsPan: { x: 0, y: 0 },
@@ -379,7 +381,10 @@
     texture: '<rect x="3" y="3" width="14" height="14" rx="2" stroke-width="1.2"/><path d="M3 7.5h14M3 12.5h14M7.5 3v14M12.5 3v14" stroke-width="1" opacity=".55"/>',
     tree: '<path d="M10 3.2 4.6 11h3l-2.4 4h9.6l-2.4-4h3L10 3.2Z" stroke-width="1.3" stroke-linejoin="round"/><path d="M10 15v2.8" stroke-width="1.3" stroke-linecap="round"/>',
     garden: '<path d="M3 15c0-6 3-9 7-9s7 3 7 9" stroke-width="1.2" stroke-linecap="round" opacity=".5"/><circle cx="10" cy="9" r="2.6" stroke-width="1.3"/><path d="M10 11.6V16M6.5 16h7" stroke-width="1.2" stroke-linecap="round"/>',
-    road: '<path d="M7 16 5.6 4M13 16l1.4-12" stroke-width="1.4" stroke-linecap="round"/><path d="M10 5.5v2M10 9.5v2M10 13.5v2" stroke-width="1.2" stroke-linecap="round"/>'
+    road: '<path d="M7 16 5.6 4M13 16l1.4-12" stroke-width="1.4" stroke-linecap="round"/><path d="M10 5.5v2M10 9.5v2M10 13.5v2" stroke-width="1.2" stroke-linecap="round"/>',
+    folder: '<path d="M2.8 5.8h5l1.5 1.8h7.9v7.9a1 1 0 0 1-1 1H3.8a1 1 0 0 1-1-1V5.8Z" stroke-width="1.3" stroke-linejoin="round"/><path d="M2.8 8.4h14.4" stroke-width="1.1"/>',
+    save: '<path d="M4 3.5h9.2L17 7.3v9.2H4V3.5Z" stroke-width="1.3" stroke-linejoin="round"/><path d="M7 3.5v5h6v-5M7 13.5h6" stroke-width="1.2"/>',
+    undo: '<path d="M7.4 6.2 3.6 10l3.8 3.8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 10h7.2a4 4 0 0 1 0 8H8.5" stroke-width="1.4" stroke-linecap="round"/>'
   };
 
   function icon(name, size) {
@@ -457,6 +462,11 @@
     refreshLevelTabs();
     refreshUndo();
     setSaveState('saved');
+    // Modo de pantalla guardado (automático por defecto): computadora/tableta/celular.
+    var storedDevice = 'auto';
+    try { storedDevice = localStorage.getItem('engdraft.deviceMode') || 'auto'; } catch (e) { storedDevice = 'auto'; }
+    App.device = 'desktop';
+    applyDeviceMode(storedDevice);
     setView('2d');
     App.editor.fitToContent();
     App.editor.render();
@@ -551,6 +561,72 @@
     return VIEW_MODES[0];
   }
 
+  // Modos de pantalla: automático (según el tamaño), computadora, tableta o celular.
+  var DEVICE_MODES = [
+    { id: 'auto', label: 'Automático' },
+    { id: 'desktop', label: 'Computadora' },
+    { id: 'tablet', label: 'Tableta' },
+    { id: 'mobile', label: 'Celular' }
+  ];
+
+  function deviceIcon(id) {
+    if (id === 'desktop') return '<rect x="2.5" y="4" width="15" height="9.5" rx="1.2" stroke-width="1.4"/><path d="M7 16.5h6M10 13.5v3" stroke-width="1.4" stroke-linecap="round"/>';
+    if (id === 'tablet') return '<rect x="4.5" y="2.8" width="11" height="14.4" rx="1.6" stroke-width="1.4"/><circle cx="10" cy="15" r="0.9" fill="currentColor"/>';
+    if (id === 'mobile') return '<rect x="6" y="2.8" width="8" height="14.4" rx="1.8" stroke-width="1.4"/><path d="M9 5.2h2" stroke-width="1.3" stroke-linecap="round"/><circle cx="10" cy="15" r="0.8" fill="currentColor"/>';
+    return '<path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" stroke-width="1.3" stroke-linecap="round"/><circle cx="7.5" cy="5.5" r="1.8" fill="currentColor"/><circle cx="12.5" cy="10" r="1.8" fill="currentColor"/><circle cx="8.5" cy="14.5" r="1.8" fill="currentColor"/>';
+  }
+
+  function detectDevice() {
+    var w = Math.min(
+      window.innerWidth || 99999,
+      document.documentElement.clientWidth || 99999
+    );
+    if (!isFinite(w) || w <= 0) w = 1200;
+    var coarse = false;
+    try { coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); } catch (e) { coarse = false; }
+    if (w <= 720 || (coarse && w <= 900)) return 'mobile';
+    if (w <= 1120) return 'tablet';
+    return 'desktop';
+  }
+
+  function resolvedDevice() {
+    return App.devicePref === 'auto' ? detectDevice() : App.devicePref;
+  }
+
+  function applyDeviceMode(pref, opts) {
+    opts = opts || {};
+    var valid = pref === 'auto' || pref === 'desktop' || pref === 'tablet' || pref === 'mobile';
+    App.devicePref = valid ? pref : 'auto';
+    try { localStorage.setItem('engdraft.deviceMode', App.devicePref); } catch (e) { /* sin almacenamiento */ }
+    var next = resolvedDevice();
+    var prev = App.device;
+    App.device = next;
+    var app = $('#app');
+    if (app) app.setAttribute('data-device', next);
+    document.documentElement.setAttribute('data-device', next);
+    $$('#toolList [data-device-mode]').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-device-mode') === App.devicePref);
+    });
+    var devSelect = $('#deviceModeSelect');
+    if (devSelect && devSelect.value !== App.devicePref) devSelect.value = App.devicePref;
+    if (!opts.silent && next !== prev) {
+      if (next === 'mobile') {
+        applyRailState('compact', { silent: true, persist: false });
+        applyInspectorState('closed', { silent: true, persist: false });
+      } else if (prev === 'mobile') {
+        applyRailState('expanded', { silent: true, persist: false });
+        applyInspectorState('open', { silent: true, persist: false });
+      }
+    }
+    clearTimeout(App.deviceTimer);
+    App.deviceTimer = setTimeout(function () {
+      if (App.editor) {
+        try { App.editor._resize(); App.editor.render(); } catch (e) { /* tolerar */ }
+      }
+      if (App.viewMode !== 'plan') renderViews();
+    }, 90);
+  }
+
   function injectShell() {
     var list = $('#toolList');
     if (!list) return;
@@ -593,6 +669,12 @@
     }).join('');
 
     list.innerHTML =
+      '<div class="rail-section rail-project"><div class="rail-section-title">Proyecto</div><div class="rail-project-grid">' +
+      '<button class="rail-action" id="btnRailOpen" title="Abrir proyecto (Ctrl+O)">' + icon('folder', 14) + '<span>Abrir</span></button>' +
+      '<button class="rail-action" id="btnRailSave" title="Guardar proyecto (Ctrl+S)">' + icon('save', 14) + '<span>Guardar</span></button>' +
+      '<button class="rail-action" id="btnRailNew" title="Nuevo proyecto (Ctrl+N)">' + icon('plus', 14) + '<span>Nuevo</span></button>' +
+      '<button class="rail-action" id="btnRailUndo" title="Deshacer (Ctrl+Z)">' + icon('undo', 14) + '<span>Deshacer</span></button>' +
+      '</div></div>' +
       '<div class="rail-section"><div class="rail-section-title">Herramientas</div>' + toolsHtml + '</div>' +
       '<div class="rail-section"><div class="rail-section-title">Dibujo</div>' +
       '<div class="rail-toggle-row">' + toggleHtml + '</div>' +
@@ -615,6 +697,11 @@
         '<div class="rail-head-tools">' +
         '<button id="btnUnitsRail" class="rail-chip" type="button" title="Sistema de unidades (métrico / imperial)"><span>m · m²</span></button>' +
         '<button id="langToggle" class="rail-chip" type="button" title="Idioma / Language"><span class="lang-opt active">ES</span><span class="lang-sep">/</span><span class="lang-opt">EN</span></button>' +
+        '<div class="rail-device-row"><span class="rail-select-label">Pantalla</span>' +
+        '<select id="deviceModeSelect" class="rail-device-select" title="Modo de pantalla">' +
+        DEVICE_MODES.map(function (m) {
+          return '<option value="' + m.id + '"' + (App.devicePref === m.id ? ' selected' : '') + '>' + m.label + '</option>';
+        }).join('') + '</select></div>' +
         '</div>');
     }
   }
@@ -630,7 +717,18 @@
     $('#btnHelp').addEventListener('click', showHelp);
     $('#btnHelpStatus').addEventListener('click', showHelp);
     if ($('#btnUnitsRail')) $('#btnUnitsRail').addEventListener('click', toggleUnits);
+    if ($('#btnRailOpen')) $('#btnRailOpen').addEventListener('click', function () { $('#fileInput').click(); });
+    if ($('#btnRailSave')) $('#btnRailSave').addEventListener('click', downloadProject);
+    if ($('#btnRailNew')) $('#btnRailNew').addEventListener('click', showTemplateModal);
+    if ($('#btnRailUndo')) $('#btnRailUndo').addEventListener('click', function () { if (App.store.undo()) afterHistory('Deshacer'); });
     if ($('#langToggle')) $('#langToggle').addEventListener('click', toggleLanguage);
+    if ($('#deviceModeSelect')) $('#deviceModeSelect').addEventListener('change', function (e) {
+      applyDeviceMode(e.target.value);
+      renderScenePanel();
+      var info = null;
+      for (var di = 0; di < DEVICE_MODES.length; di++) if (DEVICE_MODES[di].id === e.target.value) info = DEVICE_MODES[di];
+      toast('Modo de pantalla: ' + (info ? info.label : e.target.value) + '.', 'info', 2400);
+    });
     $('#projectNameBtn').addEventListener('click', showProjectInfo);
     if ($('#btnGridSetup')) $('#btnGridSetup').addEventListener('click', function (e) { e.preventDefault(); showGridDialog(); });
     if ($('#btnFontScale')) $('#btnFontScale').addEventListener('click', function (e) { e.stopPropagation(); toggleFontMenu(); });
@@ -644,6 +742,16 @@
     if ($('#btnRailToggle')) $('#btnRailToggle').addEventListener('click', toggleRail);
     if ($('#btnInspectorToggle')) $('#btnInspectorToggle').addEventListener('click', toggleInspector);
     if ($('#btnInspectorReopen')) $('#btnInspectorReopen').addEventListener('click', function () { applyInspectorState('open'); });
+    // Botones de pantalla móvil: abren el menú lateral o el panel de ajustes como cajones.
+    if ($('#btnMobileRail')) $('#btnMobileRail').addEventListener('click', function () {
+      applyRailState(App.rail === 'expanded' ? 'compact' : 'expanded');
+      if (App.inspector === 'open') applyInspectorState('closed', { silent: true });
+      if (App.editor) setTimeout(function () { App.editor._resize(); App.editor.render(); }, 220);
+    });
+    if ($('#btnMobileInspector')) $('#btnMobileInspector').addEventListener('click', function () {
+      applyInspectorState(App.inspector === 'open' ? 'closed' : 'open');
+      if (App.rail === 'expanded') applyRailState('compact', { silent: true });
+    });
     // Panel Escena (materiales, techo, render y vuelo de dron).
     var scenePanel = $('#panelScene');
     if (scenePanel) {
@@ -672,6 +780,8 @@
     // Canvas de vistas generadas (alzados y secciones): zoom con rueda y paneo con arrastre.
     var viewsCanvas = $('#viewsCanvas');
     if (viewsCanvas) {
+      var vTouches = {};
+      var vPinchDist = 0;
       viewsCanvas.addEventListener('wheel', function (e) {
         if (App.viewMode === 'plan') return;
         e.preventDefault();
@@ -680,20 +790,58 @@
       var vDrag = null;
       viewsCanvas.addEventListener('pointerdown', function (e) {
         if (App.viewMode === 'plan') return;
+        if (e.pointerType === 'touch') {
+          vTouches[e.pointerId] = { x: e.clientX, y: e.clientY };
+          var ids = Object.keys(vTouches);
+          if (ids.length === 2) {
+            var a = vTouches[ids[0]], b = vTouches[ids[1]];
+            vPinchDist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+            vDrag = null;
+            return;
+          }
+        }
         vDrag = { x: e.clientX, y: e.clientY, panX: App.viewsPan.x, panY: App.viewsPan.y };
         try { viewsCanvas.setPointerCapture(e.pointerId); } catch (err) { /* tolerar */ }
         viewsCanvas.style.cursor = 'grabbing';
       });
       viewsCanvas.addEventListener('pointermove', function (e) {
+        if (e.pointerType === 'touch' && vTouches[e.pointerId]) {
+          vTouches[e.pointerId] = { x: e.clientX, y: e.clientY };
+          var ids = Object.keys(vTouches);
+          if (ids.length === 2) {
+            var a = vTouches[ids[0]], b = vTouches[ids[1]];
+            var dist = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+            if (vPinchDist > 0) {
+              var factor = dist / vPinchDist;
+              if (factor > 1.02 || factor < 0.98) {
+                App.viewsZoom = ED.Geo.clamp((App.viewsZoom || 1) * factor, 0.2, 8);
+                vPinchDist = dist;
+                renderViews();
+              }
+            }
+            return;
+          }
+        }
         if (!vDrag) return;
         App.viewsPan.x = vDrag.panX + (e.clientX - vDrag.x);
         App.viewsPan.y = vDrag.panY + (e.clientY - vDrag.y);
         renderViews();
       });
-      var endVDrag = function () { vDrag = null; viewsCanvas.style.cursor = 'grab'; };
+      var endVDrag = function (e) {
+        if (e && e.pointerType === 'touch') {
+          delete vTouches[e.pointerId];
+          if (Object.keys(vTouches).length < 2) vPinchDist = 0;
+        }
+        vDrag = null;
+        viewsCanvas.style.cursor = 'grab';
+      };
       viewsCanvas.addEventListener('pointerup', endVDrag);
       viewsCanvas.addEventListener('pointercancel', endVDrag);
-      viewsCanvas.addEventListener('pointerleave', function () { if (vDrag) endVDrag(); });
+      viewsCanvas.addEventListener('pointerleave', function (e) { if (vDrag) endVDrag(e); });
+      viewsCanvas.addEventListener('dblclick', function () {
+        if (App.viewMode === 'plan') return;
+        zoomActiveView(App.viewsZoom > 1.3 ? 0.5 : 1.6);
+      });
       viewsCanvas.style.cursor = 'grab';
     }
     $('#fileInput').addEventListener('change', function (e) {
@@ -779,13 +927,49 @@
     });
     window.addEventListener('beforeunload', function () { App.store.saveLocal(); });
     var resizeTimer = null;
+    function onViewportResize() {
+      if (App.editor) {
+        try { App.editor._resize(); App.editor.render(); } catch (e) { /* tolerar */ }
+      }
+      if (App.viewMode !== 'plan') renderViews();
+    }
     window.addEventListener('resize', function () {
       clearTimeout(resizeTimer);
       resizeTimer = setTimeout(function () {
+        if (App.devicePref === 'auto') applyDeviceMode('auto');
         if (App.view === 'sheets') scheduleSheetPreviews(80);
         if (App.view === '2d' && App.viewMode !== 'plan') renderViews();
       }, 180);
     });
+    window.addEventListener('orientationchange', function () {
+      setTimeout(function () {
+        if (App.devicePref === 'auto') applyDeviceMode('auto');
+        onViewportResize();
+      }, 260);
+    });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', function () {
+        clearTimeout(App.vvTimer);
+        App.vvTimer = setTimeout(onViewportResize, 160);
+      });
+    }
+    if (window.ResizeObserver && $('#view2d')) {
+      var ro = new ResizeObserver(function () {
+        if (App.view === '2d' && App.viewMode !== 'plan') {
+          clearTimeout(App.roTimer);
+          App.roTimer = setTimeout(renderViews, 80);
+        }
+      });
+      ro.observe($('#view2d'));
+    }
+    // En móvil, tocar el lienzo cierra los cajones abiertos (menú o ajustes).
+    var stageEl = $('.stage');
+    if (stageEl) stageEl.addEventListener('pointerdown', function (e) {
+      if (App.device !== 'mobile') return;
+      if (e.target && e.target.closest && e.target.closest('#btnMobileRail, #btnMobileInspector')) return;
+      if (App.rail === 'expanded') applyRailState('compact', { silent: true });
+      if (App.inspector === 'open') applyInspectorState('closed', { silent: true });
+    }, true);
   }
 
   function initEditor() {
@@ -1841,12 +2025,24 @@
     if (ED.I18n && typeof ED.I18n.apply === 'function') ED.I18n.apply(document);
   }
 
+  function syncDeviceSelectLabels() {
+    var sel = $('#deviceModeSelect');
+    if (!sel || !ED.I18n) return;
+    $$('option', sel).forEach(function (opt) {
+      var id = opt.value;
+      var label = null;
+      for (var i = 0; i < DEVICE_MODES.length; i++) if (DEVICE_MODES[i].id === id) label = DEVICE_MODES[i].label;
+      if (label) opt.textContent = ED.I18n.t(label);
+    });
+  }
+
   function initLanguage() {
     if (!ED.I18n) { updateLangToggle(); return; }
     var stored = null;
     try { stored = localStorage.getItem('engdraft.lang'); } catch (e) { stored = null; }
     if (typeof ED.I18n.setLang === 'function') ED.I18n.setLang(stored === 'en' ? 'en' : (ED.I18n.current === 'en' ? 'en' : 'es'));
     updateLangToggle();
+    syncDeviceSelectLabels();
     localize();
   }
 
@@ -1962,7 +2158,13 @@
       }
       if (pr.stroke !== null && pr.stroke !== false) {
         ctx.strokeStyle = pr.stroke || '#26323c';
-        ctx.lineWidth = Math.max(0.6, (Number(pr.width) || 1) * Math.min(1.5, zoom * 40));
+        // El grosor del contrato está en mm: se convierte con la MISMA escala
+        // uniforme que la geometría (antes se usaba un factor fijo y deformaba
+        // marcos, muros y ventanas de las vistas).
+        var lwPx = (Number(pr.width) || 1) * zoom;
+        ctx.lineWidth = Math.max(0.5, Math.min(6, lwPx));
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         ctx.stroke();
       }
     });
@@ -2062,6 +2264,7 @@
     if ($('#viewModeChip') && App.viewMode !== 'plan') $('#viewModeChip').textContent = viewModeInfo(App.viewMode).label;
     if (ED.I18n.apply) ED.I18n.apply(document);
     updateLangToggle();
+    syncDeviceSelectLabels();
     toast(next === 'en' ? 'Language: English' : 'Idioma: Español', 'info', 2200);
   }
 
@@ -3728,13 +3931,14 @@
       '<p><strong>Escena 3D.</strong> En la pestaña <em>Escena</em> del panel de ajustes eliges el modo de renderizado (esquemático o realista), el tipo de techo (plano, a dos aguas, <strong>cuatro aguas</strong>, arco, spline o <strong>Mi diseño</strong>), su altura y alero, los colores y texturas de paredes, techo y suelo, y el ángulo del sol. Arriba a la izquierda de la vista 3D tienes además los selectores rápidos <strong>Techo</strong> y <strong>Modo</strong>, y el botón <strong>Colores y texturas</strong> que abre directamente los materiales. El botón <em>Vuelo dron</em> inicia una animación de cámara alrededor de la maqueta; un clic en la vista la detiene.</p>' +
       '<p><strong>Diseñar techo.</strong> Desde <em>Escena → Diseñar techo</em>, desde el botón <strong>Diseñar techo</strong> de la vista 2D o eligiendo <em>Mi diseño</em> en el selector rápido, se abre un lienzo donde arrastras los puntos del perfil (doble clic añade un punto, clic derecho lo quita). Puedes partir de los presets Plano, A dos aguas, Cuatro aguas, Arco o Spline y ajustar altura, alero y orientación de la cumbrera.</p>' +
       '<p><strong>Vistas y secciones.</strong> En el menú izquierdo, la sección <em>Vistas</em> muestra la planta o genera el <strong>frontal</strong>, los <strong>laterales derecho e izquierdo</strong> y las <strong>secciones transversal y longitudinal</strong> del proyecto en el área 2D, en modo lectura. En las secciones puedes mover la posición del corte con el control <em>Posición</em>; los botones Ajustar y el zoom funcionan también sobre la vista generada, y <em>Volver a planta</em> regresa al editor.</p>' +
-      '<p><strong>Idioma.</strong> El botón <em>ES / EN</em> del menú izquierdo cambia toda la interfaz entre español e inglés; la preferencia se recuerda en este navegador. El planos, el manual y los datos del proyecto no se traducen.</p>' +
+      '<p><strong>Idioma.</strong> El botón <em>ES / EN</em> del menú izquierdo cambia toda la interfaz entre español e inglés; la preferencia se recuerda en este navegador. El plano, el manual y los datos del proyecto no se traducen.</p>' +
+      '<p><strong>Pantalla.</strong> En la sección <em>Pantalla</em> del menú izquierdo eliges Automático, Computadora, Tableta o Celular. Automático adapta la interfaz al tamaño de la ventana: en tableta el menú es más estrecho y en celular el menú de opciones y el panel de ajustes se abren como paneles deslizantes con los botones de la barra superior, dejando el plano a toda pantalla. La preferencia se recuerda en este navegador.</p>' +
       '<p><strong>Importar objetos.</strong> En <em>Biblioteca</em> pulsa <strong>Importar objeto (.glb / .obj)</strong>. El formato recomendado es <strong>GLB</strong> (glTF 2.0 binario): un solo archivo, estándar web y con materiales; OBJ también se acepta. Indica nombre y dimensiones reales y el objeto se añade a <em>Mis objetos</em> para colocarlo, verlo en 3D y exportarlo. FBX, 3DS y STL no se admiten.</p>' +
       '<p><strong>Puertas y ventanas.</strong> Selecciona un muro y edita sus aberturas: ancho, alto, posición, antepecho, sentido de apertura y bisagra. Los botones Girar hoja e Invertir bisagra cambian el dibujo en 2D y 3D.</p>' +
       '<p><strong>Privacidad.</strong> Todo se dibuja y se guarda en tu equipo. La aplicación funciona sin conexión y no envía datos a ningún servidor.</p>' +
       '<p><strong>Manual completo.</strong> El manual de uso incluye tutorial paso a paso, buenas prácticas, ejercicios, preguntas frecuentes y checklist de entrega: <a href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">abrir manual en PDF</a>.</p>' +
       '<p><strong>Autor:</strong> ' + AUTHOR + '.</p>' +
-      '<p><span class="badge-soft">ENGDRAFT 1.4</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .engdraft para conservar copias.</p></div>';
+      '<p><span class="badge-soft">ENGDRAFT 1.5</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .engdraft para conservar copias.</p></div>';
     openModal({
       title: 'Ayuda y atajos', subtitle: 'Todo lo necesario para empezar', body: body,
       footer: '<a class="btn btn-ghost" href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">Manual PDF</a>' +
