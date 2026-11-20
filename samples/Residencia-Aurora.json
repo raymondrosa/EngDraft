@@ -1,0 +1,1972 @@
+{
+  "schema": "engdraft/v1",
+  "meta": {
+    "name": "Residencia Aurora",
+    "client": "Familia Mendoza",
+    "location": "Calle Los Nogales 245, Santa Cruz",
+    "engineer": "Ing. Proyecto",
+    "license": "***",
+    "phone": "+591 700 12345",
+    "email": "contacto@estudioaurora.com",
+    "date": "2026-11-18",
+    "revision": "A",
+    "description": "Vivienda unifamiliar de dos niveles",
+    "notes": "Proyecto residencial de dos niveles. Estructura aporticada de hormigón armado, losa maciza y cubierta plana. Todas las cotas están expresadas en metros y los niveles en metros respecto al nivel de terreno natural."
+  },
+  "settings": {
+    "units": "m",
+    "grid": 250,
+    "wallThickness": 150,
+    "wallHeight": 2700,
+    "floorHeight": 2800,
+    "northAngle": 0,
+    "autoDim": true,
+    "gridMajor": 4,
+    "gridOriginX": 0,
+    "gridOriginY": 0,
+    "snapStep": 0,
+    "gridAdaptive": true,
+    "gridStyle": "lines",
+    "showAxes": true,
+    "roof": {
+      "style": "flat",
+      "height": 1200,
+      "overhang": 400,
+      "ridge": "auto",
+      "profile": null,
+      "structure": {
+        "material": "none",
+        "spacing": 800,
+        "depth": 200,
+        "width": 120
+      }
+    },
+    "materials": {
+      "wall": {
+        "color": "#f3eee2",
+        "texture": "stucco"
+      },
+      "roof": {
+        "color": "#b49a7c",
+        "texture": "tile"
+      },
+      "trim": {
+        "color": "#fdfaf2"
+      },
+      "ground": {
+        "color": "#c9d3ab",
+        "texture": "grass"
+      }
+    },
+    "render": {
+      "mode": "schematic",
+      "shadows": true,
+      "textures": true,
+      "sunAngle": 135
+    }
+  },
+  "layers": [
+    {
+      "id": "walls",
+      "name": "Muros",
+      "color": "#263238",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "openings",
+      "name": "Aberturas",
+      "color": "#2e7d8f",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "furniture",
+      "name": "Mobiliario",
+      "color": "#6b7c93",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "rooms",
+      "name": "Ambientes",
+      "color": "#6aa89a",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "annotation",
+      "name": "Anotaciones",
+      "color": "#1f2937",
+      "visible": true,
+      "locked": false
+    },
+    {
+      "id": "dimensions",
+      "name": "Cotas",
+      "color": "#b5651d",
+      "visible": true,
+      "locked": false
+    }
+  ],
+  "levels": [
+    {
+      "id": "l0",
+      "name": "Planta baja",
+      "elevation": 0,
+      "height": 2800
+    },
+    {
+      "id": "l1",
+      "name": "Planta alta",
+      "elevation": 2800,
+      "height": 2800
+    }
+  ],
+  "walls": [
+    {
+      "id": "w_146a",
+      "type": "wall",
+      "level": "l0",
+      "layerId": "walls",
+      "a": {
+        "x": 0,
+        "y": 0
+      },
+      "b": {
+        "x": 12000,
+        "y": 0
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_29c6",
+          "type": "window",
+          "t": 0.14166666666666666,
+          "width": 1800,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_3myx",
+          "type": "door",
+          "t": 0.4791666666666667,
+          "width": 1000,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_48tz",
+          "type": "window",
+          "t": 0.7916666666666666,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_5m6m",
+      "type": "wall",
+      "level": "l0",
+      "layerId": "walls",
+      "a": {
+        "x": 12000,
+        "y": 0
+      },
+      "b": {
+        "x": 12000,
+        "y": 9000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_62ab",
+          "type": "window",
+          "t": 0.24444444444444444,
+          "width": 1400,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_7m1c",
+          "type": "window",
+          "t": 0.7555555555555555,
+          "width": 1400,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_8or6",
+      "type": "wall",
+      "level": "l0",
+      "layerId": "walls",
+      "a": {
+        "x": 12000,
+        "y": 9000
+      },
+      "b": {
+        "x": 0,
+        "y": 9000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_9d39",
+          "type": "window",
+          "t": 0.18333333333333332,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_aink",
+          "type": "window",
+          "t": 0.5,
+          "width": 1200,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_bdtp",
+          "type": "window",
+          "t": 0.775,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_cwqd",
+      "type": "wall",
+      "level": "l0",
+      "layerId": "walls",
+      "a": {
+        "x": 0,
+        "y": 9000
+      },
+      "b": {
+        "x": 0,
+        "y": 0
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_dcyx",
+          "type": "window",
+          "t": 0.2777777777777778,
+          "width": 1400,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_ebqp",
+          "type": "window",
+          "t": 0.7777777777777778,
+          "width": 1400,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_f00r",
+      "type": "wall",
+      "level": "l0",
+      "layerId": "walls",
+      "a": {
+        "x": 4500,
+        "y": 0
+      },
+      "b": {
+        "x": 4500,
+        "y": 9000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_gm9q",
+          "type": "door",
+          "t": 0.24444444444444444,
+          "width": 950,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_hsy3",
+          "type": "door",
+          "t": 0.7777777777777778,
+          "width": 900,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_ined",
+      "type": "wall",
+      "level": "l0",
+      "layerId": "walls",
+      "a": {
+        "x": 7000,
+        "y": 0
+      },
+      "b": {
+        "x": 7000,
+        "y": 9000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_juy0",
+          "type": "door",
+          "t": 0.24444444444444444,
+          "width": 950,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_kef7",
+          "type": "door",
+          "t": 0.7555555555555555,
+          "width": 900,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_l9hm",
+      "type": "wall",
+      "level": "l0",
+      "layerId": "walls",
+      "a": {
+        "x": 0,
+        "y": 5000
+      },
+      "b": {
+        "x": 4500,
+        "y": 5000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_m2m6",
+          "type": "door",
+          "t": 0.7333333333333333,
+          "width": 900,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_nxr5",
+      "type": "wall",
+      "level": "l0",
+      "layerId": "walls",
+      "a": {
+        "x": 7000,
+        "y": 4500
+      },
+      "b": {
+        "x": 12000,
+        "y": 4500
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_oh97",
+          "type": "door",
+          "t": 0.46,
+          "width": 900,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_pz7q",
+      "type": "wall",
+      "level": "l0",
+      "layerId": "walls",
+      "a": {
+        "x": 4500,
+        "y": 6000
+      },
+      "b": {
+        "x": 7000,
+        "y": 6000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_q5ia",
+          "type": "door",
+          "t": 0.4,
+          "width": 850,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_1tpky",
+      "type": "wall",
+      "level": "l1",
+      "layerId": "walls",
+      "a": {
+        "x": 0,
+        "y": 0
+      },
+      "b": {
+        "x": 12000,
+        "y": 0
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_1u7zj",
+          "type": "window",
+          "t": 0.18333333333333332,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_1vc7s",
+          "type": "window",
+          "t": 0.4791666666666667,
+          "width": 1200,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_1w1r8",
+          "type": "window",
+          "t": 0.7916666666666666,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_1x177",
+      "type": "wall",
+      "level": "l1",
+      "layerId": "walls",
+      "a": {
+        "x": 12000,
+        "y": 0
+      },
+      "b": {
+        "x": 12000,
+        "y": 9000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_1yjwq",
+          "type": "window",
+          "t": 0.24444444444444444,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_1zmm7",
+          "type": "window",
+          "t": 0.7555555555555555,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_20ct3",
+      "type": "wall",
+      "level": "l1",
+      "layerId": "walls",
+      "a": {
+        "x": 12000,
+        "y": 9000
+      },
+      "b": {
+        "x": 0,
+        "y": 9000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_21q73",
+          "type": "window",
+          "t": 0.18333333333333332,
+          "width": 1400,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_22569",
+          "type": "window",
+          "t": 0.4791666666666667,
+          "width": 1000,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_23aye",
+          "type": "window",
+          "t": 0.7916666666666666,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_24wwq",
+      "type": "wall",
+      "level": "l1",
+      "layerId": "walls",
+      "a": {
+        "x": 0,
+        "y": 9000
+      },
+      "b": {
+        "x": 0,
+        "y": 0
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_25s5q",
+          "type": "window",
+          "t": 0.28888888888888886,
+          "width": 1400,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_26ua8",
+          "type": "window",
+          "t": 0.7777777777777778,
+          "width": 1400,
+          "height": 1200,
+          "sill": 900,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_27h3z",
+      "type": "wall",
+      "level": "l1",
+      "layerId": "walls",
+      "a": {
+        "x": 4500,
+        "y": 0
+      },
+      "b": {
+        "x": 4500,
+        "y": 9000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_2884m",
+          "type": "door",
+          "t": 0.26666666666666666,
+          "width": 950,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_291nm",
+          "type": "door",
+          "t": 0.8,
+          "width": 850,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_2ar54",
+      "type": "wall",
+      "level": "l1",
+      "layerId": "walls",
+      "a": {
+        "x": 7000,
+        "y": 0
+      },
+      "b": {
+        "x": 7000,
+        "y": 9000
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_2bedv",
+          "type": "door",
+          "t": 0.24444444444444444,
+          "width": 950,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        },
+        {
+          "id": "o_2cl96",
+          "type": "door",
+          "t": 0.7555555555555555,
+          "width": 900,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_2d1g2",
+      "type": "wall",
+      "level": "l1",
+      "layerId": "walls",
+      "a": {
+        "x": 0,
+        "y": 5500
+      },
+      "b": {
+        "x": 4500,
+        "y": 5500
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_2eoyv",
+          "type": "door",
+          "t": 0.7111111111111111,
+          "width": 900,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    },
+    {
+      "id": "w_2fs1i",
+      "type": "wall",
+      "level": "l1",
+      "layerId": "walls",
+      "a": {
+        "x": 7000,
+        "y": 4500
+      },
+      "b": {
+        "x": 12000,
+        "y": 4500
+      },
+      "thickness": 150,
+      "height": 2700,
+      "openings": [
+        {
+          "id": "o_2gaus",
+          "type": "door",
+          "t": 0.46,
+          "width": 900,
+          "height": 2100,
+          "sill": 0,
+          "swing": 1,
+          "hinge": 1
+        }
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "r_rf9x",
+      "type": "room",
+      "level": "l0",
+      "layerId": "rooms",
+      "name": "Sala / Comedor",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 4500,
+          "y": 0
+        },
+        {
+          "x": 4500,
+          "y": 5000
+        },
+        {
+          "x": 0,
+          "y": 5000
+        }
+      ],
+      "finish": "wood",
+      "color": "#ece4d4"
+    },
+    {
+      "id": "r_sjqv",
+      "type": "room",
+      "level": "l0",
+      "layerId": "rooms",
+      "name": "Cocina",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 5000
+        },
+        {
+          "x": 4500,
+          "y": 5000
+        },
+        {
+          "x": 4500,
+          "y": 9000
+        },
+        {
+          "x": 0,
+          "y": 9000
+        }
+      ],
+      "finish": "tile",
+      "color": "#f1e4cc"
+    },
+    {
+      "id": "r_tnvu",
+      "type": "room",
+      "level": "l0",
+      "layerId": "rooms",
+      "name": "Dormitorio 1",
+      "polygon": [
+        {
+          "x": 7000,
+          "y": 0
+        },
+        {
+          "x": 12000,
+          "y": 0
+        },
+        {
+          "x": 12000,
+          "y": 4500
+        },
+        {
+          "x": 7000,
+          "y": 4500
+        }
+      ],
+      "finish": "wood",
+      "color": "#e7dfcf"
+    },
+    {
+      "id": "r_u43z",
+      "type": "room",
+      "level": "l0",
+      "layerId": "rooms",
+      "name": "Dormitorio 2",
+      "polygon": [
+        {
+          "x": 7000,
+          "y": 4500
+        },
+        {
+          "x": 12000,
+          "y": 4500
+        },
+        {
+          "x": 12000,
+          "y": 9000
+        },
+        {
+          "x": 7000,
+          "y": 9000
+        }
+      ],
+      "finish": "wood",
+      "color": "#e7dfcf"
+    },
+    {
+      "id": "r_vluc",
+      "type": "room",
+      "level": "l0",
+      "layerId": "rooms",
+      "name": "Hall / Escalera",
+      "polygon": [
+        {
+          "x": 4500,
+          "y": 0
+        },
+        {
+          "x": 7000,
+          "y": 0
+        },
+        {
+          "x": 7000,
+          "y": 6000
+        },
+        {
+          "x": 4500,
+          "y": 6000
+        }
+      ],
+      "finish": "tile",
+      "color": "#e8e5dd"
+    },
+    {
+      "id": "r_w75m",
+      "type": "room",
+      "level": "l0",
+      "layerId": "rooms",
+      "name": "Baño",
+      "polygon": [
+        {
+          "x": 4500,
+          "y": 6000
+        },
+        {
+          "x": 7000,
+          "y": 6000
+        },
+        {
+          "x": 7000,
+          "y": 9000
+        },
+        {
+          "x": 4500,
+          "y": 9000
+        }
+      ],
+      "finish": "tile",
+      "color": "#d9e9ea"
+    },
+    {
+      "id": "r_2hadt",
+      "type": "room",
+      "level": "l1",
+      "layerId": "rooms",
+      "name": "Dormitorio principal",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 0
+        },
+        {
+          "x": 4500,
+          "y": 0
+        },
+        {
+          "x": 4500,
+          "y": 5500
+        },
+        {
+          "x": 0,
+          "y": 5500
+        }
+      ],
+      "finish": "wood",
+      "color": "#e8dfcf"
+    },
+    {
+      "id": "r_2iu8t",
+      "type": "room",
+      "level": "l1",
+      "layerId": "rooms",
+      "name": "Baño principal",
+      "polygon": [
+        {
+          "x": 0,
+          "y": 5500
+        },
+        {
+          "x": 4500,
+          "y": 5500
+        },
+        {
+          "x": 4500,
+          "y": 9000
+        },
+        {
+          "x": 0,
+          "y": 9000
+        }
+      ],
+      "finish": "tile",
+      "color": "#dbe9ea"
+    },
+    {
+      "id": "r_2jhu5",
+      "type": "room",
+      "level": "l1",
+      "layerId": "rooms",
+      "name": "Dormitorio 3",
+      "polygon": [
+        {
+          "x": 7000,
+          "y": 0
+        },
+        {
+          "x": 12000,
+          "y": 0
+        },
+        {
+          "x": 12000,
+          "y": 4500
+        },
+        {
+          "x": 7000,
+          "y": 4500
+        }
+      ],
+      "finish": "carpet",
+      "color": "#e6dfd2"
+    },
+    {
+      "id": "r_2kx2n",
+      "type": "room",
+      "level": "l1",
+      "layerId": "rooms",
+      "name": "Dormitorio 4",
+      "polygon": [
+        {
+          "x": 7000,
+          "y": 4500
+        },
+        {
+          "x": 12000,
+          "y": 4500
+        },
+        {
+          "x": 12000,
+          "y": 9000
+        },
+        {
+          "x": 7000,
+          "y": 9000
+        }
+      ],
+      "finish": "carpet",
+      "color": "#e6dfd2"
+    },
+    {
+      "id": "r_2lj66",
+      "type": "room",
+      "level": "l1",
+      "layerId": "rooms",
+      "name": "Hall / Escalera",
+      "polygon": [
+        {
+          "x": 4500,
+          "y": 0
+        },
+        {
+          "x": 7000,
+          "y": 0
+        },
+        {
+          "x": 7000,
+          "y": 9000
+        },
+        {
+          "x": 4500,
+          "y": 9000
+        }
+      ],
+      "finish": "tile",
+      "color": "#e8e5dd"
+    }
+  ],
+  "items": [
+    {
+      "id": "i_xcj4",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "rug",
+      "x": 2250,
+      "y": 2350,
+      "rotation": 0,
+      "w": 2400,
+      "d": 1600,
+      "h": 15,
+      "name": "Alfombra"
+    },
+    {
+      "id": "i_y4qx",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "sofa3",
+      "x": 2250,
+      "y": 1300,
+      "rotation": 0,
+      "w": 2200,
+      "d": 900,
+      "h": 850,
+      "name": "Sofá 3 puestos"
+    },
+    {
+      "id": "i_zmj6",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "coffeeTable",
+      "x": 2250,
+      "y": 2450,
+      "rotation": 0,
+      "w": 1100,
+      "d": 600,
+      "h": 420,
+      "name": "Mesa de centro"
+    },
+    {
+      "id": "i_10z17",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "tvUnit",
+      "x": 2250,
+      "y": 4050,
+      "rotation": 180,
+      "w": 1800,
+      "d": 420,
+      "h": 500,
+      "name": "Mueble de TV"
+    },
+    {
+      "id": "i_11pmr",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "television",
+      "x": 2250,
+      "y": 4230,
+      "rotation": 180,
+      "w": 1200,
+      "d": 110,
+      "h": 700,
+      "name": "Televisor"
+    },
+    {
+      "id": "i_12f5w",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "diningTable6",
+      "x": 2200,
+      "y": 3900,
+      "rotation": 0,
+      "w": 1900,
+      "d": 1000,
+      "h": 750,
+      "name": "Mesa de comedor 6"
+    },
+    {
+      "id": "i_13vm2",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "plant",
+      "x": 650,
+      "y": 650,
+      "rotation": 0,
+      "w": 600,
+      "d": 600,
+      "h": 1400,
+      "name": "Planta"
+    },
+    {
+      "id": "i_14x52",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "consoleTable",
+      "x": 650,
+      "y": 4400,
+      "rotation": 90,
+      "w": 1000,
+      "d": 350,
+      "h": 800,
+      "name": "Consola"
+    },
+    {
+      "id": "i_15enu",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "kitchenCounter",
+      "x": 1500,
+      "y": 8550,
+      "rotation": 0,
+      "w": 2400,
+      "d": 620,
+      "h": 900,
+      "name": "Mesón de cocina"
+    },
+    {
+      "id": "i_1691f",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "fridge",
+      "x": 4020,
+      "y": 8400,
+      "rotation": 0,
+      "w": 760,
+      "d": 720,
+      "h": 1850,
+      "name": "Refrigerador"
+    },
+    {
+      "id": "i_179b2",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "stove",
+      "x": 2800,
+      "y": 8550,
+      "rotation": 0,
+      "w": 760,
+      "d": 640,
+      "h": 900,
+      "name": "Estufa"
+    },
+    {
+      "id": "i_18ojl",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "kitchenIsland",
+      "x": 1800,
+      "y": 6550,
+      "rotation": 0,
+      "w": 1800,
+      "d": 900,
+      "h": 950,
+      "name": "Isla de cocina"
+    },
+    {
+      "id": "i_19b25",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "diningTable4",
+      "x": 3100,
+      "y": 5450,
+      "rotation": 0,
+      "w": 1300,
+      "d": 1000,
+      "h": 750,
+      "name": "Mesa de comedor 4"
+    },
+    {
+      "id": "i_1ayzh",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "bedDouble",
+      "x": 9400,
+      "y": 2600,
+      "rotation": 0,
+      "w": 1600,
+      "d": 2100,
+      "h": 1000,
+      "name": "Cama 2 plazas"
+    },
+    {
+      "id": "i_1bux3",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 8300,
+      "y": 3400,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_1clxa",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 10550,
+      "y": 3400,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_1dfrw",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "wardrobe",
+      "x": 10800,
+      "y": 1450,
+      "rotation": 90,
+      "w": 1800,
+      "d": 600,
+      "h": 2200,
+      "name": "Ropero"
+    },
+    {
+      "id": "i_1e3j9",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "rug",
+      "x": 9400,
+      "y": 1600,
+      "rotation": 0,
+      "w": 2400,
+      "d": 1600,
+      "h": 15,
+      "name": "Alfombra"
+    },
+    {
+      "id": "i_1fk8n",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "bedQueen",
+      "x": 9400,
+      "y": 6650,
+      "rotation": 0,
+      "w": 1800,
+      "d": 2150,
+      "h": 1050,
+      "name": "Cama queen"
+    },
+    {
+      "id": "i_1gu91",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 8300,
+      "y": 7600,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_1hc7r",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 10600,
+      "y": 7600,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_1i9no",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "wardrobe",
+      "x": 10800,
+      "y": 5500,
+      "rotation": 90,
+      "w": 1800,
+      "d": 600,
+      "h": 2200,
+      "name": "Ropero"
+    },
+    {
+      "id": "i_1jng9",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "desk",
+      "x": 7950,
+      "y": 8400,
+      "rotation": 0,
+      "w": 1400,
+      "d": 700,
+      "h": 750,
+      "name": "Escritorio"
+    },
+    {
+      "id": "i_1kbom",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "toilet",
+      "x": 4850,
+      "y": 8650,
+      "rotation": 0,
+      "w": 400,
+      "d": 700,
+      "h": 780,
+      "name": "Inodoro"
+    },
+    {
+      "id": "i_1lg8b",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "sinkVanity",
+      "x": 6350,
+      "y": 8550,
+      "rotation": 0,
+      "w": 900,
+      "d": 520,
+      "h": 850,
+      "name": "Lavamanos"
+    },
+    {
+      "id": "i_1m83j",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "shower",
+      "x": 5250,
+      "y": 6950,
+      "rotation": 0,
+      "w": 1200,
+      "d": 1200,
+      "h": 2100,
+      "name": "Ducha"
+    },
+    {
+      "id": "i_1nesc",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "towelRack",
+      "x": 6800,
+      "y": 6750,
+      "rotation": 90,
+      "w": 600,
+      "d": 120,
+      "h": 900,
+      "name": "Toallero"
+    },
+    {
+      "id": "i_1oq5n",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "stairs",
+      "x": 5150,
+      "y": 3000,
+      "rotation": 90,
+      "w": 2400,
+      "d": 1000,
+      "h": 2700,
+      "name": "Escalera"
+    },
+    {
+      "id": "i_1p0q8",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "plant",
+      "x": 6650,
+      "y": 900,
+      "rotation": 0,
+      "w": 600,
+      "d": 600,
+      "h": 1400,
+      "name": "Planta"
+    },
+    {
+      "id": "i_1qnw4",
+      "type": "item",
+      "level": "l0",
+      "layerId": "furniture",
+      "libId": "consoleTable",
+      "x": 6600,
+      "y": 4700,
+      "rotation": 90,
+      "w": 1000,
+      "d": 350,
+      "h": 800,
+      "name": "Consola"
+    },
+    {
+      "id": "i_2mot7",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "bedKing",
+      "x": 2200,
+      "y": 2800,
+      "rotation": 0,
+      "w": 2000,
+      "d": 2200,
+      "h": 1100,
+      "name": "Cama king"
+    },
+    {
+      "id": "i_2n1hp",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 950,
+      "y": 3700,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_2o665",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 3450,
+      "y": 3700,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_2pe8a",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "wardrobe",
+      "x": 3750,
+      "y": 1300,
+      "rotation": 90,
+      "w": 1800,
+      "d": 600,
+      "h": 2200,
+      "name": "Ropero"
+    },
+    {
+      "id": "i_2qche",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "dresser",
+      "x": 2100,
+      "y": 4900,
+      "rotation": 0,
+      "w": 1400,
+      "d": 500,
+      "h": 900,
+      "name": "Cómoda"
+    },
+    {
+      "id": "i_2rene",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "rug",
+      "x": 2200,
+      "y": 1900,
+      "rotation": 0,
+      "w": 2400,
+      "d": 1600,
+      "h": 15,
+      "name": "Alfombra"
+    },
+    {
+      "id": "i_2s8zs",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "bathtub",
+      "x": 3200,
+      "y": 8350,
+      "rotation": 0,
+      "w": 1700,
+      "d": 800,
+      "h": 600,
+      "name": "Bañera"
+    },
+    {
+      "id": "i_2tww3",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "shower",
+      "x": 1000,
+      "y": 8300,
+      "rotation": 0,
+      "w": 1200,
+      "d": 1200,
+      "h": 2100,
+      "name": "Ducha"
+    },
+    {
+      "id": "i_2u7l0",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "sinkVanity",
+      "x": 2750,
+      "y": 5950,
+      "rotation": 180,
+      "w": 900,
+      "d": 520,
+      "h": 850,
+      "name": "Lavamanos"
+    },
+    {
+      "id": "i_2vygp",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "toilet",
+      "x": 4000,
+      "y": 6100,
+      "rotation": 180,
+      "w": 400,
+      "d": 700,
+      "h": 780,
+      "name": "Inodoro"
+    },
+    {
+      "id": "i_2wjra",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "towelRack",
+      "x": 900,
+      "y": 6200,
+      "rotation": 0,
+      "w": 600,
+      "d": 120,
+      "h": 900,
+      "name": "Toallero"
+    },
+    {
+      "id": "i_2xfsu",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "bedDouble",
+      "x": 9400,
+      "y": 2300,
+      "rotation": 0,
+      "w": 1600,
+      "d": 2100,
+      "h": 1000,
+      "name": "Cama 2 plazas"
+    },
+    {
+      "id": "i_2y7or",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 8300,
+      "y": 3150,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_2znu2",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 10550,
+      "y": 3150,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_30y74",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "wardrobe",
+      "x": 10800,
+      "y": 1350,
+      "rotation": 90,
+      "w": 1800,
+      "d": 600,
+      "h": 2200,
+      "name": "Ropero"
+    },
+    {
+      "id": "i_31mlx",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "desk",
+      "x": 7800,
+      "y": 3900,
+      "rotation": 180,
+      "w": 1400,
+      "d": 700,
+      "h": 750,
+      "name": "Escritorio"
+    },
+    {
+      "id": "i_32cat",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "bedQueen",
+      "x": 9400,
+      "y": 6800,
+      "rotation": 0,
+      "w": 1800,
+      "d": 2150,
+      "h": 1050,
+      "name": "Cama queen"
+    },
+    {
+      "id": "i_334uj",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 8300,
+      "y": 7750,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_344po",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "nightstand",
+      "x": 10600,
+      "y": 7750,
+      "rotation": 0,
+      "w": 500,
+      "d": 450,
+      "h": 600,
+      "name": "Mesa de noche"
+    },
+    {
+      "id": "i_35jnm",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "wardrobe",
+      "x": 10800,
+      "y": 5600,
+      "rotation": 90,
+      "w": 1800,
+      "d": 600,
+      "h": 2200,
+      "name": "Ropero"
+    },
+    {
+      "id": "i_36hxs",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "bookshelf",
+      "x": 7550,
+      "y": 8500,
+      "rotation": 0,
+      "w": 1200,
+      "d": 350,
+      "h": 2000,
+      "name": "Estantería"
+    },
+    {
+      "id": "i_375u0",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "stairs",
+      "x": 5150,
+      "y": 3000,
+      "rotation": 90,
+      "w": 2400,
+      "d": 1000,
+      "h": 2700,
+      "name": "Escalera"
+    },
+    {
+      "id": "i_38nj7",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "plant",
+      "x": 6650,
+      "y": 900,
+      "rotation": 0,
+      "w": 600,
+      "d": 600,
+      "h": 1400,
+      "name": "Planta"
+    },
+    {
+      "id": "i_39zw0",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "consoleTable",
+      "x": 6600,
+      "y": 7600,
+      "rotation": 90,
+      "w": 1000,
+      "d": 350,
+      "h": 800,
+      "name": "Consola"
+    },
+    {
+      "id": "i_3a6h0",
+      "type": "item",
+      "level": "l1",
+      "layerId": "furniture",
+      "libId": "rug",
+      "x": 5750,
+      "y": 6000,
+      "rotation": 0,
+      "w": 2400,
+      "d": 1600,
+      "h": 15,
+      "name": "Alfombra"
+    }
+  ],
+  "texts": [],
+  "dims": [
+    {
+      "id": "d_1rtte",
+      "type": "dim",
+      "level": "l0",
+      "layerId": "dimensions",
+      "a": {
+        "x": 0,
+        "y": 0
+      },
+      "b": {
+        "x": 12000,
+        "y": 0
+      },
+      "offset": -900
+    },
+    {
+      "id": "d_1s2eu",
+      "type": "dim",
+      "level": "l0",
+      "layerId": "dimensions",
+      "a": {
+        "x": 0,
+        "y": 0
+      },
+      "b": {
+        "x": 0,
+        "y": 9000
+      },
+      "offset": 900
+    },
+    {
+      "id": "d_3bwhq",
+      "type": "dim",
+      "level": "l1",
+      "layerId": "dimensions",
+      "a": {
+        "x": 0,
+        "y": 0
+      },
+      "b": {
+        "x": 12000,
+        "y": 0
+      },
+      "offset": -900
+    },
+    {
+      "id": "d_3c0k0",
+      "type": "dim",
+      "level": "l1",
+      "layerId": "dimensions",
+      "a": {
+        "x": 0,
+        "y": 0
+      },
+      "b": {
+        "x": 0,
+        "y": 9000
+      },
+      "offset": 900
+    }
+  ],
+  "sheets": [
+    {
+      "id": "s_3d64k",
+      "name": "Planta baja",
+      "size": "A3",
+      "orientation": "landscape",
+      "template": "modern",
+      "scale": 50,
+      "content": "plan",
+      "levelId": "l0",
+      "sheetNo": "A-01",
+      "title": "PLANTA BAJA",
+      "notes": "",
+      "showDims": true,
+      "showFurniture": true,
+      "showRooms": true,
+      "showGrid": false,
+      "imageDataUrl": null
+    },
+    {
+      "id": "s_3etl0",
+      "name": "Planta alta",
+      "size": "A3",
+      "orientation": "landscape",
+      "template": "classic",
+      "scale": 50,
+      "content": "plan",
+      "levelId": "l1",
+      "sheetNo": "A-02",
+      "title": "PLANTA ALTA",
+      "notes": "",
+      "showDims": true,
+      "showFurniture": true,
+      "showRooms": true,
+      "showGrid": false,
+      "imageDataUrl": null
+    },
+    {
+      "id": "s_3f8e7",
+      "name": "Notas y cuadros",
+      "size": "A3",
+      "orientation": "landscape",
+      "template": "technical",
+      "scale": 100,
+      "content": "notes",
+      "levelId": "l0",
+      "sheetNo": "A-03",
+      "title": "NOTAS Y CUADROS",
+      "notes": "",
+      "showDims": true,
+      "showFurniture": true,
+      "showRooms": true,
+      "showGrid": false,
+      "imageDataUrl": null
+    },
+    {
+      "id": "s_3gmrv",
+      "name": "Portada",
+      "size": "A3",
+      "orientation": "landscape",
+      "template": "municipal",
+      "scale": 100,
+      "content": "cover",
+      "levelId": "l0",
+      "sheetNo": "A-04",
+      "title": "PORTADA",
+      "notes": "",
+      "showDims": true,
+      "showFurniture": true,
+      "showRooms": true,
+      "showGrid": false,
+      "imageDataUrl": null
+    }
+  ]
+}
