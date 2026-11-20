@@ -2218,3 +2218,256 @@ html[data-device="mobile"] .import-preview { min-height: 140px; max-height: 220p
 .rail-project-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; width: 100%; }
 .rail-project-grid .rail-action { width: 100%; height: 32px; justify-content: center; }
 #app[data-device="mobile"] .rail-project-grid .rail-action { min-height: 38px; }
+
+/* ====================================================================== */
+/* 1.6 · Aberturas tipadas, snaps avanzados, vigas, líneas/curvas,        */
+/*       escalado y vistas editables                                      */
+/* ====================================================================== */
+
+/* ---------- 1) Aberturas: selector de subtipo dentro de .opening-row ---- */
+/* El select va a lo ancho de la fila (o debajo de la cabecera); no rompe el
+   mini-grid de ancho/alto/posición. */
+.opening-row .field { min-width: 0; margin-bottom: 0; }
+.opening-row .field + .field { margin-top: 6px; }
+.opening-row .field label { font-size: var(--fs-10); }
+.opening-row select,
+.opening-row .select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  margin: 0 0 6px;
+  padding: 0 26px 0 8px;
+  font-size: var(--fs-11);
+  background-position: calc(100% - 14px) 12px, calc(100% - 10px) 12px;
+}
+.opening-row .field select,
+.opening-row .field .select { margin-bottom: 0; }
+/* Si el select cae dentro del .mini-grid (3 columnas), ocupa la fila entera */
+.opening-row .mini-grid > select,
+.opening-row .mini-grid > .select { grid-column: 1 / -1; }
+.opening-row .mini-grid { min-width: 0; }
+.opening-row .mini-grid .input { min-width: 0; }
+/* El subtipo se distingue ligeramente del resto de campos numéricos */
+.opening-row select[data-open-field="subtype"],
+.opening-row .select[data-open-field="subtype"] { background-color: #101820; font-weight: 600; color: #cfdae2; }
+
+/* ---------- 2) Snaps avanzados en el rail (.snap-chip-grid) ------------ */
+.snap-chip-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+.snap-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 2px 5px;
+  border: 1px solid #2a3744;
+  border-radius: 6px;
+  background: #131c25;
+  color: #a9b6c2;
+  font-size: var(--fs-10);
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+/* En el rail expandido manda la etiqueta: los iconos solo se usan si no hay
+   texto (variante compacta), para que las 6 chips entren a 168-196px. */
+.snap-chip svg { display: none; width: 13px; height: 13px; flex: 0 0 13px; }
+.snap-chip span,
+.snap-chip b { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.snap-chip:hover { color: #e1e8ee; border-color: #3b4b5b; background: #18232d; }
+.snap-chip.on {
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-color: rgba(245, 166, 35, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(245, 166, 35, 0.08);
+}
+.snap-chip:focus-visible { outline: 2px solid var(--amber-line); outline-offset: 1px; }
+/* Compacto: una columna a ancho completo para que las etiquetas se lean */
+#app[data-rail="compact"] .snap-chip-grid { grid-template-columns: 1fr; gap: 3px; }
+#app[data-rail="compact"] .snap-chip { width: 100%; min-height: 24px; padding: 0 1px; letter-spacing: -0.01em; }
+#app[data-rail="compact"] .snap-chip svg { display: none; }
+/* En el cajón móvil/tableta (rail expandido) los chips ganan altura táctil */
+#app[data-device="tablet"] .snap-chip { min-height: 36px; }
+#app[data-device="mobile"] .snap-chip { min-height: 38px; }
+
+/* ---------- 3) Escena → Techo: vigas (selector + 3 campos) ------------- */
+/* Con 3 campos en una rejilla de 2 columnas, el último ocupa la fila entera. */
+.scene-group .field-grid > .field:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.scene-group .field-grid .field { min-width: 0; }
+.scene-group .field-grid .input { min-width: 0; }
+.scene-group .field-grid .select { min-width: 0; }
+/* La nota de la estructura de vigas no debe separarse de sus campos */
+.scene-group .field-hint + .field-grid,
+.scene-group .field-grid + .field-hint { margin-top: 2px; }
+
+/* ---------- 4) Escalado: nota de escenario y chip de factor ------------- */
+/* .stage-note ya lo usa app.js en stage-head ("Vista generada · solo lectura") */
+.stage-note {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid #2a3642;
+  border-radius: 6px;
+  background: #141d26;
+  color: #93a2b1;
+  font-size: var(--fs-10);
+  font-weight: 650;
+  white-space: nowrap;
+}
+.stage-note::before {
+  content: "";
+  flex: 0 0 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 0 3px rgba(72, 201, 216, 0.12);
+}
+/* Rango de posición de las secciones (stage-head) */
+.stage-range {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px;
+  color: #93a2b1;
+  font-size: var(--fs-10);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.stage-range input[type="range"] {
+  width: 92px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--amber);
+  cursor: pointer;
+}
+/* Chip del factor de escala activo */
+.scale-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid rgba(245, 166, 35, 0.42);
+  border-radius: 14px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: var(--fs-11);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.scale-chip::before {
+  content: "";
+  flex: 0 0 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.14);
+}
+.scale-chip b,
+.scale-chip strong { font: 700 var(--fs-10) var(--mono); letter-spacing: 0.03em; }
+.scale-chip.active,
+.scale-chip.on { color: var(--amber); }
+/* Herramientas nuevas Línea/Curva/Escalar: reutilizan .tool-btn sin cambios. */
+
+/* ---------- 5) Vistas editables ---------------------------------------- */
+/* El canvas de vistas usa la cruz cuando JS le pone .selectable */
+#viewsCanvas.selectable,
+.views-canvas.selectable { cursor: crosshair; }
+.views-canvas.selectable:active { cursor: crosshair; }
+/* Chip de vista activa en modo edición: ámbar discontinuo */
+.view-mode-chip.editable {
+  border: 1px dashed rgba(245, 166, 35, 0.6);
+  background: var(--amber-soft);
+  color: var(--amber);
+  cursor: pointer;
+}
+.view-mode-chip.editable::before {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.16);
+}
+.view-mode-chip.editable:hover { border-color: var(--amber); background: rgba(245, 166, 35, 0.2); }
+.view-mode-chip[hidden] { display: none; }
+/* Aviso flotante de edición en la vista generada (abajo izquierda, papel) */
+.views-hint {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  display: inline-flex; align-items: center; gap: 7px;
+  max-width: calc(100% - 28px);
+  padding: 7px 12px;
+  border: 1px solid rgba(36, 49, 61, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 253, 248, 0.95);
+  color: #33414d;
+  font-size: var(--fs-11);
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 6px 20px rgba(26, 34, 42, 0.16);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  z-index: 5;
+}
+.views-hint::before {
+  content: "";
+  flex: 0 0 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.16);
+}
+.views-hint[hidden] { display: none; }
+.stage-note[hidden],
+.scale-chip[hidden],
+.snap-chip[hidden] { display: none; }
+/* Sin resaltado azul del tap en los chips de snaps */
+#app [data-snap-mode].snap-chip { -webkit-tap-highlight-color: transparent; }
+
+/* ---------- 6) Ajustes por dispositivo --------------------------------- */
+#app[data-device="tablet"] .stage-note,
+#app[data-device="tablet"] .scale-chip { height: 28px; font-size: var(--fs-10); }
+#app[data-device="tablet"] .opening-row select,
+#app[data-device="tablet"] .opening-row .select { height: 34px; }
+#app[data-device="mobile"] .stage-note,
+#app[data-device="mobile"] .scale-chip { height: 28px; font-size: var(--fs-10); padding: 0 8px; }
+#app[data-device="mobile"] .opening-row select,
+#app[data-device="mobile"] .opening-row .select { height: 36px; font-size: var(--fs-12); }
+#app[data-device="mobile"] .views-hint {
+  left: 10px; right: 10px; bottom: 10px;
+  max-width: none;
+  font-size: var(--fs-10);
+  white-space: normal;
+}
+#app[data-device="mobile"] .views-canvas.selectable { cursor: crosshair; }
+@media (max-height: 720px) {
+  #app[data-rail="compact"] .snap-chip { min-height: 22px; }
+}
+/* Paridad del rail compactado por ancho (≤1200px sin data-rail="compact"):
+   snaps a una columna y herramientas de cabecera apiladas para que unidades,
+   idioma y modo de pantalla sigan accesibles en 68px. */
+@media (max-width: 1200px) {
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .snap-chip-grid { grid-template-columns: 1fr; gap: 3px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .snap-chip { width: 100%; min-height: 24px; padding: 0 1px; letter-spacing: -0.01em; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-head { height: auto; min-height: 30px; flex-wrap: wrap; padding: 0 2px 4px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-head-tools {
+    display: flex; flex-direction: column; align-items: stretch; flex-wrap: nowrap;
+    gap: 3px; width: 100%; margin-top: 4px;
+  }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-head-tools .rail-chip {
+    width: 100%; flex: 0 0 auto; min-height: 24px; padding: 0 2px;
+    font-size: var(--fs-10); letter-spacing: 0;
+  }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-head-tools .rail-device-row {
+    display: flex; flex-direction: column; align-items: stretch; gap: 2px; margin-top: 2px;
+  }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-head-tools .rail-select-label { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-head-tools .rail-device-select {
+    width: 100%; min-width: 0; height: 24px; padding: 0 2px; font-size: var(--fs-10);
+  }
+}
