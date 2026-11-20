@@ -553,32 +553,34 @@ svg { display: block; }
 #app[data-rail="compact"] #langToggle { width: 48px; flex: 0 0 48px; padding: 0 2px; gap: 1px; }
 #app[data-rail="compact"] .rail-section .rail-foot { width: 100%; align-items: center; padding-top: 5px; border-top: 0; }
 
-/* En ventanas ≤1200 el rail se ve compacto aunque el estado lógico sea
-   "expanded": se replican aquí las reglas compactas de los controles nuevos. */
+/* En ventanas ≤1200 el rail de escritorio se ve compacto aunque el estado
+   lógico sea "expanded": se replican aquí las reglas compactas de los
+   controles nuevos. En Tableta/Celular no aplica (tienen su propio layout). */
 @media (max-width: 1200px) {
-  #app[data-rail="expanded"] .rail-section { width: 100%; align-items: center; gap: 3px; padding: 4px 0; }
-  #app[data-rail="expanded"] .rail-section-title { display: none; }
-  #app[data-rail="expanded"] .rail-toggle-row { flex-direction: column; align-items: center; gap: 3px; }
-  #app[data-rail="expanded"] .rail-toggle-row .rail-toggle { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; }
-  #app[data-rail="expanded"] .rail-toggle-row .rail-toggle svg { display: block; width: 15px; height: 15px; flex: 0 0 15px; }
-  #app[data-rail="expanded"] .rail-toggle-row .rail-toggle span { display: none; }
-  #app[data-rail="expanded"] .rail-section .rail-grid-chip { width: 38px; height: 26px; justify-content: center; padding: 0; gap: 0; }
-  #app[data-rail="expanded"] .rail-section .rail-grid-chip b,
-  #app[data-rail="expanded"] .rail-section .rail-grid-chip .grid-chip-caret { display: none; }
-  #app[data-rail="expanded"] .rail-section .rail-grid-chip svg { width: 15px; height: 15px; flex-basis: 15px; opacity: 0.85; }
-  #app[data-rail="expanded"] .rail-action-row { flex-direction: column; align-items: center; gap: 3px; }
-  #app[data-rail="expanded"] .rail-action { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; gap: 0; }
-  #app[data-rail="expanded"] .rail-action svg { width: 15px; height: 15px; flex-basis: 15px; }
-  #app[data-rail="expanded"] .rail-action span { display: none; }
-  #app[data-rail="expanded"] .rail-view-btn { width: 44px; height: 26px; justify-content: center; padding: 0; gap: 0; }
-  #app[data-rail="expanded"] .rail-view-btn span { display: none; }
-  #app[data-rail="expanded"] .rail-view-btn .rail-view-abbr { display: block; font: 700 var(--fs-10) var(--mono); letter-spacing: 0.02em; }
-  #app[data-rail="expanded"] #btnUnitsRail { width: 48px; flex: 0 0 48px; padding: 0 2px; font-size: var(--fs-10); letter-spacing: 0; }
-  #app[data-rail="expanded"] #btnUnitsRail span { display: block; overflow: hidden; text-overflow: ellipsis; }
-  #app[data-rail="expanded"] #btnUnitsRail[data-unit] span { display: none; }
-  #app[data-rail="expanded"] #btnUnitsRail[data-unit]::before { content: attr(data-unit); font-weight: 700; }
-  #app[data-rail="expanded"] #langToggle { width: 48px; flex: 0 0 48px; padding: 0 2px; gap: 1px; }
-  #app[data-rail="expanded"] .rail-section .rail-foot { width: 100%; align-items: center; padding-top: 5px; border-top: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section { width: 100%; align-items: center; gap: 3px; padding: 4px 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section-title { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-toggle-row { flex-direction: column; align-items: center; gap: 3px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-toggle-row .rail-toggle { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-toggle-row .rail-toggle svg { display: block; width: 15px; height: 15px; flex: 0 0 15px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-toggle-row .rail-toggle span { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-grid-chip { width: 38px; height: 26px; justify-content: center; padding: 0; gap: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-grid-chip b,
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-grid-chip .grid-chip-caret { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-grid-chip svg { width: 15px; height: 15px; flex-basis: 15px; opacity: 0.85; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-action-row { flex-direction: column; align-items: center; gap: 3px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-action { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; gap: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-action svg { width: 15px; height: 15px; flex-basis: 15px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-action span { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-view-btn { width: 44px; height: 26px; justify-content: center; padding: 0; gap: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-view-btn span { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-view-btn .rail-view-abbr { display: block; font: 700 var(--fs-10) var(--mono); letter-spacing: 0.02em; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-view-grid { grid-template-columns: 1fr; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #btnUnitsRail { width: 48px; flex: 0 0 48px; padding: 0 2px; font-size: var(--fs-10); letter-spacing: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #btnUnitsRail span { display: block; overflow: hidden; text-overflow: ellipsis; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #btnUnitsRail[data-unit] span { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #btnUnitsRail[data-unit]::before { content: attr(data-unit); font-weight: 700; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #langToggle { width: 48px; flex: 0 0 48px; padding: 0 2px; gap: 1px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-foot { width: 100%; align-items: center; padding-top: 5px; border-top: 0; }
 }
 
 /* El rail pierde ~28px útiles a 168px: se afinan gaps y paddings de las filas
@@ -1347,7 +1349,9 @@ html[data-font="xl"] .view-mode-chip { height: 28px; }
 }
 
 /* El menú de opciones pierde ancho en ventanas medianas y se muestra
-   compacto en ventanas estrechas, sin alterar #app[data-rail]. */
+   compacto en ventanas estrechas, sin alterar #app[data-rail]. En 1.5 esto
+   se limita al modo Computadora: Tableta y Celular tienen su propio
+   tratamiento (ver sección "1.5 · modos de pantalla" al final del archivo). */
 @media (max-width: 1400px) {
   #app[data-rail="expanded"] { --rail-w: 168px; }
   #app[data-rail="expanded"] .toolrail { padding-left: 6px; padding-right: 6px; }
@@ -1355,14 +1359,15 @@ html[data-font="xl"] .view-mode-chip { height: 28px; }
   #app[data-rail="expanded"] .tool-btn small { font-size: var(--fs-11); }
 }
 @media (max-width: 1200px) {
-  #app[data-rail="expanded"], #app[data-rail="compact"] { --rail-w: 68px; }
-  #app[data-rail="expanded"] .toolrail { padding: 8px 0 10px; align-items: center; }
-  #app[data-rail="expanded"] .rail-head { height: 30px; margin-bottom: 4px; padding: 0; border-bottom: 0; justify-content: center; }
-  #app[data-rail="expanded"] .rail-title { display: none; }
-  #app[data-rail="expanded"] .rail-head .rail-toggle { width: 30px; height: 28px; flex-basis: 30px; }
-  #app[data-rail="expanded"] .rail-head .rail-toggle svg { transform: rotate(180deg); }
-  #app[data-rail="expanded"] .rail-list { align-items: center; gap: 4px; padding: 0; }
-  #app[data-rail="expanded"] .tool-btn {
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"],
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="compact"] { --rail-w: 68px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .toolrail { padding: 8px 0 10px; align-items: center; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-head { height: 30px; margin-bottom: 4px; padding: 0; border-bottom: 0; justify-content: center; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-title { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-head .rail-toggle { width: 30px; height: 28px; flex-basis: 30px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-head .rail-toggle svg { transform: rotate(180deg); }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-list { align-items: center; gap: 4px; padding: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .tool-btn {
     width: 60px;
     height: 46px;
     min-height: 46px;
@@ -1372,12 +1377,36 @@ html[data-font="xl"] .view-mode-chip { height: 28px; }
     padding: 2px 0;
     text-align: center;
   }
-  #app[data-rail="expanded"] .tool-btn svg { width: 22px; height: 22px; flex: 0 0 22px; }
-  #app[data-rail="expanded"] .tool-btn small { max-width: 58px; font-size: var(--fs-10); line-height: 1.1; letter-spacing: -0.01em; }
-  #app[data-rail="expanded"] .tool-btn .key { display: none; }
-  #app[data-rail="expanded"] .tool-btn.active::before { left: -2px; top: 10px; bottom: 10px; }
-  #app[data-rail="expanded"] .tool-sep { width: 30px; margin: 3px 0; }
-  #app[data-rail="expanded"] .rail-foot { width: 100%; align-items: center; padding-top: 6px; border-top: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .tool-btn svg { width: 22px; height: 22px; flex: 0 0 22px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .tool-btn small { max-width: 58px; font-size: var(--fs-10); line-height: 1.1; letter-spacing: -0.01em; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .tool-btn .key { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .tool-btn.active::before { left: -2px; top: 10px; bottom: 10px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .tool-sep { width: 30px; margin: 3px 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-foot { width: 100%; align-items: center; padding-top: 6px; border-top: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section { width: 100%; align-items: center; gap: 3px; padding: 4px 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section-title { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-toggle-row { flex-direction: column; align-items: center; gap: 3px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-toggle-row .rail-toggle { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-toggle-row .rail-toggle svg { display: block; width: 15px; height: 15px; flex: 0 0 15px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-toggle-row .rail-toggle span { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-grid-chip { width: 38px; height: 26px; justify-content: center; padding: 0; gap: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-grid-chip b,
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-grid-chip .grid-chip-caret { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-grid-chip svg { width: 15px; height: 15px; flex-basis: 15px; opacity: 0.85; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-action-row { flex-direction: column; align-items: center; gap: 3px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-action { width: 44px; height: 26px; flex: 0 0 auto; padding: 0; gap: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-action svg { width: 15px; height: 15px; flex-basis: 15px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-action span { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-view-btn { width: 44px; height: 26px; justify-content: center; padding: 0; gap: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-view-btn span { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-view-btn .rail-view-abbr { display: block; font: 700 var(--fs-10) var(--mono); letter-spacing: 0.02em; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-view-grid { grid-template-columns: 1fr; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #btnUnitsRail { width: 48px; flex: 0 0 48px; padding: 0 2px; font-size: var(--fs-10); letter-spacing: 0; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #btnUnitsRail span { display: block; overflow: hidden; text-overflow: ellipsis; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #btnUnitsRail[data-unit] span { display: none; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #btnUnitsRail[data-unit]::before { content: attr(data-unit); font-weight: 700; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] #langToggle { width: 48px; flex: 0 0 48px; padding: 0 2px; gap: 1px; }
+  #app:not([data-device="tablet"]):not([data-device="mobile"])[data-rail="expanded"] .rail-section .rail-foot { width: 100%; align-items: center; padding-top: 5px; border-top: 0; }
 }
 
 /* Extras de propiedades, láminas y formularios */
@@ -1860,3 +1889,332 @@ html[data-font="xl"] .view3d-tools { gap: 6px; padding: 5px 7px; }
 #app[data-rail="expanded"] .rail-head { height: auto; min-height: 30px; flex-wrap: wrap; justify-content: space-between; }
 #app[data-rail="compact"] .rail-head { height: 30px; flex-wrap: nowrap; }
 #app[data-rail="compact"] .rail-head-tools { display: none; }
+
+/* ====================================================================== */
+/* 1.5 · Modos de pantalla: Computadora / Tableta / Celular               */
+/* El JS pone data-device="desktop|tablet|mobile" en <html> y en #app.    */
+/* ====================================================================== */
+
+/* Botones móviles de la topbar (#btnMobileRail / #btnMobileInspector) */
+.mobile-only { display: none; }
+
+/* Selector de modo de pantalla del rail (2x2; activo en ámbar) */
+.rail-device-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.rail-device-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-height: 30px; padding: 2px 4px;
+  border: 1px solid #2a3744;
+  border-radius: 6px;
+  background: #131c25;
+  color: #a9b6c2;
+  font-size: var(--fs-10);
+  font-weight: 600;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+/* Expandido: chips 2x2 solo con texto (los iconos se reservan al compacto,
+   igual que los toggles de Dibujo) */
+.rail-device-btn svg { display: none; width: 14px; height: 14px; flex: 0 0 14px; opacity: 0.9; }
+.rail-device-btn span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.rail-device-btn:hover { color: #e1e8ee; border-color: #3b4b5b; background: #18232d; }
+.rail-device-btn.active {
+  color: var(--amber);
+  background: var(--amber-soft);
+  border-color: rgba(245, 166, 35, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(245, 166, 35, 0.08);
+}
+.rail-device-btn:focus-visible { outline: 2px solid var(--amber-line); outline-offset: 1px; }
+/* En el rail compacto la rejilla queda 2x2 solo con los iconos */
+#app[data-rail="compact"] .rail-device-btn { min-height: 26px; padding: 0; gap: 0; }
+#app[data-rail="compact"] .rail-device-btn svg { display: block; width: 15px; height: 15px; }
+#app[data-rail="compact"] .rail-device-btn span { display: none; }
+
+/* =========================== TABLETA =================================== */
+#app[data-device="tablet"] { min-width: 0; }
+#app[data-device="tablet"][data-rail="expanded"] { --rail-w: 170px; }
+#app[data-device="tablet"][data-inspector="open"] .inspector { width: 290px; flex-basis: 290px; }
+#app[data-device="tablet"] .topbar { height: 56px; flex: 0 0 56px; gap: 10px; padding: 0 10px; }
+#app[data-device="tablet"] .brand-text span { display: none; }
+#app[data-device="tablet"] .save-state { display: none; }
+#app[data-device="tablet"] .project-name { max-width: 200px; }
+#app[data-device="tablet"] #btnExportDxf { width: 36px; padding: 0; }
+#app[data-device="tablet"] #btnExportDxf span { display: none; }
+#app[data-device="tablet"] .view-tabs button { padding: 0 9px; }
+/* stage-head con scroll horizontal si no cabe */
+#app[data-device="tablet"] .stage-head { overflow-x: auto; justify-content: flex-start; gap: 8px; }
+#app[data-device="tablet"] .stage-head > * { flex: 0 0 auto; }
+#app[data-device="tablet"] .level-tabs { overflow: visible; }
+#app[data-device="tablet"] .stage-actions { overflow: visible; flex-wrap: nowrap; }
+/* Objetivos táctiles cómodos (≥38-40px) en el rail */
+#app[data-device="tablet"] .tool-btn { min-height: 42px; }
+#app[data-device="tablet"] .rail-toggle-row .rail-toggle,
+#app[data-device="tablet"] .rail-action { min-height: 40px; }
+#app[data-device="tablet"] .rail-view-btn,
+#app[data-device="tablet"] .rail-view-grid .rail-view-btn { min-height: 40px; }
+#app[data-device="tablet"] .rail-chip { min-height: 38px; }
+#app[data-device="tablet"] .rail-device-btn { min-height: 40px; }
+/* Cuatro pestañas del inspector en 290px */
+#app[data-device="tablet"] .inspector-tabs { padding: 0 4px; gap: 2px; }
+#app[data-device="tablet"] .inspector-tabs button { font-size: var(--fs-10); padding: 0 3px; letter-spacing: -0.01em; }
+/* Modales ≤92vw (viven fuera de #app; el attr también va en <html>) */
+html[data-device="tablet"] .modal-backdrop { padding: 16px; }
+html[data-device="tablet"] .modal { max-width: 92vw; }
+html[data-device="tablet"] .modal.modal-wide { width: min(92vw, 760px); max-width: 92vw; }
+html[data-device="tablet"] .modal.modal-narrow { width: min(92vw, 420px); max-width: 92vw; }
+
+/* =========================== CELULAR =================================== */
+#app[data-device="mobile"] {
+  min-width: 0;
+  height: 100vh;
+  height: 100dvh;
+  --m-top: 54px;
+  --m-status: 30px;
+}
+/* En móviles con área segura (notch / barra de inicio) la barra de estado crece */
+@supports (padding: max(0px)) {
+  #app[data-device="mobile"] { --m-status: calc(30px + env(safe-area-inset-bottom)); }
+}
+/* Sin resaltado azul del tap en los chips de modo de pantalla */
+#app [data-device-mode].rail-device-btn { -webkit-tap-highlight-color: transparent; }
+/* --- Barra superior condensada --- */
+#app[data-device="mobile"] .topbar {
+  height: var(--m-top);
+  flex: 0 0 var(--m-top);
+  gap: 6px;
+  padding: 0 6px;
+  padding-left: max(6px, env(safe-area-inset-left));
+  padding-right: max(6px, env(safe-area-inset-right));
+  overflow: hidden;
+}
+#app[data-device="mobile"] .brand { gap: 0; flex: 0 0 auto; }
+#app[data-device="mobile"] .brand-mark { width: 32px; height: 32px; border-radius: 8px; }
+#app[data-device="mobile"] .brand-mark svg { width: 22px; height: 22px; }
+#app[data-device="mobile"] .brand-text,
+#app[data-device="mobile"] .project-block { display: none; }
+#app[data-device="mobile"] .view-tabs { flex: 0 0 auto; padding: 2px; gap: 1px; }
+#app[data-device="mobile"] .view-tabs button { height: 32px; padding: 0 8px; gap: 0; }
+#app[data-device="mobile"] .view-tabs button span { display: none; }
+#app[data-device="mobile"] .view-tabs button svg { width: 17px; height: 17px; }
+#app[data-device="mobile"] .top-actions { gap: 4px; flex: 0 0 auto; margin-left: auto; }
+#app[data-device="mobile"] .top-actions .btn-group,
+#app[data-device="mobile"] #btnExportDxf { display: none; }
+#app[data-device="mobile"] .top-actions > .icon-btn { width: 34px; height: 34px; }
+#app[data-device="mobile"] #btnExportPdf { width: 34px; height: 34px; min-width: 34px; padding: 0; }
+#app[data-device="mobile"] #btnExportPdf span { display: none; }
+#app[data-device="mobile"] .mobile-only { display: grid; }
+#app[data-device="mobile"] #btnMobileRail.mobile-only,
+#app[data-device="mobile"] #btnMobileInspector.mobile-only { display: grid; width: 36px; height: 36px; flex: 0 0 36px; }
+
+/* --- Cajón del menú de opciones (izquierda) --- */
+#app[data-device="mobile"] .toolrail {
+  position: fixed;
+  top: var(--m-top);
+  bottom: var(--m-status);
+  left: 0;
+  width: min(82vw, 300px);
+  max-width: 300px;
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 8px 8px 10px;
+  border-right: 1px solid #25313d;
+  box-shadow: 14px 0 34px rgba(0, 0, 0, 0.5);
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform 0.2s ease, visibility 0s linear 0.2s;
+  z-index: 50;
+}
+#app[data-device="mobile"][data-rail="expanded"] .toolrail {
+  transform: translateX(0);
+  visibility: visible;
+  transition: transform 0.2s ease, visibility 0s linear 0s;
+}
+/* Controles táctiles del cajón */
+#app[data-device="mobile"] .tool-btn { min-height: 46px; }
+#app[data-device="mobile"] .rail-toggle-row .rail-toggle,
+#app[data-device="mobile"] .rail-action { min-height: 42px; }
+#app[data-device="mobile"] .rail-view-btn,
+#app[data-device="mobile"] .rail-view-grid .rail-view-btn { min-height: 42px; }
+#app[data-device="mobile"] .rail-chip { min-height: 40px; }
+#app[data-device="mobile"] .rail-device-btn { min-height: 42px; }
+
+/* --- Cajón del panel de ajustes (derecha) --- */
+#app[data-device="mobile"] .inspector {
+  position: fixed;
+  top: var(--m-top);
+  bottom: var(--m-status);
+  right: 0;
+  width: min(88vw, 340px);
+  max-width: 340px;
+  flex: 0 0 auto;
+  opacity: 1;
+  border-left: 1px solid #25313d;
+  box-shadow: -14px 0 34px rgba(0, 0, 0, 0.5);
+  transform: translateX(100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.2s ease, visibility 0s linear 0.2s;
+  z-index: 50;
+}
+#app[data-device="mobile"][data-inspector="open"] .inspector {
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: transform 0.2s ease, visibility 0s linear 0s;
+}
+#app[data-device="mobile"] #btnInspectorReopen.inspector-reopen { display: none; }
+#app[data-device="mobile"] .inspector-tabs { padding: 0 4px; gap: 2px; }
+#app[data-device="mobile"] .inspector-tabs button { font-size: var(--fs-10); padding: 0 3px; }
+#app[data-device="mobile"] .panel { padding: 12px; }
+#app[data-device="mobile"] .inspector-foot { display: none; }
+
+/* --- Fondo atenuado sobre el stage con cualquier cajón abierto ---
+   Es el ::after de .stage (no tapa la topbar ni la barra de estado); como el
+   evento cae en .stage, el listener de app.js cierra los cajones al tocarlo. */
+#app[data-device="mobile"] .stage::after {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--m-top);
+  bottom: var(--m-status);
+  background: rgba(5, 9, 13, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+  z-index: 45;
+}
+#app[data-device="mobile"][data-rail="expanded"] .stage::after,
+#app[data-device="mobile"][data-inspector="open"] .stage::after { opacity: 1; pointer-events: auto; }
+
+/* --- Escenario y lienzo a todo el ancho --- */
+#app[data-device="mobile"] .stage { width: 100%; min-width: 0; }
+#app[data-device="mobile"] .stage-head {
+  height: 44px;
+  flex: 0 0 44px;
+  gap: 8px;
+  padding: 0 8px;
+  overflow-x: auto;
+  justify-content: flex-start;
+}
+#app[data-device="mobile"] .stage-head > * { flex: 0 0 auto; }
+#app[data-device="mobile"] .level-tabs { overflow: visible; }
+#app[data-device="mobile"] .stage-actions { overflow: visible; flex-wrap: nowrap; }
+#app[data-device="mobile"] #planCanvas,
+#app[data-device="mobile"] #viewsCanvas { width: 100%; height: 100%; }
+
+/* --- Barra de estado simplificada --- */
+#app[data-device="mobile"] .statusbar {
+  height: var(--m-status);
+  flex: 0 0 var(--m-status);
+  gap: 6px;
+  padding: 0 8px;
+}
+#app[data-device="mobile"] .status-author,
+#app[data-device="mobile"] .status-sep,
+#app[data-device="mobile"] #statusLevel,
+#app[data-device="mobile"] #statusGrid { display: none; }
+#app[data-device="mobile"] .status-left { flex: 0 1 auto; }
+#app[data-device="mobile"] .status-center { font: 500 var(--fs-10) var(--mono); }
+#app[data-device="mobile"] .status-right { gap: 5px; }
+#app[data-device="mobile"] .status-chip { height: 22px; }
+
+/* --- Vista 3D: controles rápidos envolventes y avisos compactos --- */
+#app[data-device="mobile"] .view3d-tools {
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  max-width: calc(100% - 16px);
+  gap: 5px;
+  padding: 5px 6px;
+}
+#app[data-device="mobile"] .view3d-tool { font-size: var(--fs-10); gap: 4px; }
+#app[data-device="mobile"] .view3d-tool select { height: 26px; font-size: var(--fs-10); padding: 0 20px 0 6px; }
+#app[data-device="mobile"] .view3d-chip { height: 26px; padding: 0 8px; font-size: var(--fs-10); }
+#app[data-device="mobile"] .view3d-hint {
+  bottom: 10px;
+  max-width: calc(100% - 24px);
+  padding: 5px 9px;
+  font-size: var(--fs-10);
+  white-space: normal;
+  text-align: center;
+}
+/* Si el aviso de vuelo está visible, ocupa el hueco inferior */
+#app[data-device="mobile"] .view3d-flight:not([hidden]) + .view3d-hint { display: none; }
+#app[data-device="mobile"] .view3d-flight { left: 8px; bottom: 10px; }
+
+/* --- Láminas en una columna --- */
+#app[data-device="mobile"] .sheets-wrap { padding: 14px 12px 30px; }
+#app[data-device="mobile"] .sheets-toolbar { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+#app[data-device="mobile"] .sheets-toolbar-actions { width: 100%; }
+#app[data-device="mobile"] .sheets-toolbar-actions .btn { flex: 1; }
+#app[data-device="mobile"] .sheets-gallery { grid-template-columns: 1fr; gap: 12px; }
+
+/* --- Modales a casi todo el ancho, alto máximo 90vh con scroll interno --- */
+html[data-device="mobile"] .modal-backdrop { padding: 8px; }
+html[data-device="mobile"] .modal,
+html[data-device="mobile"] .modal.modal-wide,
+html[data-device="mobile"] .modal.modal-narrow {
+  width: 96vw;
+  max-width: 96vw;
+  max-height: 90vh;
+  border-radius: 12px;
+}
+html[data-device="mobile"] .modal-head { padding: 14px 14px 10px; }
+html[data-device="mobile"] .modal-head h2 { font-size: var(--fs-16); }
+html[data-device="mobile"] .modal-body { padding: 14px; overflow-y: auto; }
+html[data-device="mobile"] .modal-foot { padding: 10px 14px; gap: 6px; }
+html[data-device="mobile"] .modal-foot .btn { flex: 1; }
+html[data-device="mobile"] .form-grid,
+html[data-device="mobile"] .help-grid,
+html[data-device="mobile"] .template-options { grid-template-columns: 1fr; }
+html[data-device="mobile"] .roof-designer { width: 100%; }
+html[data-device="mobile"] .grid-preview { height: 96px; }
+html[data-device="mobile"] .import-drop { padding: 16px 12px; }
+html[data-device="mobile"] .import-preview { min-height: 140px; max-height: 220px; }
+
+/* --- Pantallas muy estrechas: se libera sitio en la topbar --- */
+@media (max-width: 380px) {
+  #app[data-device="mobile"] .topbar { gap: 4px; padding: 0 4px; }
+  #app[data-device="mobile"] .view-tabs button { padding: 0 6px; }
+  #app[data-device="mobile"] #btnHelp { display: none; }
+}
+
+/* Los cajones no animan si el usuario pide movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  #app[data-device="mobile"] .toolrail,
+  #app[data-device="mobile"] .inspector,
+  #app[data-device="mobile"] .stage::after { transition: none; }
+}
+/* ==== 1.5 · selector de pantalla en la cabecera del rail ==== */
+.rail-device-row { display: flex; align-items: center; gap: 6px; width: 100%; margin-top: 4px; }
+.rail-select-label { font-size: var(--fs-10); color: #9aa8b6; white-space: nowrap; }
+.rail-device-select {
+  flex: 1 1 auto; min-width: 0; height: 26px;
+  border: 1px solid #33404d; border-radius: 6px;
+  background: #131c25; color: #c7d2dc;
+  font-family: inherit; font-size: var(--fs-10);
+  padding: 0 4px; outline: none;
+}
+.rail-device-select:focus-visible { border-color: var(--amber-line); }
+#app[data-rail="compact"]:not([data-device="mobile"]) .rail-device-row { display: none; }
+#app[data-device="mobile"] .rail-device-row { display: flex; }
+#app[data-device="mobile"] .rail-head-tools { gap: 4px; }
+/* Tableta: ancho mínimo para que los paneles no dejen el lienzo a cero
+   si se fuerza el modo tableta en una pantalla muy pequeña. */
+#app[data-device="tablet"] { min-width: 720px; }
+
+/* Cabecera del rail: chips en una fila y selector de pantalla en otra */
+.rail-head-tools { flex-wrap: wrap; }
+.rail-head-tools > #btnUnitsRail,
+.rail-head-tools > #langToggle { flex: 0 0 auto; }
+.rail-device-row { flex: 1 1 100%; width: 100%; margin-top: 2px; }
+
+/* Proyecto accesible en móvil desde el cajón del menú */
+.rail-section.rail-project { display: none; }
+#app[data-device="mobile"] .rail-section.rail-project { display: flex; }
+.rail-project-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; width: 100%; }
+.rail-project-grid .rail-action { width: 100%; height: 32px; justify-content: center; }
+#app[data-device="mobile"] .rail-project-grid .rail-action { min-height: 38px; }
