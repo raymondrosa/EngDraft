@@ -672,3 +672,19 @@ project.assets = [
 - Los toggles se sincronizan con `editor.snap`; unidades con `project.settings.units`; idioma con `ED.I18n`.
 - La barra de estado conserva coordenadas, zoom y nivel, pero pierde los botones de unidades/toggles (se mueven al rail); `#btnUnits` desaparece.
 - En modo vista (≠ Planta) se oculta el canvas del plano y se muestra `#viewsCanvas` con la vista generada; Ajustar/Zoom operan sobre la vista activa.
+
+
+---
+
+## 16. Modos de pantalla y vistas sin deformación (1.5)
+
+### 16.1 Preferencia de pantalla
+- Se guarda en `localStorage 'engdraft.deviceMode'` con valores `auto | desktop | tablet | mobile`; por defecto `auto`.
+- Al aplicarla, `#app` y `<html>` reciben `data-device="desktop|tablet|mobile"`; el CSS de la app se ramifica con ese atributo.
+- `auto` detecta: ancho ≤ 720 px (o ≤ 900 px con puntero táctil) → móvil; ≤ 1120 px → tableta; resto → escritorio. Se recalcula al redimensionar y al girar la pantalla.
+- En móvil, el rail y el inspector usan los estados existentes `#app[data-rail]` y `#app[data-inspector]` como cajones superpuestos; el botón `#btnMobileRail` (menú) y `#btnMobileInspector` (ajustes) de la barra superior los abren y cierran. Tocar el lienzo los cierra.
+- La barra de estado conserva coordenadas y zoom; en móvil se ocultan autor, nivel y separadores. El rail incluye la sección **Pantalla** con los cuatro modos.
+
+### 16.2 Vistas 2D sin distorsión
+- El renderizador de vistas (`app.js`) usa una **única escala uniforme** para geometría y para el grosor de línea: `lineWidth = width(mm) * zoom`, con límites 0.5–6 px. El ancho de línea del contrato está en mm y nunca se multiplica por un factor fijo (causa de la deformación visual corregida en 1.5).
+- El canvas de vistas se redibuja al cambiar el tamaño del contenedor (`ResizeObserver`), al redimensionar la ventana, al girar la pantalla (`orientationchange`) y con `visualViewport`, manteniendo la proporción de píxeles (`devicePixelRatio`) sin estirar el dibujo.

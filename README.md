@@ -50,8 +50,11 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 - El menú izquierdo, sección **Vistas**, cambia el área 2D entre la **planta** editable y dibujos de **solo lectura** generados desde el proyecto: **frontal**, **lateral derecho**, **lateral izquierdo**, **sección transversal** y **sección longitudinal**.
 - Los alzados muestran muros, huecos de puertas y ventanas, vidrios, antepechos, losas, terreno, techo (con todos los estilos, incluidos cuatro aguas y perfil propio) y etiquetas de nivel; las secciones cortan los muros con relleno y trama, dibujan la geometría posterior en líneas tenues y permiten mover la **posición del corte**.
 - La vista generada se puede ampliar con la rueda o los botones de zoom, arrastrar para desplazarla, ajustar al ancho con **Ajustar** y volver al editor con **Volver a planta**. Se dibujan con primitivas vectoriales propias (sin librerías) y respetan las unidades del proyecto.
+- **Sin deformación:** el grosor de líneas, marcos y muros se escala con la misma proporción que la geometría (no con un factor fijo), y el dibujo se recalcula al cambiar el tamaño de la ventana, la orientación o el modo de pantalla. En móvil se puede ampliar con pinza de dos dedos, doble toque o los botones de zoom.
 
 ![Vista frontal generada desde la planta](docs/vistas-secciones.png)
+
+![Vista frontal en modo celular, con líneas y marcos a escala uniforme](docs/vista-frontal-movil.png)
 
 ![Sección transversal con muros cortados y techo](docs/seccion-transversal.png)
 
@@ -93,6 +96,17 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 ![Diseñador de techo con perfil editable](docs/disenador-techo-2.png)
 
 ![Vuelo de dron](docs/vuelo-dron.png)
+
+### Modos de pantalla
+- En el menú izquierdo, sección **Pantalla**, eliges **Automático**, **Computadora**, **Tableta** o **Celular**. La preferencia se recuerda en el navegador.
+- **Automático** detecta el tamaño de la ventana y adapta la interfaz: en tableta el menú es más estrecho y los controles más grandes; en celular el menú de opciones y el panel de ajustes pasan a ser **paneles deslizantes** que se abren con los botones de la barra superior, y el plano ocupa toda la pantalla. Los modos manuales fuerzan ese tamaño aunque cambies la ventana.
+- El render 3D, el editor 2D y las vistas y secciones se redibujan al cambiar de tamaño, orientación o modo de pantalla, sin deformarse.
+
+![Modo celular: plano a toda pantalla y botones de menú y ajustes](docs/pantalla-movil.png)
+
+![Menú lateral en celular con proyecto, pantalla, unidades e idioma](docs/pantalla-movil-menu.png)
+
+![Modo tableta con menú estrecho y panel de ajustes](docs/pantalla-tableta.png)
 
 ### Idioma
 - Botón **ES / EN** en la parte superior del menú izquierdo: cambia toda la interfaz entre español e inglés (menús, herramientas, paneles, propiedades, escena, biblioteca, láminas, modales, ayuda y avisos) sin recargar el proyecto. La preferencia se recuerda en este navegador.
@@ -224,6 +238,6 @@ Las pruebas de navegador se hicieron contra Microsoft Edge (Chromium) servido po
 
 ---
 
-**EngDraft 1.4** · HTML + CSS + JavaScript clásico · sin dependencias externas · funciona offline.
+**EngDraft 1.5** · HTML + CSS + JavaScript clásico · sin dependencias externas · funciona offline.
 
 **Autor:** Prof. Raymond Rosa Ávila.
