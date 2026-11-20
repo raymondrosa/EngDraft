@@ -41,7 +41,7 @@
         floorHeight: 2800, northAngle: 0, autoDim: true,
         gridMajor: 4, gridOriginX: 0, gridOriginY: 0, snapStep: 0,
         gridAdaptive: true, gridStyle: 'lines', showAxes: true,
-        roof: { style: 'flat', height: 1200, overhang: 400, ridge: 'auto', profile: null },
+        roof: { style: 'flat', height: 1200, overhang: 400, ridge: 'auto', profile: null, structure: { material: 'none', spacing: 800, depth: 200, width: 120 } },
         materials: {
           wall: { color: '#f3eee2', texture: 'stucco' },
           roof: { color: '#b49a7c', texture: 'tile' },

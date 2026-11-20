@@ -7,7 +7,7 @@
 
   var KIND_MAP = {
     wall: 'walls', room: 'rooms', item: 'items',
-    text: 'texts', dim: 'dims'
+    text: 'texts', dim: 'dims', line: 'lines'
   };
 
   function todayISO() {
@@ -40,6 +40,16 @@
 
   var ROOF_STYLES = { flat: 1, gable: 1, hip: 1, arc: 1, spline: 1, custom: 1 };
   var ROOF_RIDGES = { auto: 1, x: 1, y: 1 };
+  var ROOF_STRUCTURES = { none: 1, steel: 1, concrete: 1, wood: 1 };
+  // Subtipos de aberturas (CONTRACT §17.1).
+  var OPENING_SUBTYPES = {
+    door: { single: 1, double: 1, sliding: 1 },
+    window: { fixed: 1, sliding: 1, double: 1, awning: 1 },
+    garage: { sectional: 1, sliding: 1 },
+    pass: {}
+  };
+  var OPENING_DEFAULTS = { door: 'single', window: 'fixed', garage: 'sectional', pass: '' };
+
   var WALL_TEXTURES = { stucco: 1, brick: 1, wood: 1, stone: 1, smooth: 1 };
   var ROOF_TEXTURES = { tile: 1, shingle: 1, metal: 1, wood: 1, concrete: 1, smooth: 1 };
   var GROUND_TEXTURES = { grass: 1, paving: 1, gravel: 1, smooth: 1 };
@@ -154,6 +164,14 @@
         if (p.z > s.roof.height * 2.5) p.z = s.roof.height * 2.5;
       });
     }
+    // Vigas interiores del techo (CONTRACT §17.3).
+    var rstruct = (s.roof.structure && typeof s.roof.structure === 'object') ? s.roof.structure : {};
+    s.roof.structure = {
+      material: ROOF_STRUCTURES[rstruct.material] ? rstruct.material : 'none',
+      spacing: gridNumber(rstruct.spacing, 800, 300, 3000),
+      depth: gridNumber(rstruct.depth, 200, 80, 600),
+      width: gridNumber(rstruct.width, 120, 60, 400)
+    };
     var mats = (s.materials && typeof s.materials === 'object') ? s.materials : {};
     var mWall = (mats.wall && typeof mats.wall === 'object') ? mats.wall : {};
     var mRoof = (mats.roof && typeof mats.roof === 'object') ? mats.roof : {};
@@ -213,7 +231,7 @@
       if (!Array.isArray(p[name])) p[name] = [];
       return p[name];
     }
-    arr('walls'); arr('rooms'); arr('items'); arr('texts'); arr('dims'); arr('sheets'); arr('assets');
+    arr('walls'); arr('rooms'); arr('items'); arr('texts'); arr('dims'); arr('sheets'); arr('assets'); arr('lines');
 
     p.walls = p.walls.filter(function (w) { return w && w.a && w.b; });
     p.walls.forEach(function (w) {
@@ -229,6 +247,8 @@
       if (w.curve) w.openings = [];
       w.openings.forEach(function (o) {
         o.id = o.id || ED.Geo.uid('o');
+        o.type = OPENING_SUBTYPES[o.type] ? o.type : 'door';
+        if (!OPENING_SUBTYPES[o.type][o.subtype]) o.subtype = OPENING_DEFAULTS[o.type];
         o.t = ED.Geo.clamp(Number(o.t) || 0.5, 0, 1);
         o.width = Number(o.width) || 900;
         o.height = Number(o.height) || (o.type === 'window' ? 1200 : 2100);
@@ -262,6 +282,34 @@
       i.w = Number(i.w) || 600;
       i.d = Number(i.d) || 600;
       i.h = Number(i.h) || 800;
+    });
+
+    // Líneas y curvas de dibujo libre (CONTRACT §17.4).
+    p.lines = p.lines.filter(function (l) { return l && l.a && l.b; });
+    p.lines.forEach(function (l) {
+      l.id = l.id || ED.Geo.uid('ln');
+      l.type = l.type === 'curve' ? 'curve' : 'line';
+      l.level = levelIds[l.level] ? l.level : firstLevel;
+      l.layerId = l.layerId || 'annotation';
+      l.a = { x: Number(l.a.x) || 0, y: Number(l.a.y) || 0 };
+      l.b = { x: Number(l.b.x) || 0, y: Number(l.b.y) || 0 };
+      l.color = colorOr(l.color, '#3f6f86');
+      l.width = gridNumber(l.width, 25, 5, 300);
+      l.style = (l.style === 'dash' || l.style === 'dot') ? l.style : 'solid';
+      var c = l.curve;
+      if (c && typeof c === 'object' && c.type === 'arc') {
+        var bg = finiteNumber(c.bulge, 0);
+        if (Math.abs(bg) < 1e-4) delete l.curve;
+        else l.curve = { type: 'arc', bulge: ED.Geo.clamp(bg, -4, 4) };
+      } else if (c && typeof c === 'object' && c.type === 'spline') {
+        var cpts = (Array.isArray(c.pts) ? c.pts : []).filter(function (q) { return q && isFinite(Number(q.x)) && isFinite(Number(q.y)); })
+          .slice(0, 32).map(function (q) { return { x: Number(q.x), y: Number(q.y) }; });
+        if (cpts.length) l.curve = { type: 'spline', pts: cpts }; else delete l.curve;
+      } else {
+        delete l.curve;
+      }
+      if (l.type === 'line') delete l.curve;
+      else if (!l.curve) l.type = 'line';
     });
 
     // Objetos importados por el usuario (GLB/OBJ): se conservan en el proyecto.
@@ -410,6 +458,26 @@
     this.scheduleSave();
   };
 
+  // Elimina un nivel (planta) y todas sus entidades. Debe quedar al menos uno.
+  Store.prototype.removeLevel = function (levelId) {
+    var p = this.project;
+    if (!p || !Array.isArray(p.levels) || p.levels.length <= 1) return false;
+    if (!p.levels.some(function (l) { return l.id === levelId; })) return false;
+    p.levels = p.levels.filter(function (l) { return l.id !== levelId; });
+    ['walls', 'rooms', 'items', 'texts', 'dims', 'lines'].forEach(function (name) {
+      if (Array.isArray(p[name])) p[name] = p[name].filter(function (o) { return o.level !== levelId; });
+    });
+    (p.sheets || []).forEach(function (sh) {
+      if (sh.levelId === levelId) sh.levelId = p.levels[0].id;
+    });
+    if (this.activeLevel === levelId) this.activeLevel = p.levels[0].id;
+    this.selection = [];
+    this.touch();
+    this.emit('level', this.activeLevel);
+    this.emit('selection', this.selection);
+    return true;
+  };
+
   Store.prototype.byLevel = function (name) {
     var level = this.activeLevel;
     return this.project[name].filter(function (o) { return o.level === level; });
@@ -420,6 +488,7 @@
   Store.prototype.items = function () { return this.byLevel('items'); };
   Store.prototype.texts = function () { return this.byLevel('texts'); };
   Store.prototype.dims = function () { return this.byLevel('dims'); };
+  Store.prototype.lines = function () { return this.byLevel('lines'); };
 
   Store.prototype.newId = function (prefix) {
     return ED.Geo.uid(prefix);

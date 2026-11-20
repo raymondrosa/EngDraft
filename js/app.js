@@ -384,7 +384,10 @@
     road: '<path d="M7 16 5.6 4M13 16l1.4-12" stroke-width="1.4" stroke-linecap="round"/><path d="M10 5.5v2M10 9.5v2M10 13.5v2" stroke-width="1.2" stroke-linecap="round"/>',
     folder: '<path d="M2.8 5.8h5l1.5 1.8h7.9v7.9a1 1 0 0 1-1 1H3.8a1 1 0 0 1-1-1V5.8Z" stroke-width="1.3" stroke-linejoin="round"/><path d="M2.8 8.4h14.4" stroke-width="1.1"/>',
     save: '<path d="M4 3.5h9.2L17 7.3v9.2H4V3.5Z" stroke-width="1.3" stroke-linejoin="round"/><path d="M7 3.5v5h6v-5M7 13.5h6" stroke-width="1.2"/>',
-    undo: '<path d="M7.4 6.2 3.6 10l3.8 3.8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 10h7.2a4 4 0 0 1 0 8H8.5" stroke-width="1.4" stroke-linecap="round"/>'
+    undo: '<path d="M7.4 6.2 3.6 10l3.8 3.8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 10h7.2a4 4 0 0 1 0 8H8.5" stroke-width="1.4" stroke-linecap="round"/>',
+    line: '<path d="M3.5 16.5 16.5 3.5" stroke-width="1.5" stroke-linecap="round"/><circle cx="3.5" cy="16.5" r="1.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="3.5" r="1.6" fill="currentColor" stroke="none"/>',
+    curve: '<path d="M3.5 15.5c2.5-8 10.5-8 13 0" stroke-width="1.5" stroke-linecap="round"/><circle cx="3.5" cy="15.5" r="1.6" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15.5" r="1.6" fill="currentColor" stroke="none"/>',
+    scale: '<path d="M4 16V9M4 16h7M4 9l5-5M4 16l7-7" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.5 3.5h5v5" stroke-width="1.3" stroke-linecap="round"/>'
   };
 
   function icon(name, size) {
@@ -476,6 +479,7 @@
     updateZoomStatus();
     sync3DQuickControls();
     syncCanvasToggles();
+    syncSnapChips();
     initLanguage();
 
     setTimeout(function () {
@@ -548,6 +552,15 @@
     { id: 'left', label: 'Lateral izq.', abbr: 'LI' },
     { id: 'sectionX', label: 'Sección transversal', abbr: 'ST' },
     { id: 'sectionY', label: 'Sección longitudinal', abbr: 'SL' }
+  ];
+
+  var SNAP_MODES = [
+    { id: 'endpoint', label: 'Extremo' },
+    { id: 'midpoint', label: 'Medio' },
+    { id: 'center', label: 'Centro' },
+    { id: 'quadrant', label: 'Cuadrante' },
+    { id: 'tangent', label: 'Tangente' },
+    { id: 'perpendicular', label: 'Perp.' }
   ];
 
   var TOGGLE_ICONS = {
@@ -637,6 +650,8 @@
       { id: 'wall', label: 'Muro', key: 'M', icon: 'wall', title: 'Muro recto encadenado' },
       { id: 'wallArc', label: 'Arco', key: 'C', icon: 'wallArc', title: 'Muro en arco' },
       { id: 'wallSpline', label: 'Spline', key: 'K', icon: 'wallSpline', title: 'Muro spline' },
+      { id: 'line', label: 'Línea', key: 'L', icon: 'line', title: 'Líneas encadenadas' },
+      { id: 'curve', label: 'Curva', key: 'B', icon: 'curve', title: 'Curva por tres puntos' },
       { id: 'door', label: 'Puerta', key: 'P', icon: 'door' },
       { id: 'window', label: 'Ventana', key: 'N', icon: 'window' },
       { id: 'room', label: 'Ambiente', key: 'A', icon: 'room' },
@@ -644,6 +659,7 @@
       { id: 'furniture', label: 'Muebles', key: 'F', icon: 'furniture', title: 'Muebles, plantas y vías' },
       { id: 'text', label: 'Texto', key: 'T', icon: 'text' },
       { id: 'dim', label: 'Cota', key: 'D', icon: 'dim' },
+      { id: 'scale', label: 'Escalar', key: 'X', icon: 'scale', title: 'Escalar la selección' },
       { sep: true },
       { id: 'erase', label: 'Borrar', key: 'E', icon: 'erase' }
     ];
@@ -682,7 +698,10 @@
       '<svg viewBox="0 0 18 18" width="14" height="14" fill="none" aria-hidden="true"><path d="M3 3h12v12H3zM3 7.5h12M3 12h12M7.5 3v12M12 3v12" stroke="currentColor" stroke-width="1.2"/></svg>' +
       '<b id="gridChipLabel">25 cm</b>' +
       '<svg class="grid-chip-caret" viewBox="0 0 12 12" width="10" height="10" fill="none" aria-hidden="true"><path d="M3 4.5 6 7.5l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
-      '</button></div>' +
+      '</button>' +
+      '<div class="snap-chip-grid">' + SNAP_MODES.map(function (m) {
+        return '<button class="snap-chip' + (App.editor && App.editor.snapModes && App.editor.snapModes[m.id] !== false ? ' on' : '') + '" type="button" data-snap-mode="' + m.id + '" title="Snap: ' + m.label + '">' + m.label + '</button>';
+      }).join('') + '</div></div>' +
       '<div class="rail-section"><div class="rail-section-title">Vista</div><div class="rail-action-row">' +
       '<button class="rail-action" id="btnFit2d" title="Ajustar a la vista (Shift+F)">' + icon('fit', 15) + '<span>Ajustar</span></button>' +
       '<button class="rail-action" id="zoomIn" title="Acercar"><b>+</b></button>' +
@@ -788,6 +807,7 @@
         zoomActiveView(e.deltaY < 0 ? 1.12 : 0.9);
       }, { passive: false });
       var vDrag = null;
+      var vTap = null;
       viewsCanvas.addEventListener('pointerdown', function (e) {
         if (App.viewMode === 'plan') return;
         if (e.pointerType === 'touch') {
@@ -801,6 +821,7 @@
           }
         }
         vDrag = { x: e.clientX, y: e.clientY, panX: App.viewsPan.x, panY: App.viewsPan.y };
+        vTap = { x: e.clientX, y: e.clientY, moved: false };
         try { viewsCanvas.setPointerCapture(e.pointerId); } catch (err) { /* tolerar */ }
         viewsCanvas.style.cursor = 'grabbing';
       });
@@ -823,6 +844,7 @@
           }
         }
         if (!vDrag) return;
+        if (vTap && Math.abs(e.clientX - vTap.x) + Math.abs(e.clientY - vTap.y) > 4) vTap.moved = true;
         App.viewsPan.x = vDrag.panX + (e.clientX - vDrag.x);
         App.viewsPan.y = vDrag.panY + (e.clientY - vDrag.y);
         renderViews();
@@ -832,8 +854,14 @@
           delete vTouches[e.pointerId];
           if (Object.keys(vTouches).length < 2) vPinchDist = 0;
         }
+        if (vTap && !vTap.moved && App.viewMode !== 'plan') {
+          var src = viewsHitTest(vTap.x, vTap.y);
+          if (src) selectViewsPrimitive(src);
+          else { App.viewSelection = null; App.store.setSelection([]); renderViews(); }
+        }
+        vTap = null;
         vDrag = null;
-        viewsCanvas.style.cursor = 'grab';
+        viewsCanvas.style.cursor = App.viewMode === 'plan' ? 'grab' : 'crosshair';
       };
       viewsCanvas.addEventListener('pointerup', endVDrag);
       viewsCanvas.addEventListener('pointercancel', endVDrag);
@@ -850,6 +878,15 @@
     });
 
     $('#toolrail').addEventListener('click', function (e) {
+      var sc = e.target.closest('[data-snap-mode]');
+      if (sc) {
+        var modeId = sc.getAttribute('data-snap-mode');
+        var patch = {};
+        patch[modeId] = !(App.editor && App.editor.snapModes && App.editor.snapModes[modeId] !== false);
+        if (App.editor && App.editor.setSnapModes) App.editor.setSnapModes(patch);
+        syncSnapChips();
+        return;
+      }
       var vm = e.target.closest('[data-view-mode]');
       if (vm) { setViewMode(vm.getAttribute('data-view-mode')); return; }
       var toggleBtn = e.target.closest('[data-toggle]');
@@ -863,6 +900,8 @@
     $('#levelTabs').addEventListener('click', function (e) {
       var add = e.target.closest('[data-level-add]');
       if (add) { showLevelModal(); return; }
+      var rem = e.target.closest('[data-level-remove]');
+      if (rem) { confirmDeleteLevel(); return; }
       var tab = e.target.closest('[data-level]');
       if (tab) {
         App.store.setActiveLevel(tab.getAttribute('data-level'));
@@ -1122,7 +1161,8 @@
     wrap.innerHTML = App.store.levels().map(function (l) {
       return '<button class="level-tab' + (l.id === active ? ' active' : '') + '" data-level="' + esc(l.id) + '">' +
         '<span class="lvl-dot"></span>' + esc(l.name) + '</button>';
-    }).join('') + '<button class="level-add" data-level-add title="Añadir nivel">+</button>';
+    }).join('') + '<button class="level-add" data-level-add title="Añadir nivel">+</button>' +
+      '<button class="level-add" data-level-remove title="Eliminar el nivel activo" aria-label="Eliminar el nivel activo">−</button>';
   }
 
   function setSaveState(mode, text) {
@@ -1181,6 +1221,10 @@
 
   // ================================================================== herramientas
   function chooseTool(tool) {
+    if (tool === 'scale' && (!App.store.selection || !App.store.selection.length)) {
+      toast('Selecciona primero uno o varios objetos para escalar.', 'info', 2800);
+      return;
+    }
     if (tool === 'furniture') {
       if (!App.store.isVisible('furniture')) { toast('La capa Mobiliario está oculta.', 'warn'); return; }
       if (!App.lastFurnitureId) App.lastFurnitureId = 'sofa3';
@@ -1199,6 +1243,14 @@
     updateToolRailActive();
     $('#statusTool').textContent = App.editor.statusText();
     if (tool === 'room') toast('Haz clic dentro de un recinto cerrado por muros.', 'info', 2600);
+  }
+
+  function syncSnapChips() {
+    if (!App.editor) return;
+    $$('#toolList [data-snap-mode]').forEach(function (b) {
+      var id = b.getAttribute('data-snap-mode');
+      b.classList.toggle('on', !(App.editor.snapModes && App.editor.snapModes[id] === false));
+    });
   }
 
   function updateToolRailActive() {
@@ -1223,6 +1275,15 @@
   // ============================================================ escena 3D
   var ROOF_STYLES = { flat: 'Plano', gable: 'A dos aguas', hip: 'Cuatro aguas (poliforme)', arc: 'Arco', spline: 'Spline', custom: 'Mi diseño' };
   var ROOF_RIDGES = { auto: 1, x: 1, y: 1 };
+  var ROOF_STRUCTURES = { none: 'Sin vigas', steel: 'Acero', concrete: 'Hormigón', wood: 'Madera' };
+  var OPENING_SUBTYPES = {
+    door: [['single', 'Hoja simple'], ['double', 'Doble hoja'], ['sliding', 'Corrediza']],
+    window: [['fixed', 'Fija'], ['sliding', 'Corrediza'], ['double', 'Doble hoja'], ['awning', 'Proyectante']],
+    garage: [['sectional', 'Seccional'], ['sliding', 'Corrediza']],
+    pass: []
+  };
+  var OPENING_SUBTYPE_DEFAULT = { door: 'single', window: 'fixed', garage: 'sectional', pass: '' };
+
   var MATERIAL_LABELS = { wall: 'Paredes', roof: 'Techo', ground: 'Suelo' };
   var SCENE_TEXTURES = {
     wall: [['stucco', 'Estuco'], ['brick', 'Ladrillo'], ['wood', 'Madera'], ['stone', 'Piedra'], ['smooth', 'Liso']],
@@ -1240,6 +1301,7 @@
       ridge: ROOF_RIDGES[roof.ridge] ? roof.ridge : 'auto',
       roofHeight: n(roof.height, 1200),
       roofOverhang: n(roof.overhang, 400),
+      roofStructure: roof.structure || { material: 'none', spacing: 800, depth: 200, width: 120 },
       roofProfile: Array.isArray(roof.profile) ? roof.profile : null,
       materials: {
         wall: { color: (mats.wall && mats.wall.color) || '#f3eee2', texture: (mats.wall && mats.wall.texture) || 'stucco' },
@@ -1264,6 +1326,7 @@
       roofStyle: sc.roofStyle,
       roofRidge: sc.ridge,
       roofProfile: sc.roofProfile,
+      roofStructure: sc.roofStructure,
       roofHeight: sc.roofHeight,
       roofOverhang: sc.roofOverhang,
       roofColor: sc.materials.roof.color,
@@ -1458,7 +1521,18 @@
       '<div class="field-grid">' +
       field('Altura / flecha', '<div class="input-row"><input class="input" type="number" min="0.2" step="0.1" data-scene-field="roofHeight" value="' + unitLenInput(sc.roofHeight) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
       field('Alero', '<div class="input-row"><input class="input" type="number" min="0" step="0.1" data-scene-field="roofOverhang" value="' + unitLenInput(sc.roofOverhang) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
-      '</div><div class="field-hint">Al elegir un estilo se muestra el techo automáticamente. También puedes cambiarlo con el selector <strong>Techo</strong> de la vista 3D.</div></div>';
+      '</div><div class="field-hint">Al elegir un estilo se muestra el techo automáticamente. También puedes cambiarlo con el selector <strong>Techo</strong> de la vista 3D.</div></div>' +
+      '<div class="scene-group"><div class="section-title">Estructura interior del techo</div>' +
+      '<div class="field"><label>Vigas</label><select class="select" data-scene-field="roofStructureMaterial">' +
+      Object.keys(ROOF_STRUCTURES).map(function (k) {
+        return '<option value="' + k + '"' + (sc.roofStructure.material === k ? ' selected' : '') + '>' + ROOF_STRUCTURES[k] + '</option>';
+      }).join('') + '</select></div>' +
+      '<div class="field-grid">' +
+      field('Separación', '<div class="input-row"><input class="input" type="number" min="0.3" step="0.05" data-scene-field="roofStructureSpacing" value="' + unitLenInput(sc.roofStructure.spacing) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
+      field('Canto', '<div class="input-row"><input class="input" type="number" min="0.08" step="0.02" data-scene-field="roofStructureDepth" value="' + unitLenInput(sc.roofStructure.depth) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
+      '</div>' +
+      '<div class="field"><label>Ancho de viga</label><div class="input-row"><input class="input" type="number" min="0.06" step="0.01" data-scene-field="roofStructureWidth" value="' + unitLenInput(sc.roofStructure.width) + '"><span class="input-unit">' + unitLenLabel() + '</span></div></div>' +
+      '<div class="field-hint">Vigas vistas desde el interior en la vista 3D y en las secciones. Material: acero, hormigón o madera. Para verlas desde arriba, oculta la cubierta con «Mostrar techo».</</div></div>';
 
     html += '<div class="scene-group" id="sceneMaterials"><div class="section-title">Materiales</div>' +
       '<div class="field-hint">Colores y texturas de paredes, techo y suelo. También puedes abrirlos con el botón “Colores y texturas” de la vista 3D.</div>' +
@@ -1530,6 +1604,15 @@
       applyScene3D(); schedule3D(); updateStageActions(); renderScenePanel();
       return;
     }
+    if (fieldName === 'roofStructureMaterial') {
+      App.store.act('Estructura del techo', function () {
+        var st = App.store.project.settings.roof.structure || {};
+        st.material = ROOF_STRUCTURES[t.value] ? t.value : 'none';
+        App.store.project.settings.roof.structure = st;
+      });
+      applyScene3D(); schedule3D(); renderScenePanel();
+      return;
+    }
     if (fieldName === 'roofRidge') {
       App.store.act('Orientación del techo', function () {
         App.store.project.settings.roof.ridge = ROOF_RIDGES[t.value] ? t.value : 'auto';
@@ -1563,6 +1646,19 @@
         App.store.project.settings.render[fieldName] = !!t.checked;
       });
       applyScene3D(); schedule3D(); renderScenePanel();
+      return;
+    }
+    if (fieldName === 'roofStructureSpacing' || fieldName === 'roofStructureDepth' || fieldName === 'roofStructureWidth') {
+      var smm = parseLenInput(t.value);
+      if (!isFinite(smm)) return;
+      App.store.act('Editar estructura del techo', function () {
+        var st = App.store.project.settings.roof.structure || {};
+        if (fieldName === 'roofStructureSpacing') st.spacing = ED.Geo.clamp(smm, 300, 3000);
+        if (fieldName === 'roofStructureDepth') st.depth = ED.Geo.clamp(smm, 80, 600);
+        if (fieldName === 'roofStructureWidth') st.width = ED.Geo.clamp(smm, 60, 400);
+        App.store.project.settings.roof.structure = st;
+      });
+      applyScene3D(); schedule3D();
       return;
     }
     if (fieldName === 'roofHeight' || fieldName === 'roofOverhang') {
@@ -2075,6 +2171,114 @@
     return opts;
   }
 
+  function viewSrcMatch(src) {
+    var sel = App.viewSelection;
+    if (!sel || !src) return false;
+    if (sel.kind === 'opening') {
+      return src.kind === 'opening' && src.wallId === sel.wallId && src.openingId === sel.openingId;
+    }
+    return src.kind === sel.kind && String(src.id) === String(sel.id);
+  }
+
+  function pointInPoly(px, py, pts) {
+    var inside = false;
+    for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      var xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+      if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / ((yj - yi) || 1e-9) + xi)) inside = !inside;
+    }
+    return inside;
+  }
+
+  function nearPolyline(px, py, pts) {
+    var best = Infinity;
+    for (var i = 0; i < pts.length - 1; i++) {
+      var a = pts[i], b = pts[i + 1];
+      var vx = b.x - a.x, vy = b.y - a.y;
+      var len2 = vx * vx + vy * vy;
+      var t = len2 > 0 ? ((px - a.x) * vx + (py - a.y) * vy) / len2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      var dx = px - (a.x + vx * t), dy = py - (a.y + vy * t);
+      best = Math.min(best, Math.sqrt(dx * dx + dy * dy));
+    }
+    return best;
+  }
+
+  function viewsHitTest(clientX, clientY) {
+    var canvas = $('#viewsCanvas'), fit = App.viewsFit, data = App.viewsData;
+    if (!canvas || !fit || !data) return null;
+    var r = canvas.getBoundingClientRect();
+    var x = clientX - r.left, y = clientY - r.top;
+    function toScreen(p) {
+      return { x: fit.cssW / 2 + (p.x - fit.cx) * fit.zoom + App.viewsPan.x, y: fit.cssH / 2 - (p.y - fit.cy) * fit.zoom + App.viewsPan.y };
+    }
+    var prims = data.primitives || [], best = null, bestScore = Infinity;
+    for (var i = prims.length - 1; i >= 0; i--) {
+      var pr = prims[i];
+      if (!pr || !pr.src || !pr.points || pr.points.length < 2) continue;
+      var pts = pr.points.map(toScreen);
+      var inside = !!pr.closed && pointInPoly(x, y, pts);
+      var dist = nearPolyline(x, y, pts);
+      var score = inside ? -1 : dist;
+      if (inside || dist <= 6) { if (score < bestScore) { bestScore = score; best = pr; } }
+    }
+    return best ? best.src : null;
+  }
+
+  function selectViewsPrimitive(src) {
+    if (!src) return;
+    if (src.kind === 'roof') {
+      App.viewSelection = null;
+      applyInspectorState('open');
+      setInspectorTab('scene');
+      toast('Techo: ajusta estilo, materiales y vigas en Escena.', 'info', 2600);
+      return;
+    }
+    applyInspectorState('open');
+    setInspectorTab('props');
+    if (src.kind === 'opening') {
+      App.store.setSelection([{ kind: 'wall', id: src.wallId }]);
+      App.viewSelection = { kind: 'opening', wallId: src.wallId, openingId: src.openingId };
+      renderViewSelectionProps();
+    } else {
+      App.viewSelection = null;
+      App.store.setSelection([{ kind: src.kind, id: src.id }]);
+      refreshProps();
+    }
+    renderViews();
+  }
+
+  function renderViewSelectionProps() {
+    var panel = $('#panelProps');
+    if (!panel) return;
+    var sel = App.viewSelection;
+    if (!sel || sel.kind !== 'opening') { App.viewSelection = null; refreshProps(); return; }
+    var wall = App.store.find('wall', sel.wallId);
+    var op = null;
+    (wall && wall.openings ? wall.openings : []).forEach(function (o) { if (o.id === sel.openingId) op = o; });
+    if (!wall || !op) { App.viewSelection = null; refreshProps(); return; }
+    var sizeU = unitSizeLabel();
+    var typeLabel = op.type === 'window' ? 'Ventana' : op.type === 'garage' ? 'Portón' : op.type === 'pass' ? 'Paso' : 'Puerta';
+    var subOptions = (OPENING_SUBTYPES[op.type] || []).map(function (pair) {
+      return '<option value="' + pair[0] + '"' + ((op.subtype || OPENING_SUBTYPE_DEFAULT[op.type]) === pair[0] ? ' selected' : '') + '>' + pair[1] + '</option>';
+    }).join('');
+    var html = '<div class="section"><div class="section-title">Abertura en vista <span class="count">' + typeLabel + '</span></div>' +
+      '<div class="field-hint">Seleccionada en la vista generada. Los cambios se aplican al proyecto.</div>' +
+      (subOptions ? '<div class="field"><label>Tipo de hoja / ventana</label><select class="select" data-opening="' + esc(op.id) + '" data-wall="' + esc(wall.id) + '" data-open-field="subtype">' + subOptions + '</select></div>' : '') +
+      '<div class="field-grid"><div class="field"><label>Ancho</label><div class="input-row"><input class="input" type="number" min="0.3" step="0.05" data-opening="' + esc(op.id) + '" data-wall="' + esc(wall.id) + '" data-open-field="width" value="' + unitSizeInput(op.width) + '"><span class="input-unit">' + sizeU + '</span></div></div>' +
+      '<div class="field"><label>Alto</label><div class="input-row"><input class="input" type="number" min="0.3" step="0.05" data-opening="' + esc(op.id) + '" data-wall="' + esc(wall.id) + '" data-open-field="height" value="' + unitSizeInput(op.height) + '"><span class="input-unit">' + sizeU + '</span></div></div>' +
+      '<div class="field"><label>Antepecho</label><div class="input-row"><input class="input" type="number" min="0" step="0.05" data-opening="' + esc(op.id) + '" data-wall="' + esc(wall.id) + '" data-open-field="sill" value="' + unitSizeInput(op.sill || 0) + '"><span class="input-unit">' + sizeU + '</span></div></div>' +
+      '<div class="field"><label>Posición</label><div class="input-row"><input class="input" type="number" min="0" max="100" step="1" data-opening="' + esc(op.id) + '" data-wall="' + esc(wall.id) + '" data-open-field="t" value="' + fnum(op.t * 100, 1) + '"><span class="input-unit">%</span></div></div></div>' +
+      (op.type === 'door' || op.type === 'garage' ? '<div class="prop-actions"><button class="btn btn-ghost btn-sm" data-action="flip-opening" data-wall="' + esc(wall.id) + '" data-opening="' + esc(op.id) + '" data-open-prop="swing">' + icon('rotate', 12) + 'Girar hoja</button>' +
+        '<button class="btn btn-ghost btn-sm" data-action="flip-opening" data-wall="' + esc(wall.id) + '" data-opening="' + esc(op.id) + '" data-open-prop="hinge">' + icon('duplicate', 12) + 'Invertir bisagra</button></div>' : '') +
+      '<div class="prop-actions"><button class="btn btn-ghost btn-sm" data-action="delete-opening" data-wall="' + esc(wall.id) + '" data-opening="' + esc(op.id) + '">' + icon('trash', 12) + 'Eliminar abertura</button></div></div>' +
+      '<div class="section"><div class="section-title">Muro</div>' +
+      '<div class="read-line"><span>Longitud</span><strong>' + unitLen(ED.Geo.wallLength(wall)) + '</strong></div>' +
+      '<div class="read-line"><span>Nivel</span><strong>' + esc(levelName(wall.level)) + '</strong></div>' +
+      '<div class="prop-actions"><button class="btn btn-ghost btn-sm" data-action="view-select-wall" data-id="' + esc(wall.id) + '">' + icon('wall', 12) + 'Seleccionar muro completo</button></div></div>';
+    panel.innerHTML = html;
+    localize();
+  }
+
   function setViewMode(mode) {
     var valid = false;
     for (var i = 0; i < VIEW_MODES.length; i++) if (VIEW_MODES[i].id === mode) valid = true;
@@ -2087,6 +2291,10 @@
     var viewsCanvas = $('#viewsCanvas');
     var chip = $('#viewModeChip');
     if (next === 'plan') {
+      App.viewSelection = null;
+      if (viewsCanvas) { viewsCanvas.hidden = true; if (viewsCanvas.classList) viewsCanvas.classList.remove('selectable'); }
+      if (chip) chip.classList.remove('editable');
+      var vh = $('#viewsHint'); if (vh) vh.hidden = true;
       if (viewsCanvas) viewsCanvas.hidden = true;
       if (planCanvas) planCanvas.hidden = false;
       if (chip) chip.hidden = true;
@@ -2121,6 +2329,7 @@
     if (!isFinite(zoom) || zoom <= 0) zoom = 0.05;
     var cx = (b.minX + b.maxX) / 2;
     var cy = (b.minY + b.maxY) / 2;
+    App.viewsFit = { zoom: zoom, cx: cx, cy: cy, cssW: cssW, cssH: cssH };
     function tx(p) {
       return {
         x: cssW / 2 + (p.x - cx) * zoom + App.viewsPan.x,
@@ -2168,6 +2377,25 @@
         ctx.stroke();
       }
     });
+    // Resaltado de la entidad seleccionada en la vista
+    if (App.viewSelection) {
+      ctx.save();
+      prims.forEach(function (pr) {
+        if (!pr || !pr.src || !pr.points || pr.points.length < 2) return;
+        if (!viewSrcMatch(pr.src)) return;
+        ctx.beginPath();
+        var q0 = tx(pr.points[0]);
+        ctx.moveTo(q0.x, q0.y);
+        for (var h = 1; h < pr.points.length; h++) { var qp = tx(pr.points[h]); ctx.lineTo(qp.x, qp.y); }
+        if (pr.closed) ctx.closePath();
+        ctx.strokeStyle = '#e0a030';
+        ctx.lineWidth = 2.6;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+        if (pr.closed) { ctx.fillStyle = 'rgba(224,160,48,0.10)'; ctx.fill(); }
+      });
+      ctx.restore();
+    }
     // Marco y rótulo de la vista
     ctx.save();
     ctx.strokeStyle = 'rgba(36,49,61,0.22)';
@@ -2211,6 +2439,12 @@
     try { data = ED.Views.build(App.store.project, viewsOpts()); } catch (e) { console.error('[EngDraft vistas]', e); }
     if (!data) return;
     App.viewsData = data;
+    if (canvas.classList) canvas.classList.add('selectable');
+    canvas.style.cursor = 'crosshair';
+    var chip = $('#viewModeChip');
+    if (chip) chip.classList.add('editable');
+    var hint = $('#viewsHint');
+    if (hint) hint.hidden = false;
     drawViewData(ctx, data, cssW, cssH);
     updateZoomStatus();
   }
@@ -2289,6 +2523,7 @@
       if (flightBadge) flightBadge.hidden = true;
     }
     App.view = view;
+    if (view !== '2d' || App.viewMode === 'plan') App.viewSelection = null;
     $$('#viewTabs button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-view') === view); });
     ['2d', '3d', 'sheets'].forEach(function (v) {
       var sec = $('#view' + (v === '2d' ? '2d' : v === '3d' ? '3d' : 'Sheets'));
@@ -2566,7 +2801,7 @@
     if (App.view === '2d') {
       if (App.viewMode !== 'plan') {
         var isSection = App.viewMode === 'sectionX' || App.viewMode === 'sectionY';
-        html = '<span class="stage-note">Vista generada · solo lectura</span>' +
+        html = '<span class="stage-note">Vista generada · clic para editar</span>' +
           (isSection
             ? '<label class="stage-range">Posición <input type="range" id="sectionPos" min="5" max="95" step="1" value="' + App.sectionPosPct + '"></label>'
             : '') +
@@ -2691,9 +2926,9 @@
     try {
       App.store.saveLocal();
       var blob = new Blob([App.store.exportJSON()], { type: 'application/json' });
-      downloadBlob(blob, safeName(App.store.project.meta.name) + '.engdraft');
+      downloadBlob(blob, safeName(App.store.project.meta.name) + '.json');
       setSaveState('saved');
-      toast('Proyecto descargado como .engdraft', 'success', 3000);
+      toast('Proyecto descargado como .json', 'success', 3000);
     } catch (e) {
       console.error(e);
       toast('No se pudo descargar el proyecto.', 'error');
@@ -2832,6 +3067,7 @@
     if (!App.store) return;
     if (App.tab !== 'props') return;
     if (App.view === 'sheets') { renderSheetProps(); return; }
+    if (App.viewMode !== 'plan' && App.viewSelection) { renderViewSelectionProps(); return; }
     var selected = App.store.getSelectionObjects();
     if (selected.length === 1) renderEntityProps(selected[0]);
     else if (selected.length > 1) renderMultiProps(selected);
@@ -2885,10 +3121,10 @@
   }
 
   function entityIcon(kind) {
-    return { wall: 'wall', item: 'furniture', room: 'room', text: 'text', dim: 'dim' }[kind] || 'info';
+    return { wall: 'wall', item: 'furniture', room: 'room', text: 'text', dim: 'dim', line: 'line' }[kind] || 'info';
   }
   function kindLabel(kind) {
-    return { wall: 'Muro', item: 'Mobiliario', room: 'Ambiente', text: 'Texto', dim: 'Cota' }[kind] || 'Objeto';
+    return { wall: 'Muro', item: 'Mobiliario', room: 'Ambiente', text: 'Texto', dim: 'Cota', line: 'Línea / curva' }[kind] || 'Objeto';
   }
   function levelName(id) {
     var name = id;
@@ -2940,6 +3176,12 @@
         } else {
           actions = '<div class="field" style="margin:6px 0 0"><label>Antepecho</label><div class="input-row"><input class="input" type="number" min="0" step="50" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="sill" value="' + unitSizeInput(o.sill || 0) + '"><span class="input-unit">' + esc(sizeU) + '</span></div></div>';
         }
+        var subOptions = (OPENING_SUBTYPES[o.type] || []).map(function (pair) {
+          return '<option value="' + pair[0] + '"' + ((o.subtype || OPENING_SUBTYPE_DEFAULT[o.type]) === pair[0] ? ' selected' : '') + '>' + pair[1] + '</option>';
+        }).join('');
+        var subSelect = subOptions
+          ? '<div class="field" style="margin:6px 0 0"><label>Tipo de hoja / ventana</label><select class="select" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="subtype">' + subOptions + '</select></div>'
+          : '';
         return '<div class="opening-row">' +
           '<div class="opening-head"><strong><span class="dot"></span>' + typeLabel +
           ' <span class="badge-soft">' + unitSizeInput(o.width) + ' ' + esc(sizeU) + '</span></strong>' +
@@ -2948,7 +3190,7 @@
           '<input class="input" type="number" min="300" step="50" title="Ancho (' + sizeU + ')" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="width" value="' + unitSizeInput(o.width) + '">' +
           '<input class="input" type="number" min="300" step="50" title="Alto (' + sizeU + ')" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="height" value="' + unitSizeInput(o.height) + '">' +
           '<input class="input" type="number" min="0" max="100" step="1" title="Posición (%)" data-opening="' + esc(o.id) + '" data-wall="' + esc(obj.id) + '" data-open-field="t" value="' + fnum(o.t * 100, 1) + '">' +
-          '</div><div class="opening-meta">Ancho · alto (' + sizeU + ') · posición (%)</div>' + actions + '</div>';
+          '</div><div class="opening-meta">Ancho · alto (' + sizeU + ') · posición (%)</div>' + subSelect + actions + '</div>';
       }).join('');
       body =
         '<div class="section"><div class="section-title">Geometría</div><div class="field-grid">' +
@@ -3025,6 +3267,26 @@
         '</div><div class="field"><label>Texto personalizado (opcional)</label><input class="input" data-entity="dim" data-id="' + esc(obj.id) + '" data-field="text" value="' + esc(obj.text || '') + '" placeholder="Automático"></div></div>' +
         '<div class="section"><div class="section-title">Ubicación</div>' + readLine('Nivel', levelName(obj.level)) + readLine('Capa', layer.name) + '</div>' +
         actionsHtml('dim', obj.id, false);
+    } else if (kind === 'line') {
+      var llen = ED.Geo.dist(obj.a, obj.b);
+      var isCurve = obj.type === 'curve' && obj.curve;
+      sub = (isCurve ? 'Curva' : 'Línea') + ' · ' + unitLen(llen) + (isCurve && obj.curve.type === 'arc' ? ' · arco' : '');
+      var styleOpts = [['solid', 'Continua'], ['dash', 'Discontinua'], ['dot', 'Punteada']].map(function (x) {
+        return '<option value="' + x[0] + '"' + ((obj.style || 'solid') === x[0] ? ' selected' : '') + '>' + x[1] + '</option>';
+      }).join('');
+      body = '<div class="section"><div class="section-title">Geometría</div><div class="field-grid">' +
+        field('Longitud', '<div class="input-row"><input class="input" type="number" min="0.01" step="0.05" data-entity="line" data-id="' + esc(obj.id) + '" data-field="length" value="' + unitLenInput(llen) + '"><span class="input-unit">' + unitLenLabel() + '</span></div>') +
+        field('Ángulo', '<input class="input" readonly value="' + fnum(ED.Geo.radToDeg(Math.atan2(obj.b.y - obj.a.y, obj.b.x - obj.a.x)), 1) + '°">') +
+        field('Grosor', '<div class="input-row"><input class="input" type="number" min="5" max="300" step="5" data-entity="line" data-id="' + esc(obj.id) + '" data-field="width" value="' + fnum(obj.width, 0) + '"><span class="input-unit">mm</span></div>') +
+        field('Estilo', '<select class="select" data-entity="line" data-id="' + esc(obj.id) + '" data-field="style">' + styleOpts + '</select>') +
+        '</div></div>' +
+        (isCurve && obj.curve.type === 'arc' ? '<div class="section"><div class="section-title">Curvatura</div>' +
+          '<div class="read-line"><span>Flecha</span><strong>' + unitLen(Math.abs(obj.curve.bulge || 0) * llen / 2) + '</strong></div>' +
+          '<div class="field"><label>Color</label><div class="color-row"><input type="color" data-entity="line" data-id="' + esc(obj.id) + '" data-field="color" value="' + esc(obj.color || '#3f6f86') + '"></div></div>' +
+          '<div class="prop-actions"><button class="btn btn-ghost btn-sm" data-action="flip-line-curve" data-id="' + esc(obj.id) + '">' + icon('rotate', 12) + 'Invertir curva</button></div></div>' :
+          '<div class="section"><div class="field"><label>Color</label><div class="color-row"><input type="color" data-entity="line" data-id="' + esc(obj.id) + '" data-field="color" value="' + esc(obj.color || '#3f6f86') + '"></div></div></div>') +
+        '<div class="section"><div class="section-title">Ubicación</div>' + readLine('Nivel', levelName(obj.level)) + readLine('Capa', layer.name) + readLine('Inicio', 'X ' + unitLen(obj.a.x) + ' · Y ' + unitLen(obj.a.y)) + readLine('Fin', 'X ' + unitLen(obj.b.x) + ' · Y ' + unitLen(obj.b.y)) + '</div>' +
+        actionsHtml('line', obj.id, false);
     }
 
     panel.innerHTML = '<div class="entity-head"><div class="entity-icon">' + icon(entityIcon(kind), 17) + '</div><div><h3>' + esc(title) + '</h3><p>' + esc(sub) + '</p></div></div>' + body;
@@ -3039,7 +3301,7 @@
   function actionsHtml(kind, id, withDuplicate) {
     return '<div class="prop-actions">' +
       (withDuplicate ? '<button class="btn btn-ghost btn-sm" data-action="duplicate-item" data-id="' + esc(id) + '">' + icon('duplicate', 12) + 'Duplicar</button>' : '') +
-      '<button class="btn btn-danger btn-sm" data-action="delete-selection">' + icon('trash', 12) + 'Eliminar ' + (kind === 'wall' ? 'muro' : kind === 'item' ? 'mueble' : kind === 'room' ? 'ambiente' : kind === 'text' ? 'texto' : 'cota') + '</button></div>';
+      '<button class="btn btn-danger btn-sm" data-action="delete-selection">' + icon('trash', 12) + 'Eliminar ' + (kind === 'wall' ? 'muro' : kind === 'item' ? 'mueble' : kind === 'room' ? 'ambiente' : kind === 'text' ? 'texto' : kind === 'line' ? 'línea' : 'cota') + '</button></div>';
   }
 
   function renderMultiProps(selected) {
@@ -3137,6 +3399,16 @@
       (wall.openings || []).forEach(function (o) { if (o.id === target.getAttribute('data-opening')) op = o; });
       if (!op) return;
       var of = target.getAttribute('data-open-field');
+      if (of === 'subtype') {
+        var sub = String(target.value || '');
+        if ((OPENING_SUBTYPES[op.type] || []).some(function (p) { return p[0] === sub; })) {
+          App.store.act('Cambiar tipo de abertura', function () { op.subtype = sub; });
+        }
+        refreshProps();
+        if (App.viewMode !== 'plan') renderViews();
+        App.editor.render();
+        return;
+      }
       var ov = Number(target.value);
       if (!isFinite(ov)) return;
       App.store.act('Editar abertura', function () {
@@ -3155,6 +3427,7 @@
         }
       });
       refreshProps();
+      if (App.viewMode !== 'plan') renderViews();
       return;
     }
     if (target.matches('[data-entity]')) {
@@ -3166,6 +3439,7 @@
       var raw = target.type === 'checkbox' ? target.checked : target.value;
       applyEntityField(kind, obj, fieldName, raw);
       refreshProps();
+      if (App.viewMode !== 'plan') renderViews();
     }
   }
 
@@ -3206,6 +3480,14 @@
       } else if (kind === 'dim') {
         if (fieldName === 'offset') obj.offset = parseLenInput(value);
         else if (fieldName === 'text') obj.text = String(value) || null;
+      } else if (kind === 'line') {
+        if (fieldName === 'length') {
+          var llen2 = Math.max(10, parseLenInput(value));
+          var ang2 = Math.atan2(obj.b.y - obj.a.y, obj.b.x - obj.a.x);
+          obj.b = ED.Geo.polar(obj.a, ang2, llen2);
+        } else if (fieldName === 'width') obj.width = ED.Geo.clamp(parseSizeInput(value), 5, 300);
+        else if (fieldName === 'style') obj.style = (value === 'dash' || value === 'dot') ? value : 'solid';
+        else if (fieldName === 'color') obj.color = String(value);
       }
     });
     App.editor.render();
@@ -3230,6 +3512,18 @@
     else if (action === 'flip-curve') flipWallCurve(btn.getAttribute('data-id'));
     else if (action === 'straighten-wall') straightenWall(btn.getAttribute('data-id'));
     else if (action === 'scene-materials') openSceneMaterials();
+    else if (action === 'flip-line-curve') {
+      var lineObj = App.store.find('line', btn.getAttribute('data-id'));
+      if (lineObj && lineObj.curve && lineObj.curve.type === 'arc') {
+        App.store.act('Invertir curva', function () { lineObj.curve.bulge = -(lineObj.curve.bulge || 0); });
+        refreshProps(); App.editor.render();
+      }
+    }
+    else if (action === 'view-select-wall') {
+      App.viewSelection = null;
+      App.store.setSelection([{ kind: 'wall', id: btn.getAttribute('data-id') }]);
+      renderViews();
+    }
     else if (action === 'new-sheet') addSheet();
     else if (action === 'sheet-export') { var sh = getSelectedSheet(); if (sh) exportPDF([sh]); }
     else if (action === 'sheet-duplicate') duplicateSheet();
@@ -3301,7 +3595,7 @@
     App.store.act('Insertar abertura', function () {
       wall.openings = wall.openings || [];
       wall.openings.push({
-        id: App.store.newId('o'), type: type, t: 0.5, width: width,
+        id: App.store.newId('o'), type: type, subtype: OPENING_SUBTYPE_DEFAULT[type] || '', t: 0.5, width: width,
         height: type === 'window' ? 1200 : 2100, sill: type === 'window' ? 900 : 0,
         swing: 1, hinge: 1
       });
@@ -3315,6 +3609,8 @@
   function deleteOpening(wallId, openingId) {
     var wall = App.store.find('wall', wallId);
     if (!wall) return;
+    if (App.viewSelection && App.viewSelection.kind === 'opening' && App.viewSelection.openingId === openingId) App.viewSelection = null;
+    if (App.viewMode !== 'plan') setTimeout(renderViews, 30);
     App.store.act('Eliminar abertura', function () {
       wall.openings = (wall.openings || []).filter(function (o) { return o.id !== openingId; });
     });
@@ -3873,6 +4169,33 @@
     });
   }
 
+  function confirmDeleteLevel() {
+    var active = App.store.activeLevelObj();
+    if (!active) return;
+    var levels = App.store.project.levels || [];
+    if (levels.length <= 1) { toast('El proyecto debe conservar al menos un nivel.', 'warn', 3200); return; }
+    var counts = { walls: 0, items: 0, rooms: 0 };
+    ['walls', 'items', 'rooms'].forEach(function (k) {
+      counts[k] = (App.store.project[k] || []).filter(function (o) { return o.level === active.id; }).length;
+    });
+    var body = '<p>¿Eliminar el nivel <strong>' + esc(active.name) + '</strong> y todos sus objetos?</p>' +
+      '<p class="modal-note" style="display:block">Se borrarán ' + counts.walls + ' muros, ' + counts.items + ' muebles y ' + counts.rooms + ' ambientes de ese nivel. Las láminas que lo usaban pasarán al primer nivel.</p>' +
+      '<p class="field-hint">Puedes deshacerlo con Ctrl+Z.</p>';
+    var m = openModal({ title: 'Eliminar nivel', subtitle: active.name, body: body, wide: false,
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn" id="levelDeleteConfirm" style="background:#8a3b31;color:#fff">Eliminar nivel</button>' });
+    $('#levelDeleteConfirm', m.root).addEventListener('click', function () {
+      var ok = App.store.act('Eliminar nivel', function () { return App.store.removeLevel(active.id); });
+      m.close();
+      if (ok === false) { toast('No se pudo eliminar el nivel.', 'warn'); return; }
+      App.store.setActiveLevel(App.store.project.levels[0].id);
+      applyGridToEditor();
+      App.editor.render();
+      refreshHeader(); refreshLevelTabs(); refreshProps(); refreshLayers(); refreshUndo();
+      updateZoomStatus();
+      toast('Nivel eliminado. Puedes deshacer con Ctrl+Z.', 'success', 3200);
+    });
+  }
+
   function showLevelModal() {
     var levels = App.store.levels();
     var nextElev = 0;
@@ -3921,7 +4244,9 @@
       shortcut('Configurar rejilla', ['Shift', 'G']) +
       '</div></div></div>' +
       '<hr style="border:0;border-top:1px solid #26323e;margin:18px 0">' +
-      '<div class="help-copy"><p><strong>Flujo recomendado.</strong> Dibuja el perímetro con la herramienta Muro, inserta puertas y ventanas sobre los muros, y pulsa <strong>Detectar ambientes</strong> para etiquetar los recintos. Amuebla desde la biblioteca y comprueba el resultado en 3D.</p>' +
+      '<div class="help-copy"><p><strong>Niveles.</strong> Añade niveles con el botón <strong>+</strong> de las pestañas de planta; el botón <strong>−</strong> elimina el nivel activo y todos sus objetos (con confirmación y opción de deshacer). Debe quedar al menos un nivel.</p>' +
+      '<p><strong>Archivos.</strong> El botón Guardar descarga el proyecto en formato <strong>.json</strong>; también puedes abrir archivos <strong>.json</strong> y los antiguos <strong>.engdraft</strong>. El autoguardado sigue usando el navegador.</p>' +
+      '<p><strong>Flujo recomendado.</strong> Dibuja el perímetro con la herramienta Muro, inserta puertas y ventanas sobre los muros, y pulsa <strong>Detectar ambientes</strong> para etiquetar los recintos. Amuebla desde la biblioteca y comprueba el resultado en 3D.</p>' +
       '<p><strong>Láminas y PDF.</strong> En la vista Láminas puedes escoger tamaño, orientación, escala y uno de los cuatro cajetines. El PDF se genera vectorial, con el plano nítido a cualquier zoom.</p>' +
       '<p><strong>DWG/DXF.</strong> El navegador no escribe el formato binario propietario DWG; EngDraft exporta DXF R12, el formato de intercambio de AutoCAD. Abre el DXF en AutoCAD y usa <em>Guardar como → DWG</em> si necesitas ese formato.</p>' +
       '<p><strong>Unidades.</strong> El selector del sistema de unidades está en el menú izquierdo (sección superior, junto a <em>ES/EN</em>) y alterna entre métrico (m · m²) e imperial (ft · ft²). También puedes cambiarlo en Datos del proyecto. Las cotas, áreas, propiedades y láminas se actualizan.</p>' +
@@ -3929,16 +4254,22 @@
       '<p><strong>Tamaño de letra.</strong> El botón <em>Aa</em> de la barra de estado cambia el tamaño del texto entre Normal, Grande y Muy grande; la preferencia queda guardada en este navegador.</p>' +
       '<p><strong>Muros curvos.</strong> Con las herramientas <em>Muro en arco</em> (C) y <em>Muro spline</em> (K) dibujas muros curvos: en el arco, el tercer clic define la curvatura; en la spline, cada clic añade un punto y Enter o doble clic termina. Selecciona un muro curvo para ajustar su flecha, invertir el arco o quitar la curva desde Propiedades. Los muros curvos no admiten puertas ni ventanas en esta versión.</p>' +
       '<p><strong>Escena 3D.</strong> En la pestaña <em>Escena</em> del panel de ajustes eliges el modo de renderizado (esquemático o realista), el tipo de techo (plano, a dos aguas, <strong>cuatro aguas</strong>, arco, spline o <strong>Mi diseño</strong>), su altura y alero, los colores y texturas de paredes, techo y suelo, y el ángulo del sol. Arriba a la izquierda de la vista 3D tienes además los selectores rápidos <strong>Techo</strong> y <strong>Modo</strong>, y el botón <strong>Colores y texturas</strong> que abre directamente los materiales. El botón <em>Vuelo dron</em> inicia una animación de cámara alrededor de la maqueta; un clic en la vista la detiene.</p>' +
+      '<p><strong>Vigas del techo.</strong> En <em>Escena → Techo → Estructura interior</em> eliges vigas de acero, hormigón o madera, con separación, canto y ancho. Se ven en la cara interior del techo en 3D y en las secciones.</p>' +
       '<p><strong>Diseñar techo.</strong> Desde <em>Escena → Diseñar techo</em>, desde el botón <strong>Diseñar techo</strong> de la vista 2D o eligiendo <em>Mi diseño</em> en el selector rápido, se abre un lienzo donde arrastras los puntos del perfil (doble clic añade un punto, clic derecho lo quita). Puedes partir de los presets Plano, A dos aguas, Cuatro aguas, Arco o Spline y ajustar altura, alero y orientación de la cumbrera.</p>' +
+      '<p><strong>Snaps.</strong> En el menú izquierdo, sección <em>Dibujo</em>, puedes activar o desactivar los snaps de <strong>Extremo</strong>, <strong>Medio</strong>, <strong>Centro</strong>, <strong>Cuadrante</strong>, <strong>Tangente</strong> y <strong>Perpendicular</strong>. El cursor muestra el tipo de punto capturado mientras dibujas o mueves objetos.</p>' +
+      '<p><strong>Líneas, curvas y escalado.</strong> Las herramientas <em>Línea</em> (L) y <em>Curva</em> (B) dibujan geometría de referencia encadenada (la curva con tres clics). <em>Escalar</em> (X) escala la selección alrededor de un punto base: mueve el cursor para el factor o escribe un número y pulsa Enter; Esc cancela.</p>' +
       '<p><strong>Vistas y secciones.</strong> En el menú izquierdo, la sección <em>Vistas</em> muestra la planta o genera el <strong>frontal</strong>, los <strong>laterales derecho e izquierdo</strong> y las <strong>secciones transversal y longitudinal</strong> del proyecto en el área 2D, en modo lectura. En las secciones puedes mover la posición del corte con el control <em>Posición</em>; los botones Ajustar y el zoom funcionan también sobre la vista generada, y <em>Volver a planta</em> regresa al editor.</p>' +
+      '<p><strong>Vistas editables.</strong> En las vistas frontal, laterales y secciones puedes hacer clic sobre un muro, una abertura, un mueble o el techo para seleccionarlo y editarlo desde Propiedades (o abrir Escena para el techo). La entidad seleccionada se resalta en ámbar y la vista se actualiza al cambiar los valores.</p>' +
       '<p><strong>Idioma.</strong> El botón <em>ES / EN</em> del menú izquierdo cambia toda la interfaz entre español e inglés; la preferencia se recuerda en este navegador. El plano, el manual y los datos del proyecto no se traducen.</p>' +
       '<p><strong>Pantalla.</strong> En la sección <em>Pantalla</em> del menú izquierdo eliges Automático, Computadora, Tableta o Celular. Automático adapta la interfaz al tamaño de la ventana: en tableta el menú es más estrecho y en celular el menú de opciones y el panel de ajustes se abren como paneles deslizantes con los botones de la barra superior, dejando el plano a toda pantalla. La preferencia se recuerda en este navegador.</p>' +
       '<p><strong>Importar objetos.</strong> En <em>Biblioteca</em> pulsa <strong>Importar objeto (.glb / .obj)</strong>. El formato recomendado es <strong>GLB</strong> (glTF 2.0 binario): un solo archivo, estándar web y con materiales; OBJ también se acepta. Indica nombre y dimensiones reales y el objeto se añade a <em>Mis objetos</em> para colocarlo, verlo en 3D y exportarlo. FBX, 3DS y STL no se admiten.</p>' +
-      '<p><strong>Puertas y ventanas.</strong> Selecciona un muro y edita sus aberturas: ancho, alto, posición, antepecho, sentido de apertura y bisagra. Los botones Girar hoja e Invertir bisagra cambian el dibujo en 2D y 3D.</p>' +
+      '<p><strong>Puertas y ventanas.</strong> Selecciona un muro y edita sus aberturas: tipo de hoja/ventana (simple, doble, corrediza, fija, proyectante o garaje), ancho, alto, posición, antepecho, sentido de apertura y bisagra. Los botones Girar hoja e Invertir bisagra cambian el dibujo en 2D y 3D.</p>' +
+      '<p><strong>Donativos.</strong> EngDraft es gratuito y se mantiene con contribuciones voluntarias. Si quieres apoyar su desarrollo puedes hacer una donación por PayPal: ' +
+      '<a class="btn btn-primary" style="margin-left:6px" href="https://www.paypal.com/ncp/payment/K6KXFVTEDKY96" target="_blank" rel="noopener">Donar con PayPal</a></p>' +
       '<p><strong>Privacidad.</strong> Todo se dibuja y se guarda en tu equipo. La aplicación funciona sin conexión y no envía datos a ningún servidor.</p>' +
       '<p><strong>Manual completo.</strong> El manual de uso incluye tutorial paso a paso, buenas prácticas, ejercicios, preguntas frecuentes y checklist de entrega: <a href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">abrir manual en PDF</a>.</p>' +
       '<p><strong>Autor:</strong> ' + AUTHOR + '.</p>' +
-      '<p><span class="badge-soft">ENGDRAFT 1.5</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .engdraft para conservar copias.</p></div>';
+      '<p><span class="badge-soft">ENGDRAFT 1.6</span> &nbsp; Guardado automático en el navegador. Descarga el archivo .json para conservar copias.</p></div>';
     openModal({
       title: 'Ayuda y atajos', subtitle: 'Todo lo necesario para empezar', body: body,
       footer: '<a class="btn btn-ghost" href="manual/EngDraft-Manual.pdf" target="_blank" rel="noopener">Manual PDF</a>' +
@@ -4053,6 +4384,9 @@
     if (lower === 'm') { chooseTool('wall'); e.preventDefault(); return; }
     if (lower === 'c') { chooseTool('wallArc'); e.preventDefault(); return; }
     if (lower === 'k') { chooseTool('wallSpline'); e.preventDefault(); return; }
+    if (lower === 'l') { chooseTool('line'); e.preventDefault(); return; }
+    if (lower === 'b') { chooseTool('curve'); e.preventDefault(); return; }
+    if (lower === 'x') { chooseTool('scale'); e.preventDefault(); return; }
     if (lower === 'p') { chooseTool('door'); e.preventDefault(); return; }
     if (lower === 'n') { chooseTool('window'); e.preventDefault(); return; }
     if (lower === 'a') { chooseTool('room'); e.preventDefault(); return; }

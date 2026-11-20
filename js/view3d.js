@@ -58,6 +58,22 @@
   var ROOF_TEXTURES = { tile: 1, shingle: 1, metal: 1, wood: 1, concrete: 1, smooth: 1 };
   var GROUND_TEXTURES = { grass: 1, paving: 1, gravel: 1, smooth: 1 };
 
+  // Ampliación 1.6: subtipos de abertura y estructura de techo.
+  var OPENING_SUBTYPES = {
+    door: { single: 1, double: 1, sliding: 1 },
+    window: { fixed: 1, sliding: 1, double: 1, awning: 1 },
+    garage: { sectional: 1, sliding: 1 }
+  };
+  var OPENING_SUBTYPE_DEFAULT = { door: 'single', window: 'fixed', garage: 'sectional' };
+  var ROOF_STRUCTURES = { none: 1, steel: 1, concrete: 1, wood: 1 };
+  var STRUCTURE_COLORS = {
+    steel: { face: '#5b6670', edge: '#424b54' },
+    concrete: { face: '#cfcec8', edge: '#b8b6b0' },
+    wood: { face: '#9a6b43', edge: '#7e522f' }
+  };
+  var DEFAULT_STRUCTURE = { material: 'none', spacing: 800, depth: 200, width: 120 };
+  var STRUCT_FACE_MAX = 1500;          // presupuesto de caras de vigas por escena
+
   // Materiales por defecto (se completan con project.settings.materials).
   var DEFAULT_MATERIALS = {
     wall: { color: '#f3eee2', texture: 'stucco' },
@@ -338,6 +354,36 @@
     return fbOpeningSpan(wall, opening);
   }
 
+  // Subtipo efectivo de una abertura 1.6 (defectos: single / fixed / sectional).
+  function openingSubtype(o) {
+    if (!o || !o.type) return null;
+    var map = OPENING_SUBTYPES[o.type];
+    if (!map) return null;
+    return map[o.subtype] ? o.subtype : (OPENING_SUBTYPE_DEFAULT[o.type] || null);
+  }
+
+  // Saneado de la estructura de techo (viga de madera/hormigón/acero).
+  function normalizeRoofStructure(raw) {
+    var out = {
+      material: DEFAULT_STRUCTURE.material,
+      spacing: DEFAULT_STRUCTURE.spacing,
+      depth: DEFAULT_STRUCTURE.depth,
+      width: DEFAULT_STRUCTURE.width
+    };
+    if (!raw || typeof raw !== 'object') return out;
+    if (ROOF_STRUCTURES[raw.material]) out.material = raw.material;
+    var sp = Number(raw.spacing), dp = Number(raw.depth), wd = Number(raw.width);
+    if (isFinite(sp)) out.spacing = clamp(sp, 300, 3000);
+    if (isFinite(dp)) out.depth = clamp(dp, 80, 600);
+    if (isFinite(wd)) out.width = clamp(wd, 60, 400);
+    return out;
+  }
+
+  function cloneRoofStructure(raw) {
+    if (raw == null) return null;
+    return normalizeRoofStructure(raw);
+  }
+
   function formatAreaText(mm2, units) {
     var G = ED && ED.Geo;
     if (G && typeof G.formatArea === 'function') {
@@ -521,6 +567,7 @@
       roofOverhang: null,
       roofRidge: null,
       roofProfile: null,
+      roofStructure: null,
       roofColor: null,
       roofTexture: null,
       renderMode: null,
@@ -664,6 +711,8 @@
     canvas.addEventListener('dblclick', h.dbl, false);
     canvas.addEventListener('contextmenu', h.ctx, false);
     try { canvas.style.cursor = 'grab'; } catch (e2) { /* tolerar */ }
+    // Necesario en tablet/celular para recibir pointer events del pinch.
+    try { if (!canvas.style.touchAction) canvas.style.touchAction = 'none'; } catch (e5) { /* tolerar */ }
 
     this._onWinResize = function () { self.resize(); };
     if (typeof window !== 'undefined' && window.addEventListener) {
@@ -752,6 +801,7 @@
         ? patch.roofRidge : null;
     }
     if ('roofProfile' in patch) o.roofProfile = cloneRoofProfile(patch.roofProfile);
+    if ('roofStructure' in patch) o.roofStructure = cloneRoofStructure(patch.roofStructure);
     if ('roofColor' in patch) o.roofColor = (typeof patch.roofColor === 'string' && patch.roofColor) ? patch.roofColor : null;
     if ('roofTexture' in patch) o.roofTexture = ROOF_TEXTURES[patch.roofTexture] ? patch.roofTexture : null;
     if ('renderMode' in patch) {
@@ -868,7 +918,7 @@
       roof: o.roof, furniture: o.furniture, labels: o.labels, dimensions: o.dimensions,
       ground: o.ground, levels: o.levels, wallsCut: o.wallsCut,
       roofStyle: o.roofStyle, roofHeight: o.roofHeight, roofOverhang: o.roofOverhang,
-      roofRidge: o.roofRidge, roofProfile: o.roofProfile,
+      roofRidge: o.roofRidge, roofProfile: o.roofProfile, roofStructure: o.roofStructure,
       roofColor: o.roofColor, roofTexture: o.roofTexture, renderMode: o.renderMode,
       materials: o.materials, shadows: o.shadows, textures: o.textures, sunAngle: o.sunAngle
     };
@@ -1134,6 +1184,8 @@
       roofStyle: (cfg && cfg.roofStyle) || 'flat',
       ridge: (cfg && cfg.roofRidge) || 'auto',
       hasProfile: !!(cfg && cfg.roofProfile),
+      hasStructure: !!(cfg && cfg.roofStructure && cfg.roofStructure.material !== 'none'),
+      material: (cfg && cfg.roofStructure && cfg.roofStructure.material) || 'none',
       shadows: !!(cfg && cfg.shadows),
       sunAngle: cfg ? cfg.sunAngle : 135,
       flying: this.isFlying()
@@ -2005,6 +2057,9 @@
     var roofProfile = normalizeRoofProfile(profileRaw);
     // 'custom' sin perfil válido cae a 'gable' (estilo efectivo).
     if (style === 'custom' && !roofProfile) style = 'gable';
+    // Estructura de techo (ampliación 1.6): options.roofStructure o settings.roof.structure.
+    var structureRaw = o.roofStructure != null ? o.roofStructure : sRoof.structure;
+    var roofStructure = normalizeRoofStructure(structureRaw);
 
     var roofColor = o.roofColor || roof.color || DEFAULT_MATERIALS.roof.color;
     var roofTexture = ROOF_TEXTURES[o.roofTexture] ? o.roofTexture : roof.texture;
@@ -2022,6 +2077,8 @@
       roofOverhang: clamp(ov, 0, 2500),
       roofRidge: ridge,
       roofProfile: roofProfile,
+      roofStructure: roofStructure,
+      structureColors: STRUCTURE_COLORS[roofStructure.material] || null,
       materials: { wall: wall, roof: roof, trim: trim, ground: ground },
       wallColor: realistic ? wall.color : WALL_COLOR,
       trimColor: realistic ? trim.color : TRIM_COLOR,
@@ -2072,6 +2129,8 @@
     // Contadores de mallas de biblioteca (def.mesh) para el presupuesto global.
     var meshFaces = 0;
     var meshShadowCount = 0;
+    // Ampliación 1.6: presupuesto de caras de vigas de techo.
+    var structFaceCount = 0;
 
     function bump(x, y, z) {
       if (!isFinite(x) || !isFinite(y) || !isFinite(z)) return;
@@ -2306,6 +2365,61 @@
         ];
       }
 
+      // --- Ampliación 1.6: ayudantes de hojas, paneles y junquillos ---
+      function wallPt(s, off, z) {
+        return { x: a.x + ux * s + nx * off, y: a.y + uy * s + ny * off, z: z };
+      }
+      function planQuad(s0, s1, off0, off1) {
+        return [
+          { x: a.x + ux * s0 + nx * off0, y: a.y + uy * s0 + ny * off0 },
+          { x: a.x + ux * s1 + nx * off0, y: a.y + uy * s1 + ny * off0 },
+          { x: a.x + ux * s1 + nx * off1, y: a.y + uy * s1 + ny * off1 },
+          { x: a.x + ux * s0 + nx * off1, y: a.y + uy * s0 + ny * off1 }
+        ];
+      }
+      // Caja fina alineada con el muro (marcos, junquillos, carriles).
+      function thinBox(s0, s1, off0, off1, zB, zT, color, edge) {
+        if (!(s1 - s0 > 1) || !(zT - zB > 1)) return null;
+        addBox(pass.others, planQuad(s0, s1, off0, off1), zB, zT, color, edge);
+        return null;
+      }
+      // Vidrio plano con reflejo diagonal sutil.
+      function glassFace(pts, reflective) {
+        var g = face(pass.others, pts, cfg.glassFill,
+          { fill: cfg.glassFill, stroke: cfg.glassStroke, lw: 0.9, twoSided: true, edge: false });
+        if (g && reflective) {
+          g.details = g.details || [];
+          var q0 = pts[0], q2 = pts[2];
+          g.details.push({
+            a: { x: q0.x, y: q0.y, z: q0.z + (q2.z - q0.z) * 0.16 },
+            b: { x: q2.x, y: q2.y, z: q2.z - (q2.z - q0.z) * 0.06 },
+            color: 'rgba(255, 255, 255, 0.28)', lw: 1.1
+          });
+        }
+        return g;
+      }
+      function glassPane(s0, s1, off, zB, zT, reflective) {
+        return glassFace([
+          wallPt(s0, off, zB), wallPt(s1, off, zB),
+          wallPt(s1, off, zT), wallPt(s0, off, zT)
+        ], reflective);
+      }
+      // Vidrio inclinado (hoja proyectante): offset distinto arriba/abajo.
+      function slopedGlass(s0, s1, offB, offT, zB, zT) {
+        return glassFace([
+          wallPt(s0, offB, zB), wallPt(s1, offB, zB),
+          wallPt(s1, offT, zT), wallPt(s0, offT, zT)
+        ], true);
+      }
+      function leafPanel(s0, s1, off0, off1, zB, zT, color) {
+        if (!(s1 - s0 > 10) || !(zT - zB > 10)) return;
+        addBox(pass.others, planQuad(s0, s1, off0, off1), zB, zT, color, EDGE_FURN);
+      }
+      // Rótulo de hoja: junta vertical fina en el canto.
+      function leafEdge(s, off0, off1, zB, zT, color) {
+        thinBox(s, s + 14, off0, off1, zB, zT, color, EDGE_FURN);
+      }
+
       // Aberturas ordenadas y unión de huecos.
       var ops = [];
       var openings = wall.openings || [];
@@ -2376,55 +2490,119 @@
           addBox(pass.others, corners(from2 - tw, to2 + tw, 0, 0, trimHalf), top, Math.min(top + tw, z1), cfg.trimColor, cfg.edge);
         }
 
-        // Vidrio y montantes
+        // Vidrio, hojas y paneles según el subtipo (ampliación 1.6).
+        var subtype = openingSubtype(o);
+        var budgetOk = totalFacesNow() < 26000;
+        var paneOff = half * 0.35;
+        var railColor = tintColor(cfg.trimColor, -0.18);
+
         if (type === 'window') {
-          var p0 = { x: a.x + ux * from2, y: a.y + uy * from2 };
-          var p1 = { x: a.x + ux * to2, y: a.y + uy * to2 };
-          var gpts = [
-            { x: p0.x, y: p0.y, z: bottom },
-            { x: p1.x, y: p1.y, z: bottom },
-            { x: p1.x, y: p1.y, z: top },
-            { x: p0.x, y: p0.y, z: top }
-          ];
-          var glass = face(pass.others, gpts, cfg.glassFill, { fill: cfg.glassFill, stroke: cfg.glassStroke, lw: 0.9, twoSided: true, edge: false });
-          if (glass) {
-            glass.details = glass.details || [];
-            var midx = (p0.x + p1.x) / 2, midy = (p0.y + p1.y) / 2;
-            if (wop > 900) {
-              glass.details.push({ a: { x: midx, y: midy, z: bottom }, b: { x: midx, y: midy, z: top }, color: 'rgba(246, 249, 249, 0.8)', lw: 1.1 });
+          if (subtype === 'sliding') {
+            // Carriles superior e inferior y dos hojas solapadas.
+            thinBox(from2 - 30, to2 + 30, half * 0.2, half + 24, top - 26, top, railColor, cfg.edge);
+            thinBox(from2 - 30, to2 + 30, half * 0.2, half + 24, bottom, bottom + 22, railColor, cfg.edge);
+            var paneW = wop * 0.56;
+            var sA0 = from2 + wop * 0.02, sA1 = sA0 + paneW;
+            var sB0 = to2 - wop * 0.02 - paneW, sB1 = to2 - wop * 0.02;
+            glassPane(sA0, sA1, half + 20, bottom + 26, top - 30, true);
+            glassPane(sB0, sB1, half + 8, bottom + 26, top - 30, true);
+            thinBox(sA0, sA0 + 16, half + 2, half + 30, bottom + 24, top - 28, cfg.trimColor, cfg.edge);
+            thinBox(sA1 - 16, sA1, half + 2, half + 30, bottom + 24, top - 28, cfg.trimColor, cfg.edge);
+            thinBox(sB0, sB0 + 16, half - 8, half + 18, bottom + 24, top - 28, cfg.trimColor, cfg.edge);
+            thinBox(sB1 - 16, sB1, half - 8, half + 18, bottom + 24, top - 28, cfg.trimColor, cfg.edge);
+            var midRailZ = (bottom + top) / 2;
+            thinBox(sB0, sB1, half + 6, half + 18, midRailZ - 12, midRailZ + 12, cfg.trimColor, cfg.edge);
+          } else if (subtype === 'double') {
+            glassPane(from2 + 12, to2 - 12, paneOff, bottom + 14, top - 14, true);
+            // Parteluz central y junquillos laterales.
+            var midS = (from2 + to2) / 2;
+            thinBox(midS - 32, midS + 32, half * 0.1, half + 28, bottom, top, cfg.trimColor, cfg.edge);
+            thinBox(from2, from2 + 20, half * 0.1, half + 26, bottom, top, cfg.trimColor, cfg.edge);
+            thinBox(to2 - 20, to2, half * 0.1, half + 26, bottom, top, cfg.trimColor, cfg.edge);
+            if (top - bottom > 1500) {
+              var midZ2 = (bottom + top) / 2;
+              thinBox(from2, to2, half * 0.1, half + 26, midZ2 - 16, midZ2 + 16, cfg.trimColor, cfg.edge);
             }
-            if (top - bottom > 1000) {
-              var mz = (bottom + top) / 2;
-              glass.details.push({ a: { x: p0.x, y: p0.y, z: mz }, b: { x: p1.x, y: p1.y, z: mz }, color: 'rgba(246, 249, 249, 0.7)', lw: 1 });
+          } else if (subtype === 'awning') {
+            // Proyectante: bisagra arriba y hoja inclinada hacia fuera.
+            var lift = clamp((top - bottom) * 0.26, 90, 420);
+            slopedGlass(from2 + 14, to2 - 14, lift, 0, bottom + 10, top - 10);
+            thinBox(from2, to2, half * 0.1, half + 26, top - 26, top, cfg.trimColor, cfg.edge);
+            thinBox(from2, from2 + 18, half * 0.1, half + 26, bottom, top, cfg.trimColor, cfg.edge);
+            thinBox(to2 - 18, to2, half * 0.1, half + 26, bottom, top, cfg.trimColor, cfg.edge);
+          } else {
+            // Fija: vidrio con junquillos según el ancho.
+            glassPane(from2, to2, paneOff, bottom + 12, top - 12, true);
+            var cols = clamp(Math.round(wop / 900), 1, 3);
+            for (var ci2 = 1; ci2 <= cols; ci2++) {
+              var mullS = from2 + (wop * ci2) / (cols + 1);
+              thinBox(mullS - 16, mullS + 16, half * 0.1, half + 24, bottom + 8, top - 8, cfg.trimColor, cfg.edge);
             }
-            // Reflejo diagonal sutil
-            glass.details.push({
-              a: { x: p0.x, y: p0.y, z: bottom + (top - bottom) * 0.16 },
-              b: { x: p1.x, y: p1.y, z: top - (top - bottom) * 0.04 },
-              color: 'rgba(255, 255, 255, 0.30)', lw: 1.2
-            });
+            if (top - bottom > 1500) {
+              var mz3 = (bottom + top) / 2;
+              thinBox(from2, to2, half * 0.1, half + 24, mz3 - 16, mz3 + 16, cfg.trimColor, cfg.edge);
+            }
+            thinBox(from2, from2 + 18, half * 0.1, half + 24, bottom, top, cfg.trimColor, cfg.edge);
+            thinBox(to2 - 18, to2, half * 0.1, half + 24, bottom, top, cfg.trimColor, cfg.edge);
           }
         } else if (type === 'garage') {
-          // Panel de garaje cerrado con nervaduras.
-          var q0 = { x: a.x + ux * from2, y: a.y + uy * from2 };
-          var q1 = { x: a.x + ux * to2, y: a.y + uy * to2 };
-          var panel = face(pass.others, [
-            { x: q0.x, y: q0.y, z: bottom + 10 },
-            { x: q1.x, y: q1.y, z: bottom + 10 },
-            { x: q1.x, y: q1.y, z: top - 10 },
-            { x: q0.x, y: q0.y, z: top - 10 }
-          ], cfg.garageColor, { edge: cfg.edge });
-          if (panel) {
-            panel.details = panel.details || [];
-            var ribs = Math.min(6, Math.floor((top - bottom) / 350));
-            for (var rb = 1; rb <= ribs; rb++) {
-              var rz = bottom + (top - bottom) * (rb / (ribs + 1));
-              panel.details.push({ a: { x: q0.x, y: q0.y, z: rz }, b: { x: q1.x, y: q1.y, z: rz }, color: 'rgba(120, 112, 98, 0.35)', lw: 1 });
+          if (subtype === 'sliding') {
+            // Hoja corrediza lateral con carril superior.
+            thinBox(from2 - wop * 0.08, to2 + wop * 0.55, half * 0.2, half + 30, top - 34, top, railColor, cfg.edge);
+            var gs0 = from2 + wop * 0.42, gs1 = gs0 + wop * 1.06;
+            leafPanel(gs0, gs1, half + 8, half + 54, z0 + 25, top - 34, cfg.garageColor);
+            leafEdge(gs0 + 8, half + 12, half + 50, z0 + 25, top - 34, cfg.trimColor);
+            leafEdge(gs1 - 22, half + 12, half + 50, z0 + 25, top - 34, cfg.trimColor);
+          } else {
+            // Seccional: paneles horizontales apilados.
+            var nP = clamp(Math.round((top - bottom) / 600), 2, 5);
+            var ph = (top - bottom) / nP;
+            for (var pi2 = 0; pi2 < nP; pi2++) {
+              var secZ0 = bottom + pi2 * ph + 6;
+              var secZ1 = bottom + (pi2 + 1) * ph - 6;
+              addBox(pass.others, planQuad(from2 + 8, to2 - 8, half * 0.1, half * 0.55),
+                secZ0, secZ1, cfg.garageColor, cfg.edge);
             }
+            thinBox(from2, from2 + 26, half * 0.05, half + 22, bottom, top, cfg.trimColor, cfg.edge);
+            thinBox(to2 - 26, to2, half * 0.05, half + 22, bottom, top, cfg.trimColor, cfg.edge);
+            thinBox(from2, to2, half * 0.05, half + 22, bottom, bottom + 20, cfg.trimColor, cfg.edge);
+            thinBox(from2, to2, half * 0.05, half + 22, top - 20, top, cfg.trimColor, cfg.edge);
           }
         } else if (type === 'door') {
-          // Hoja abierta (detalle de puerta)
-          if (totalFacesNow() < 22000) {
+          if (subtype === 'double' && budgetOk) {
+            // Dos hojas con bisagras en jambas opuestas, abriendo al mismo lado.
+            for (var lf = 0; lf < 2; lf++) {
+              var hingeFrom2 = lf === 0;
+              var hs2 = hingeFrom2 ? from2 : to2;
+              var hinge2 = { x: a.x + ux * hs2, y: a.y + uy * hs2 };
+              var bd = hingeFrom2 ? 1 : -1;
+              var ang2 = ((num(o.swing) || 1) >= 0 ? 1 : -1) * bd * 64 * DEG;
+              var ca2 = Math.cos(ang2), sa2 = Math.sin(ang2);
+              var dirx2 = ux * bd * ca2 - uy * bd * sa2;
+              var diry2 = ux * bd * sa2 + uy * bd * ca2;
+              var leafW2 = Math.max(160, wop / 2 - 70);
+              var tip2 = { x: hinge2.x + dirx2 * leafW2, y: hinge2.y + diry2 * leafW2 };
+              var opx2 = -diry2 * 20, opy2 = dirx2 * 20;
+              var lz0 = Math.min(z1 - 40, z0 + 35);
+              var lz1 = Math.max(lz0 + 60, top - 40);
+              addBox(pass.others, [
+                { x: hinge2.x + opx2, y: hinge2.y + opy2 },
+                { x: tip2.x + opx2, y: tip2.y + opy2 },
+                { x: tip2.x - opx2, y: tip2.y - opy2 },
+                { x: hinge2.x - opx2, y: hinge2.y - opy2 }
+              ], lz0, lz1, cfg.doorColor, EDGE_FURN);
+            }
+          } else if (subtype === 'sliding') {
+            // Corrediza: hoja solapada lateral con carril superior.
+            thinBox(from2 - wop * 0.1, to2 + wop * 0.42, half * 0.2, half + 26, top - 30, top, railColor, cfg.edge);
+            var ds0 = from2 + wop * 0.52, ds1 = ds0 + wop * 0.96;
+            leafPanel(ds0, ds1, half + 8, half + 46, z0 + 30, top - 40, cfg.doorColor);
+            leafEdge(ds0 + 6, half + 12, half + 42, z0 + 30, top - 40, cfg.trimColor);
+            leafEdge(ds1 - 20, half + 12, half + 42, z0 + 30, top - 40, cfg.trimColor);
+            thinBox(from2, from2 + 18, half * 0.1, half + 24, z0 + 30, top - 40, cfg.trimColor, cfg.edge);
+            thinBox(to2 - 18, to2, half * 0.1, half + 24, z0 + 30, top - 40, cfg.trimColor, cfg.edge);
+          } else if (budgetOk) {
+            // Hoja simple abierta (comportamiento anterior).
             var hingeFrom = (num(o.hinge) || 1) >= 0;
             var hs = hingeFrom ? from2 : to2;
             var hinge = { x: a.x + ux * hs, y: a.y + uy * hs };
@@ -2779,7 +2957,101 @@
       bump(sbx1, sby1, p2.elevation - 6);
     }
 
-    // --- techo según estilo (flat | gable | arc | spline) ---
+    // --- ampliación 1.6: vigas de la estructura de techo ---
+    function roofStructureEnabled() {
+      return !!(cfg.roofStructure && cfg.roofStructure.material !== 'none' &&
+        cfg.structureColors);
+    }
+
+    // Viga como cinta 3D siguiendo `path` (puntos de la cara superior, centro).
+    // Se dibuja con lateral izquierdo/derecho y cara inferior (visible desde abajo).
+    function beamRibbon(path, width, depth, colors) {
+      if (!path || path.length < 2 || !colors) return;
+      if (structFaceCount >= STRUCT_FACE_MAX) return;
+      var n = path.length, i;
+      var left = [], right = [];
+      for (i = 0; i < n; i++) {
+        var prev = path[i - 1] || path[i];
+        var next = path[i + 1] || path[i];
+        var dx = next.x - prev.x, dy = next.y - prev.y;
+        var dl = Math.sqrt(dx * dx + dy * dy) || 1;
+        var px = -dy / dl, py = dx / dl;
+        left.push({ x: path[i].x + px * width / 2, y: path[i].y + py * width / 2, z: path[i].z });
+        right.push({ x: path[i].x - px * width / 2, y: path[i].y - py * width / 2, z: path[i].z });
+      }
+      for (i = 0; i + 1 < n; i++) {
+        if (structFaceCount >= STRUCT_FACE_MAX) return;
+        var sdx = path[i + 1].x - path[i].x, sdy = path[i + 1].y - path[i].y;
+        var sl = Math.sqrt(sdx * sdx + sdy * sdy) || 1;
+        var pnx = -sdy / sl, pny = sdx / sl;
+        // Lateral izquierdo.
+        addFaceOriented(scene.roofFaces, [
+          { x: left[i].x, y: left[i].y, z: left[i].z },
+          { x: left[i + 1].x, y: left[i + 1].y, z: left[i + 1].z },
+          { x: left[i + 1].x, y: left[i + 1].y, z: left[i + 1].z - depth },
+          { x: left[i].x, y: left[i].y, z: left[i].z - depth }
+        ], colors.face, { edge: colors.edge }, { x: pnx, y: pny, z: 0 });
+        // Lateral derecho.
+        addFaceOriented(scene.roofFaces, [
+          { x: right[i].x, y: right[i].y, z: right[i].z },
+          { x: right[i + 1].x, y: right[i + 1].y, z: right[i + 1].z },
+          { x: right[i + 1].x, y: right[i + 1].y, z: right[i + 1].z - depth },
+          { x: right[i].x, y: right[i].y, z: right[i].z - depth }
+        ], colors.face, { edge: colors.edge }, { x: -pnx, y: -pny, z: 0 });
+        // Cara inferior.
+        addFaceOriented(scene.roofFaces, [
+          { x: left[i].x, y: left[i].y, z: left[i].z - depth },
+          { x: left[i + 1].x, y: left[i + 1].y, z: left[i + 1].z - depth },
+          { x: right[i + 1].x, y: right[i + 1].y, z: right[i + 1].z - depth },
+          { x: right[i].x, y: right[i].y, z: right[i].z - depth }
+        ], colors.face, { edge: colors.edge }, { x: 0, y: 0, z: -1 });
+        structFaceCount += 3;
+      }
+    }
+
+    // Vigas paralelas bajo un perfil (gable/hip/arc/spline/custom/flat).
+    function structureCrossBeams(ptFn, profile, longA, longB, opt) {
+      if (!roofStructureEnabled()) return;
+      var st = cfg.roofStructure, colors = cfg.structureColors;
+      opt = opt || {};
+      var lo = opt.lo != null ? opt.lo : longA + 150;
+      var hi = opt.hi != null ? opt.hi : longB - 150;
+      if (!(hi - lo > 200)) return;
+      var spacing = clamp(st.spacing, 300, 3000);
+      var count = clamp(Math.floor((hi - lo) / spacing) + 1, 1, 40);
+      for (var i = 0; i < count; i++) {
+        if (structFaceCount >= STRUCT_FACE_MAX) return;
+        var pos = count > 1 ? lo + (hi - lo) * i / (count - 1) : (lo + hi) / 2;
+        var bpath = [];
+        for (var k = 0; k < profile.length; k++) {
+          bpath.push(ptFn(profile[k].u, profile[k].z - 8, pos));
+        }
+        beamRibbon(bpath, st.width, st.depth, colors);
+      }
+    }
+
+    function structurePeak(profile) {
+      var peak = { u: 0.5, z: -Infinity };
+      for (var i = 0; i < profile.length; i++) {
+        if (profile[i].z > peak.z) { peak.z = profile[i].z; peak.u = profile[i].u; }
+      }
+      if (!isFinite(peak.z)) { peak.z = 0; peak.u = 0.5; }
+      return peak;
+    }
+
+    // Viga de cumbrera/coronación a lo largo del eje de la cumbrera.
+    function structureRidgeBeam(ptFn, profile, longA, longB) {
+      if (!roofStructureEnabled()) return;
+      var st = cfg.roofStructure, colors = cfg.structureColors;
+      var peak = structurePeak(profile);
+      var zTop = peak.z - 8 - Math.max(0, st.depth * 0.1);
+      beamRibbon([
+        ptFn(peak.u, zTop, longA + 150),
+        ptFn(peak.u, zTop, longB - 150)
+      ], st.width * 1.15, st.depth * 1.05, colors);
+    }
+
+    // --- techo según estilo (flat | gable | hip | arc | spline | custom) ---
     buildRoof();
 
     function buildRoof() {
@@ -2836,6 +3108,18 @@
         peakZ = baseZ + slabH;
         bump(x0, y0, baseZ); bump(x1, y0, baseZ);
         bump(x1, y1, peakZ); bump(x0, y1, peakZ);
+        if (roofStructureEnabled()) {
+          // Vigas planas bajo la losa, perpendiculares al eje largo.
+          var flatAlongX = w >= d;
+          var flatProfile = [{ u: 0, z: baseZ }, { u: 1, z: baseZ }];
+          var flatPt = function (u2, z2, along) {
+            return flatAlongX
+              ? { x: along, y: y0 + u2 * (y1 - y0), z: z2 }
+              : { x: x0 + u2 * (x1 - x0), y: along, z: z2 };
+          };
+          structureCrossBeams(flatPt, flatProfile,
+            flatAlongX ? x0 : y0, flatAlongX ? x1 : y1, {});
+        }
         if (cfg.realistic && cfg.shadows) {
           shadow([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], peakZ);
         }
@@ -2953,6 +3237,13 @@
           addFaceOriented(scene.roofFaces, fq, cfg.trimColor, { edge: edge }, out3);
         }
       }
+      // Vigas de la estructura bajo la cara interior del techo.
+      if (roofStructureEnabled()) {
+        var structLongA = alongX ? x0 : y0;
+        var structLongB = alongX ? x1 : y1;
+        structureCrossBeams(pt, profile, structLongA, structLongB, {});
+        structureRidgeBeam(pt, profile, structLongA, structLongB);
+      }
       // Altura máxima real del perfil (para cotas de la escena y sombra).
       peakZ = baseZ;
       for (i = 0; i < profile.length; i++) {
@@ -3061,6 +3352,46 @@
           { x: x1, y: y0, z: zf }, { x: x1, y: y1, z: zf },
           { x: x1, y: y1, z: baseZ }, { x: x1, y: y0, z: baseZ }
         ], cfg.trimColor, { edge: edge }, { x: 1, y: 0, z: 0 });
+      }
+      // Vigas de la estructura bajo la cara interior (cuatro aguas).
+      if (roofStructureEnabled()) {
+        var stH = cfg.roofStructure, colorsH = cfg.structureColors;
+        var hProfile = [{ u: 0, z: baseZ }, { u: 0.5, z: peakZ2 }, { u: 1, z: baseZ }];
+        var hCrossA = ridgeAlongX ? y0 : x0, hCrossB = ridgeAlongX ? y1 : x1;
+        var hLongA = ridgeAlongX ? x0 : y0, hLongB = ridgeAlongX ? x1 : y1;
+        var ptH = function (u2, z2, along) {
+          return ridgeAlongX
+            ? { x: along, y: hCrossA + u2 * (hCrossB - hCrossA), z: z2 }
+            : { x: hCrossA + u2 * (hCrossB - hCrossA), y: along, z: z2 };
+        };
+        var ridgeLo = rl > 1 ? (ridgeAlongX ? rx0 : ry0) : (ridgeAlongX ? cx : cy);
+        var ridgeHi = rl > 1 ? (ridgeAlongX ? rx1 : ry1) : (ridgeAlongX ? cx : cy);
+        structureCrossBeams(ptH, hProfile, hLongA, hLongB, { lo: ridgeLo, hi: ridgeHi });
+        var raftW = Math.max(60, stH.width * 0.85), raftD = Math.max(80, stH.depth * 0.8);
+        var zBaseBeam = baseZ - 10, zPeakBeam = peakZ2 - 10;
+        if (rl > 1) {
+          var zRidgeBeam = peakZ2 - 8 - Math.max(0, stH.depth * 0.1);
+          beamRibbon([ptH(0.5, zRidgeBeam, ridgeLo), ptH(0.5, zRidgeBeam, ridgeHi)],
+            stH.width * 1.15, stH.depth * 1.05, colorsH);
+          // Limatesas desde las esquinas del alero a los extremos de la cumbrera.
+          if (ridgeAlongX) {
+            beamRibbon([{ x: x0, y: y0, z: zBaseBeam }, { x: rx0, y: cy, z: zPeakBeam }], raftW, raftD, colorsH);
+            beamRibbon([{ x: x1, y: y0, z: zBaseBeam }, { x: rx1, y: cy, z: zPeakBeam }], raftW, raftD, colorsH);
+            beamRibbon([{ x: x0, y: y1, z: zBaseBeam }, { x: rx0, y: cy, z: zPeakBeam }], raftW, raftD, colorsH);
+            beamRibbon([{ x: x1, y: y1, z: zBaseBeam }, { x: rx1, y: cy, z: zPeakBeam }], raftW, raftD, colorsH);
+          } else {
+            beamRibbon([{ x: x0, y: y0, z: zBaseBeam }, { x: cx, y: ry0, z: zPeakBeam }], raftW, raftD, colorsH);
+            beamRibbon([{ x: x1, y: y0, z: zBaseBeam }, { x: cx, y: ry0, z: zPeakBeam }], raftW, raftD, colorsH);
+            beamRibbon([{ x: x0, y: y1, z: zBaseBeam }, { x: cx, y: ry1, z: zPeakBeam }], raftW, raftD, colorsH);
+            beamRibbon([{ x: x1, y: y1, z: zBaseBeam }, { x: cx, y: ry1, z: zPeakBeam }], raftW, raftD, colorsH);
+          }
+        } else {
+          // Pirámide: limatesas de las cuatro esquinas al ápice.
+          beamRibbon([{ x: x0, y: y0, z: zBaseBeam }, { x: cx, y: cy, z: zPeakBeam }], raftW, raftD, colorsH);
+          beamRibbon([{ x: x1, y: y0, z: zBaseBeam }, { x: cx, y: cy, z: zPeakBeam }], raftW, raftD, colorsH);
+          beamRibbon([{ x: x1, y: y1, z: zBaseBeam }, { x: cx, y: cy, z: zPeakBeam }], raftW, raftD, colorsH);
+          beamRibbon([{ x: x0, y: y1, z: zBaseBeam }, { x: cx, y: cy, z: zPeakBeam }], raftW, raftD, colorsH);
+        }
       }
       if (cfg.realistic && cfg.shadows) {
         shadow([{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }], peakZ2 * 0.86);

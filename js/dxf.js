@@ -3,8 +3,10 @@
  * Los muros curvos (arco/spline) se exportan como LWPOLYLINE de la banda de muro
  * (cerrada, capa A-WALL) más la directriz como LWPOLYLINE abierta; el tramo de
  * arco se conserva exacto con su bulge DXF. Como LWPOLYLINE no forma parte de
- * R12, cuando la exportación contiene curvas la cabecera sube a AC1015 (R2000);
- * sin curvas el archivo sigue siendo R12 como siempre.
+ * R12, cuando la exportación contiene curvas (muros o project.lines) la cabecera
+ * sube a AC1015 (R2000); sin curvas el archivo sigue siendo R12 como siempre.
+ * `project.lines` (CONTRACT §17.4) se exporta como LINE (rectas) o LWPOLYLINE
+ * con bulge (arcos/splines), en capas A-LINE / A-LINE-DASHED.
  */
 (function (ED) {
   'use strict';
@@ -19,7 +21,9 @@
     { name: 'A-ROOM', color: 3, ltype: 'CONTINUOUS' },
     { name: 'A-TEXT', color: 7, ltype: 'CONTINUOUS' },
     { name: 'A-DIM', color: 1, ltype: 'DASHED' },
-    { name: 'A-LEVEL', color: 2, ltype: 'CONTINUOUS' }
+    { name: 'A-LEVEL', color: 2, ltype: 'CONTINUOUS' },
+    { name: 'A-LINE', color: 7, ltype: 'CONTINUOUS' },
+    { name: 'A-LINE-DASHED', color: 8, ltype: 'DASHED' }
   ];
 
   var ACI = {
@@ -59,9 +63,10 @@
     this.raw(20, num(y));
     this.raw(30, num(z || 0));
   };
-  Writer.prototype.line = function (x1, y1, x2, y2, layer, z) {
+  Writer.prototype.line = function (x1, y1, x2, y2, layer, z, color) {
     this.raw(0, 'LINE');
     this.raw(8, layer || '0');
+    if (color) this.raw(62, color);
     this.point(x1, y1, z);
     this.raw(11, num(x2));
     this.raw(21, num(y2));
@@ -107,12 +112,13 @@
   // LWPOLYLINE: una sola entidad para contornos/directrices (curvas muestreadas) y,
   // con `bulge`, un tramo de arco exacto según la convención DXF.
   // Los marcadores 100 AcDbEntity/AcDbPolyline los exigen los lectores modernos.
-  Writer.prototype.lwpolyline = function (points, close, layer, z, bulges) {
+  Writer.prototype.lwpolyline = function (points, close, layer, z, bulges, color) {
     var list = points || [];
     if (list.length < 2) return;
     this.raw(0, 'LWPOLYLINE');
     this.raw(100, 'AcDbEntity');
     this.raw(8, layer || '0');
+    if (color) this.raw(62, color);
     this.raw(100, 'AcDbPolyline');
     this.raw(90, list.length);
     this.raw(70, close ? 1 : 0);
@@ -182,30 +188,144 @@
   }
 
   function layerFor(kind) {
-    return { wall: 'A-WALL', door: 'A-DOOR', window: 'A-WIND', furniture: 'A-FURN', room: 'A-ROOM', text: 'A-TEXT', dim: 'A-DIM' }[kind] || '0';
+    return { wall: 'A-WALL', door: 'A-DOOR', window: 'A-WIND', furniture: 'A-FURN', room: 'A-ROOM', text: 'A-TEXT', dim: 'A-DIM', line: 'A-LINE' }[kind] || '0';
   }
 
-  // Caja de un nivel tal como se dibuja (muros + ambientes; el mobiliario no
-  // define la separación entre niveles, igual que en buildEntities).
+  /* ------------------------------------------------ líneas/curvas libres §17.4 */
+  function asArray(v) { return Array.isArray(v) ? v : []; }
+
+  function safePoint(p) {
+    if (!p) return null;
+    var x = Number(p.x), y = Number(p.y);
+    if (!isFinite(x) || !isFinite(y)) return null;
+    return { x: x, y: y };
+  }
+
+  function lineEndpoints(line) {
+    var a = safePoint(line && line.a), b = safePoint(line && line.b);
+    if (!a || !b) return null;
+    return { a: a, b: b };
+  }
+
+  function lineBulge(line) {
+    var c = line && line.curve;
+    if (!c || c.type !== 'arc') return 0;
+    var b = Number(c.bulge);
+    if (!isFinite(b) || Math.abs(b) < 1e-4) return 0;
+    return Math.max(-4, Math.min(4, b));
+  }
+
+  function lineHasCurve(line) {
+    if (!line || line.type !== 'curve') return false;
+    if (lineBulge(line)) return true;
+    var c = line.curve;
+    return !!(c && c.type === 'spline' && asArray(c.pts).length);
+  }
+
+  // Polilínea del eje de la línea/curva libre (recta: 2 puntos; curvas muestreadas).
+  function linePath(line) {
+    var ends = lineEndpoints(line);
+    if (!ends) return [];
+    var c = line && line.curve;
+    if (!lineHasCurve(line) || !c) return [ends.a, ends.b];
+    try {
+      if (c.type === 'arc') {
+        var arcPath = Geo.wallPath({ a: ends.a, b: ends.b, curve: { type: 'arc', bulge: lineBulge(line) }, thickness: 0 });
+        if (Array.isArray(arcPath) && arcPath.length >= 2) return arcPath;
+      } else if (c.type === 'spline' && Geo.catmullRomPath) {
+        var ctrl = [ends.a];
+        asArray(c.pts).forEach(function (p) { var q = safePoint(p); if (q) ctrl.push(q); });
+        ctrl.push(ends.b);
+        var path = Geo.catmullRomPath(ctrl, 12);
+        if (Array.isArray(path) && path.length >= 2) return path;
+      }
+    } catch (e) { /* respaldo recto */ }
+    return [ends.a, ends.b];
+  }
+
+  // Color de entidad ACI (1..255) a partir de un color hex del proyecto.
+  var ACI_BASIC = [
+    [1, 255, 0, 0], [2, 255, 255, 0], [3, 0, 255, 0], [4, 0, 255, 255],
+    [5, 0, 0, 255], [6, 255, 0, 255], [7, 255, 255, 255], [8, 128, 128, 128],
+    [9, 192, 192, 192], [30, 255, 127, 0], [140, 0, 191, 255], [170, 127, 0, 127]
+  ];
+  function hexToAci(hex) {
+    var s = String(hex == null ? '' : hex).trim();
+    var m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s);
+    if (!m) return 0;
+    var h = m[1];
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    var best = 7, bestD = Infinity;
+    for (var i = 0; i < ACI_BASIC.length; i++) {
+      var e = ACI_BASIC[i];
+      var d = (r - e[1]) * (r - e[1]) + (g - e[2]) * (g - e[2]) + (b - e[3]) * (b - e[3]);
+      if (d < bestD) { bestD = d; best = e[0]; }
+    }
+    return best;
+  }
+
+  function lineEntityLayer(line) {
+    var style = String((line && line.style) || 'solid');
+    return (style === 'dash' || style === 'dot' || style === 'dashed' || style === 'dotted')
+      ? 'A-LINE-DASHED' : 'A-LINE';
+  }
+
+  function emitGuideLine(w, line, ox) {
+    var ends = lineEndpoints(line);
+    if (!ends) return;
+    var layer = lineEntityLayer(line);
+    var color = hexToAci(line.color) || 0;
+    var a = { x: ends.a.x + ox, y: ends.a.y };
+    var b = { x: ends.b.x + ox, y: ends.b.y };
+    var bulge = lineBulge(line);
+    if (lineHasCurve(line) && bulge) {
+      w.lwpolyline([{ x: a.x, y: a.y, bulge: bulge }, { x: b.x, y: b.y }], false, layer, 0, null, color || null);
+      return;
+    }
+    if (lineHasCurve(line) && line.curve && line.curve.type === 'spline') {
+      var path = linePath(line);
+      var pts = [];
+      for (var i = 0; i < path.length; i++) {
+        var q = safePoint(path[i]);
+        if (q) pts.push({ x: q.x + ox, y: q.y });
+      }
+      if (pts.length >= 3) {
+        w.lwpolyline(pts, false, layer, 0, null, color || null);
+        return;
+      }
+    }
+    w.line(a.x, a.y, b.x, b.y, layer, 0, color || null);
+  }
+
+
+  // Caja de un nivel tal como se dibuja (muros + ambientes + líneas; el mobiliario
+  // no define la separación entre niveles, igual que en buildEntities).
   function levelExtent(project, levelId) {
     var pts = [];
-    project.walls.forEach(function (wall) {
-      if (wall.level !== levelId) return;
+    asArray(project.walls).forEach(function (wall) {
+      if (!wall || wall.level !== levelId) return;
       pts = pts.concat(Geo.wallPolygon(wall, true));
     });
-    project.rooms.forEach(function (r) {
-      if (r.level !== levelId) return;
-      pts = pts.concat(r.polygon);
+    asArray(project.rooms).forEach(function (r) {
+      if (!r || r.level !== levelId) return;
+      pts = pts.concat(asArray(r.polygon));
+    });
+    asArray(project.lines).forEach(function (line) {
+      if (!line || line.level !== levelId) return;
+      pts = pts.concat(linePath(line));
     });
     return pts.length ? Geo.bounds(pts) : { minX: 0, minY: 0, maxX: 0, maxY: 0, w: 0, h: 0 };
   }
 
   function resolveLevels(project, options) {
     options = options || {};
-    var levels = options.levels === 'all' ? project.levels.slice() : project.levels.filter(function (l) {
-      return l.id === (options.levelId || project.levels[0].id);
+    var all = asArray(project.levels).filter(function (l) { return l && l.id; });
+    if (!all.length) all = [{ id: 'l0', name: 'Nivel', elevation: 0, height: 2700 }];
+    var levels = options.levels === 'all' ? all.slice() : all.filter(function (l) {
+      return l.id === (options.levelId || all[0].id);
     });
-    if (!levels.length) levels = [project.levels[0]];
+    if (!levels.length) levels = [all[0]];
     return levels;
   }
 
@@ -217,19 +337,27 @@
     levels.forEach(function (level) {
       var bb = levelExtent(project, level.id);
       var ox = cursorX - bb.minX;
-      project.walls.forEach(function (wall) {
-        if (wall.level !== level.id) return;
+      asArray(project.walls).forEach(function (wall) {
+        if (!wall || wall.level !== level.id) return;
         var poly = Geo.wallPolygon(wall, true);
         for (var i = 0; i < poly.length; i++) pts.push({ x: poly[i].x + ox, y: poly[i].y });
       });
-      project.rooms.forEach(function (r) {
-        if (r.level !== level.id || !r.polygon) return;
+      asArray(project.rooms).forEach(function (r) {
+        if (!r || r.level !== level.id || !r.polygon) return;
         for (var i = 0; i < r.polygon.length; i++) pts.push({ x: r.polygon[i].x + ox, y: r.polygon[i].y });
       });
-      project.items.forEach(function (it) {
-        if (it.level !== level.id) return;
+      asArray(project.items).forEach(function (it) {
+        if (!it || it.level !== level.id) return;
         pts.push({ x: it.x - it.w / 2 - 800 + ox, y: it.y - it.d / 2 - 800 });
         pts.push({ x: it.x + it.w / 2 + 800 + ox, y: it.y + it.d / 2 + 800 });
+      });
+      asArray(project.lines).forEach(function (line) {
+        if (!line || line.level !== level.id) return;
+        var path = linePath(line);
+        for (var i = 0; i < path.length; i++) {
+          var q = safePoint(path[i]);
+          if (q) pts.push({ x: q.x + ox, y: q.y });
+        }
       });
       cursorX += bb.w + 4000;
     });
@@ -419,20 +547,22 @@
     var levels = resolveLevels(project, options);
     var cursorX = 0;
     levels.forEach(function (level, index) {
-      var lvlWalls = project.walls.filter(function (x) { return x.level === level.id; });
-      var lvlRooms = project.rooms.filter(function (x) { return x.level === level.id; });
-      var lvlItems = project.items.filter(function (x) { return x.level === level.id; });
-      var lvlTexts = project.texts.filter(function (x) { return x.level === level.id; });
-      var lvlDims = project.dims.filter(function (x) { return x.level === level.id; });
+      var lvlWalls = asArray(project.walls).filter(function (x) { return x && x.level === level.id; });
+      var lvlRooms = asArray(project.rooms).filter(function (x) { return x && x.level === level.id; });
+      var lvlItems = asArray(project.items).filter(function (x) { return x && x.level === level.id; });
+      var lvlTexts = asArray(project.texts).filter(function (x) { return x && x.level === level.id; });
+      var lvlDims = asArray(project.dims).filter(function (x) { return x && x.level === level.id; });
+      var lvlLines = asArray(project.lines).filter(function (x) { return x && x.level === level.id; });
       var bb = levelExtent(project, level.id);
       var ox = cursorX - bb.minX;
       lvlWalls.forEach(function (wall) { emitWall(w, wall, ox); });
+      lvlLines.forEach(function (line) { emitGuideLine(w, line, ox); });
       lvlRooms.forEach(function (room) { emitRoom(w, room, ox); });
       lvlItems.forEach(function (item) { emitItem(w, item, ox); });
       lvlTexts.forEach(function (t) { emitText(w, t, ox); });
       lvlDims.forEach(function (d) { emitDim(w, d, ox); });
       w.text(ox + bb.minX, bb.maxY + 800, 500, (level.name || 'NIVEL') + '  ·  EngDraft', 0, 'A-LEVEL');
-      w.text(ox + bb.minX, bb.maxY + 250, 230, 'Escala 1:1 · mm · ' + (project.meta.name || ''), 0, 'A-LEVEL');
+      w.text(ox + bb.minX, bb.maxY + 250, 230, 'Escala 1:1 · mm · ' + ((project.meta && project.meta.name) || ''), 0, 'A-LEVEL');
       cursorX += bb.w + 4000;
     });
     return w.toString();
@@ -444,16 +574,18 @@
       options = options || {};
       var levelObjs = resolveLevels(project, options);
       var levelIds = levelObjs.map(function (l) { return l.id; });
-      var hasCurves = project.walls.some(function (wall) {
-        return levelIds.indexOf(wall.level) >= 0 && Geo.wallIsCurved(wall);
+      var hasCurves = asArray(project.walls).some(function (wall) {
+        return wall && levelIds.indexOf(wall.level) >= 0 && Geo.wallIsCurved(wall);
+      }) || asArray(project.lines).some(function (line) {
+        return line && levelIds.indexOf(line.level) >= 0 && lineHasCurve(line);
       });
       var ext = projectBounds(project, levelObjs);
       var w = new Writer();
       w.raw(999, 'EngDraft — ' + clean(project.meta && project.meta.name || 'Proyecto'));
       w.raw(999, 'DXF ASCII · unidades milimetros · exportado ' + new Date().toISOString());
-      // LWPOLYLINE no existe en DXF R12: si la exportación incluye muros curvos
-      // se declara R2000 (AC1015) para que la polilínea se interprete bien.
-      // Sin curvas se mantiene R12 (AC1009) como siempre.
+      // LWPOLYLINE no existe en DXF R12: si la exportación incluye curvas
+      // (muros o project.lines) se declara R2000 (AC1015) para que la polilínea
+      // se interprete bien. Sin curvas se mantiene R12 (AC1009) como siempre.
       buildHeader(w, ext, hasCurves ? 'AC1015' : 'AC1009');
       buildTables(w);
       w.raw(0, 'SECTION');

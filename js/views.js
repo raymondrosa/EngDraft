@@ -1,4 +1,4 @@
-/* EngDraft — generador de vistas y secciones (1.4)
+/* EngDraft — generador de vistas y secciones (1.4 + ampliación 1.6)
  * Módulo PURO de datos (sin DOM): ED.Views.build() devuelve primitivas 2D en mm
  * (Y hacia arriba) y ED.Views.render() las dibuja ajustadas a un canvas 2D.
  * Usa ED.Geo cuando existe (muros curvos) y no depende de nada más.
@@ -6,6 +6,10 @@
  *   ED.Views.TYPES  -> front | right | left | sectionX | sectionY
  *   ED.Views.build(project, opts) -> { type, title, bounds, primitives, meta }
  *   ED.Views.render(canvas, project, opts) -> mismo objeto (dibuja si hay canvas)
+ *
+ * 1.6: aberturas tipadas (door/window/garage con subtype), vigas del techo
+ * (settings.roof.structure) cortadas en secciones y canto en alzados, y campo
+ * `src` en cada primitiva para editar la entidad desde la vista (§17.5).
  *
  * opts = { type, levelId|'all', sectionPos, scale, title }
  */
@@ -55,7 +59,34 @@
     earth: '#ebe5d5',
     earthHatch: 'rgba(118,108,86,0.32)',
     dim: '#b5651d',
-    level: '#2e7d8f'
+    level: '#2e7d8f',
+    /* Vigas de techo (CONTRACT §17.3): mismos tonos que la vista 3D. */
+    steelFill: '#5b6670',
+    steelStroke: '#424b54',
+    steelHatch: 'rgba(66,75,84,0.55)',
+    concreteFill: '#cfcec8',
+    concreteStroke: '#b8b6b0',
+    concreteHatch: 'rgba(120,118,112,0.45)',
+    woodFill: '#9a6b43',
+    woodStroke: '#7e522f',
+    woodHatch: 'rgba(126,82,47,0.5)'
+  };
+
+  /* Subtipos de aberturas (CONTRACT §17.1). */
+  var OPENING_SUBTYPES = {
+    door: { single: 1, double: 1, sliding: 1 },
+    window: { fixed: 1, sliding: 1, double: 1, awning: 1 },
+    garage: { sectional: 1, sliding: 1 },
+    pass: {}
+  };
+  var OPENING_DEFAULTS = { door: 'single', window: 'fixed', garage: 'sectional', pass: '' };
+
+  /* Materiales de la estructura del techo (CONTRACT §17.3). */
+  var STRUCT_MATERIALS = { none: 1, steel: 1, concrete: 1, wood: 1 };
+  var STRUCT_COLORS = {
+    steel: { fill: '#5b6670', stroke: '#424b54', hatch: 'rgba(66,75,84,0.55)' },
+    concrete: { fill: '#cfcec8', stroke: '#b8b6b0', hatch: 'rgba(120,118,112,0.45)' },
+    wood: { fill: '#9a6b43', stroke: '#7e522f', hatch: 'rgba(126,82,47,0.5)' }
   };
 
   /* Anchos de línea en mm de dibujo (se escalan al canvas). */
@@ -217,6 +248,16 @@
     }
     return ctx.levels[0];
   }
+  /* Un nivel sin muros ni ambientes no debe dibujar losas flotantes. */
+  function levelHasContent(ctx, levelId) {
+    var has = false;
+    ctx.walls.forEach(function (w) { if (w && String(w.level) === String(levelId)) has = true; });
+    if (has) return true;
+    arr(ctx.project.rooms).forEach(function (r) {
+      if (r && String(r.level) === String(levelId)) has = true;
+    });
+    return has;
+  }
   function wallBottomZ(ctx, wall) {
     return levelOfWall(ctx, wall).elevation;
   }
@@ -298,6 +339,53 @@
     return { from: from, to: to, width: to - from, center: center };
   }
 
+  /* ------------------------------------------- origen de primitivas (§17.5) */
+  function idText(v) {
+    return v === null || v === undefined ? '' : String(v);
+  }
+  function wallSource(wall) {
+    return { kind: 'wall', id: idText(wall && wall.id) };
+  }
+  function openingSource(wall, o) {
+    return {
+      kind: 'opening',
+      id: idText(o && o.id),
+      wallId: idText(wall && wall.id),
+      openingId: idText(o && o.id)
+    };
+  }
+  function itemSource(item) {
+    return { kind: 'item', id: idText(item && item.id) };
+  }
+  function roofSource() {
+    return { kind: 'roof', id: 'roof' };
+  }
+  function roomSource(room) {
+    return { kind: 'room', id: idText(room && room.id) };
+  }
+
+  /* ------------------------------------- subtipos de aberturas (CONTRACT §17.1) */
+  function openingKind(o) {
+    o = obj(o);
+    var type = OPENING_SUBTYPES[o.type] ? o.type : 'door';
+    var allowed = OPENING_SUBTYPES[type];
+    var subtype = allowed[o.subtype] ? o.subtype : (OPENING_DEFAULTS[type] || '');
+    return { type: type, subtype: subtype };
+  }
+
+  /* ----------------------------------- estructura del techo (CONTRACT §17.3) */
+  function sanitizeStructure(settings) {
+    var r = obj(settings.roof);
+    var st = obj(r.structure);
+    var material = STRUCT_MATERIALS[st.material] ? st.material : 'none';
+    return {
+      material: material,
+      spacing: clamp(num(st.spacing, 800), 300, 3000),
+      depth: clamp(num(st.depth, 200), 80, 600),
+      width: clamp(num(st.width, 120), 60, 400)
+    };
+  }
+
   /* --------------------------------------------------------------- techo */
   function sanitizeProfile(raw) {
     var list = [];
@@ -347,7 +435,8 @@
       ridge: (r.ridge === 'x' || r.ridge === 'y') ? r.ridge : 'auto',
       height: clamp(num(r.height, 1200), 200, 8000),
       overhang: clamp(num(r.overhang, 400), 0, 2500),
-      profile: profile
+      profile: profile,
+      structure: sanitizeStructure(settings)
     };
   }
 
@@ -396,7 +485,9 @@
     ctx.levels.forEach(function (l) { levelTop = Math.max(levelTop, l.elevation + l.height); });
     var wallTop = 0;
     ctx.walls.forEach(function (w2) { wallTop = Math.max(wallTop, wallTopZ(ctx, w2)); });
-    var baseZ = Math.max(wallTop, levelTop);
+    /* El techo apoya sobre el muro más alto existente; si el nivel superior no
+     * tiene muros, no debe quedar flotando sobre la nada. */
+    var baseZ = wallTop > 0 ? wallTop : levelTop;
     if (!(baseZ > 0)) baseZ = num(ctx.settings.wallHeight, 2700);
     roof.baseZ = baseZ;
     roof.x0 = x0; roof.x1 = x1; roof.y0 = y0; roof.y1 = y1;
@@ -516,11 +607,18 @@
   function Painter(limit) {
     this.list = [];
     this.limit = limit || MAX_PRIMITIVES;
+    this.src = null; /* CONTRACT §17.5: entidad de origen de las primitivas */
   }
   Painter.prototype.add = function (prim) {
     if (!prim || this.list.length >= this.limit) return null;
+    if (this.src) prim.src = this.src;
     this.list.push(prim);
     return prim;
+  };
+  Painter.prototype.setSrc = function (src) {
+    var prev = this.src;
+    this.src = src || null;
+    return prev;
   };
   Painter.prototype.poly = function (points, style) {
     var pts = [], i;
@@ -634,6 +732,77 @@
     return out;
   }
 
+  /* Paneles de una abertura en alzado según type/subtype (CONTRACT §17.1). */
+  function openingPanelsElevation(p, h0, h1, zb, zt, kind) {
+    var w = h1 - h0, hgt = zt - zb;
+    if (!(w > 10) || !(hgt > 10)) return;
+    var frame = { stroke: PALETTE.frame, width: LW.normal };
+    var glass = { stroke: PALETTE.glass, width: LW.thin };
+    var leaf = { stroke: PALETTE.doorLeaf, width: LW.thin };
+    var hline = function (z, x0, x1, st) { p.line({ x: x0, y: z }, { x: x1, y: z }, st || frame); };
+    var vline = function (x, z0, z1, st) { p.line({ x: x, y: z0 }, { x: x, y: z1 }, st || frame); };
+    var type = kind.type, sub = kind.subtype;
+
+    if (type === 'window') {
+      /* cristal tenue de fondo */
+      var pane = rectPts(h0 + Math.min(40, w * 0.04), zb + Math.min(40, hgt * 0.04),
+        h1 - Math.min(40, w * 0.04), zt - Math.min(40, hgt * 0.04));
+      if (pane) p.poly(pane, { fill: 'rgba(79,127,143,0.14)', stroke: null, width: LW.hair });
+      if (sub === 'sliding') {
+        var off = Math.max(30, w * 0.06);
+        vline(h0 + w * 0.5, zb, zt, frame);
+        vline(h0 + w * 0.5 + off, zb, zt, frame);
+        hline(zb + Math.max(30, hgt * 0.06), h0, h1, glass);
+        hline(zt - Math.max(30, hgt * 0.06), h0, h1, glass);
+      } else if (sub === 'double') {
+        vline(h0 + w * 0.5, zb, zt, frame);
+        vline(h0 + w * 0.25, zb, zt, glass);
+        vline(h0 + w * 0.75, zb, zt, glass);
+        hline((zb + zt) / 2, h0, h1, glass);
+      } else if (sub === 'awning') {
+        var zAw = zb + hgt * 0.35;
+        hline(zAw, h0, h1, frame);
+        p.line({ x: h0, y: zb }, { x: h0 + w * 0.5, y: zAw }, glass);
+        p.line({ x: h1, y: zb }, { x: h1 - w * 0.5, y: zAw }, glass);
+        vline(h0 + w * 0.5, zb, zAw, glass);
+      } else {
+        /* fija: junquillos verticales + travesaño */
+        var nDiv = clamp(Math.round(w / 700), 1, 5);
+        for (var i = 1; i < nDiv; i++) vline(h0 + w * i / nDiv, zb, zt, glass);
+        hline((zb + zt) / 2, h0, h1, glass);
+      }
+    } else if (type === 'garage') {
+      if (sub === 'sliding') {
+        var offG = Math.max(40, w * 0.08);
+        vline(h0 + w * 0.58, zb, zt, frame);
+        vline(h0 + w * 0.58 + offG, zb, zt, frame);
+        hline(zt - Math.max(30, hgt * 0.05), h0, h1, leaf);
+      } else {
+        /* seccional: paneles horizontales */
+        for (var k = 1; k <= 3; k++) hline(zb + hgt * k / 4, h0, h1, leaf);
+        vline(h0 + w * 0.5, zb, zb + hgt * 0.25, leaf);
+      }
+    } else if (type === 'door') {
+      if (sub === 'double') {
+        vline(h0 + w * 0.5, zb, zt, frame);
+        hline(zb + hgt * 0.52, h0, h0 + w * 0.5, leaf);
+        hline(zb + hgt * 0.52, h0 + w * 0.5, h1, leaf);
+        p.line({ x: h0 + w * 0.42, y: zb + hgt * 0.46 }, { x: h0 + w * 0.42, y: zb + hgt * 0.52 }, leaf);
+        p.line({ x: h1 - w * 0.42, y: zb + hgt * 0.46 }, { x: h1 - w * 0.42, y: zb + hgt * 0.52 }, leaf);
+      } else if (sub === 'sliding') {
+        var offD = Math.max(40, w * 0.07);
+        vline(h0 + w * 0.55, zb, zt, frame);
+        vline(h0 + w * 0.55 + offD, zb, zt, frame);
+        hline(zt - Math.max(30, hgt * 0.04), h0, h1, leaf);
+      } else {
+        /* single: hoja con panel y manilla */
+        var hoja = rectPts(h0 + w * 0.08, zb + hgt * 0.03, h1 - w * 0.08, zt - hgt * 0.03);
+        if (hoja) p.poly(hoja, { fill: null, stroke: PALETTE.doorLeaf, width: LW.thin });
+        p.line({ x: h1 - w * 0.18, y: zb + hgt * 0.47 }, { x: h1 - w * 0.18, y: zb + hgt * 0.53 }, leaf);
+      }
+    }
+  }
+
   function openingRectForWall(p, item, def) {
     var wall = item.wall;
     var openings = arr(wall.openings);
@@ -653,28 +822,53 @@
       zb = item.z0 + sill;
       zt = Math.min(item.z1, zb + height);
       if (!(zt > zb + 10)) continue;
-      var type = text(o.type, 'door');
+      var kind = openingKind(o);
       var rect = rectPts(h0, zb, h1, zt);
       if (!rect) continue;
+      var prev = p.setSrc(openingSource(wall, o));
       p.poly(rect, { fill: PALETTE.paper, stroke: null, width: LW.hair });
+      /* marco del hueco */
       p.line({ x: h0, y: zb }, { x: h0, y: zt }, { stroke: PALETTE.frame, width: LW.normal });
       p.line({ x: h1, y: zb }, { x: h1, y: zt }, { stroke: PALETTE.frame, width: LW.normal });
       p.line({ x: h0, y: zt }, { x: h1, y: zt }, { stroke: PALETTE.frame, width: LW.normal });
       p.line({ x: h0, y: zb }, { x: h1, y: zb }, { stroke: PALETTE.frame, width: LW.thin });
-      if (type === 'window') {
-        var zm = (zb + zt) / 2;
-        p.line({ x: h0, y: zm }, { x: h1, y: zm }, { stroke: PALETTE.glass, width: LW.thin });
-        p.line({ x: (h0 + h1) / 2, y: zb }, { x: (h0 + h1) / 2, y: zt }, { stroke: PALETTE.glass, width: LW.hair });
-      } else if (type === 'garage') {
-        for (var k = 1; k <= 3; k++) {
-          var zg = zb + (zt - zb) * k / 4;
-          p.line({ x: h0, y: zg }, { x: h1, y: zg }, { stroke: PALETTE.doorLeaf, width: LW.hair });
-        }
-      } else if (type === 'pass') {
-        /* hueco de paso: sin hoja */
+      /* hojas/paneles/dinteles según subtipo */
+      openingPanelsElevation(p, h0, h1, zb, zt, kind);
+      p.setSrc(prev);
+    }
+  }
+
+  /* Detalle de la abertura en la sección: cristal, hojas y paneles según subtipo. */
+  function drawSectionOpeningDetail(p, h0, h1, zb, zt, kind) {
+    var w = h1 - h0;
+    if (!(w > 1) || !(zt > zb + 10)) return;
+    var mid = (h0 + h1) / 2;
+    var frame = { stroke: PALETTE.frame, width: LW.thin };
+    var glass = { stroke: PALETTE.glass, width: LW.thin };
+    var leaf = { stroke: PALETTE.doorLeaf, width: LW.thin };
+    var type = kind.type, sub = kind.subtype;
+    var vline = function (x, st) { p.line({ x: x, y: zb }, { x: x, y: zt }, st || frame); };
+    if (type === 'window') {
+      p.line({ x: h0, y: zb }, { x: h0, y: zt }, frame);
+      p.line({ x: h1, y: zb }, { x: h1, y: zt }, frame);
+      if (sub === 'sliding') { vline(mid - w * 0.18, glass); vline(mid + w * 0.18, glass); }
+      else if (sub === 'double') { vline(mid, frame); vline(mid - w * 0.22, glass); vline(mid + w * 0.22, glass); }
+      else if (sub === 'awning') { p.line({ x: h0, y: zb }, { x: h1, y: zt }, glass); }
+      else vline(mid, glass);
+    } else if (type === 'garage') {
+      if (sub === 'sliding') {
+        vline(mid + w * 0.12, leaf);
       } else {
-        p.line({ x: h0, y: zb + 700 }, { x: h1, y: zb + 700 }, { stroke: PALETTE.doorLeaf, width: LW.hair });
+        for (var k = 1; k <= 3; k++) {
+          var z = zb + (zt - zb) * k / 4;
+          p.line({ x: h0, y: z }, { x: h1, y: z }, leaf);
+        }
+        vline(mid, leaf);
       }
+    } else if (type === 'door') {
+      if (sub === 'double') { vline(mid - w * 0.16, leaf); vline(mid + w * 0.16, leaf); }
+      else if (sub === 'sliding') { vline(mid - w * 0.12, frame); vline(mid + w * 0.12, leaf); }
+      else vline(mid, leaf);
     }
   }
 
@@ -694,7 +888,9 @@
       if (vals.length < 2) return;
       var rect = rectPts(Math.min.apply(null, vals), lv.elevation, Math.max.apply(null, vals), lv.elevation + h);
       if (!rect) return;
+      var prev = p.setSrc(itemSource(it));
       p.poly(rect, { fill: PALETTE.furniture, stroke: PALETTE.inkSoft, width: LW.hair });
+      p.setSrc(prev);
     });
   }
 
@@ -715,6 +911,12 @@
 
   function addRoofSilhouette(p, def, roof, mode) {
     if (!roof || !roof.enabled || !roof.polygons.length) return;
+    var prev = p.setSrc(roofSource());
+    drawRoofSilhouette(p, def, roof, mode);
+    p.setSrc(prev);
+  }
+
+  function drawRoofSilhouette(p, def, roof, mode) {
     var proj = [], i, j, pts, pb;
     for (i = 0; i < roof.polygons.length; i++) {
       pts = projectRoofPoly(def, roof, i);
@@ -785,6 +987,178 @@
     return segments;
   }
 
+  function structureInfo(roof) {
+    var st = roof && roof.structure;
+    if (!st || st.material === 'none' || !STRUCT_COLORS[st.material]) return null;
+    return {
+      material: st.material, spacing: st.spacing,
+      depth: st.depth, width: st.width,
+      colors: STRUCT_COLORS[st.material]
+    };
+  }
+
+  /* Canto de la estructura visible bajo el alero en los alzados (§17.3). */
+  function addElevationBeams(p, def, roof) {
+    var st = structureInfo(roof);
+    if (!st || !roof.enabled) return;
+    var corners = [
+      { x: roof.x0, y: roof.y0 }, { x: roof.x1, y: roof.y0 },
+      { x: roof.x0, y: roof.y1 }, { x: roof.x1, y: roof.y1 }
+    ];
+    var hs = [], i;
+    for (i = 0; i < corners.length; i++) {
+      var h = hOf(def, corners[i]);
+      if (isFinite(h)) hs.push(h);
+    }
+    if (!hs.length) return;
+    var h0 = Math.min.apply(null, hs), h1 = Math.max.apply(null, hs);
+    var vis = Math.min(st.depth, 260);
+    var rect = rectPts(h0, roof.baseZ - vis, h1, roof.baseZ);
+    if (!rect) return;
+    var prev = p.setSrc(roofSource());
+    p.poly(rect, { fill: st.colors.fill, stroke: st.colors.stroke, width: LW.thin });
+    p.hatch(h0, roof.baseZ - vis, h1, roof.baseZ, 160, { stroke: st.colors.hatch, width: LW.hatch });
+    p.setSrc(prev);
+  }
+
+  /* Canto del techo en la sección: z del perfil cortado más bajo en cada h. */
+  function ceilingZAt(segs, h, fallback) {
+    var zs = [], i, a, b, lo, hi, t;
+    for (i = 0; i < segs.length; i++) {
+      a = segs[i].a; b = segs[i].b;
+      lo = Math.min(a.x, b.x); hi = Math.max(a.x, b.x);
+      if (h < lo - 2 || h > hi + 2) continue;
+      t = (hi - lo) > 1e-6 ? (h - lo) / (hi - lo) : 0.5;
+      zs.push(a.y + (b.y - a.y) * clamp(t, 0, 1));
+    }
+    if (!zs.length) return fallback;
+    return Math.min.apply(null, zs);
+  }
+
+  /* Vigas del techo cortadas/visibles en la sección (§17.3). */
+  function addSectionBeams(p, def, roof, segs, hMin0, hMax0) {
+    var st = structureInfo(roof);
+    if (!st || !roof.enabled || !segs || !segs.length) return;
+    var span = hMax0 - hMin0;
+    if (!(span > 100)) return;
+    var cols = st.colors;
+    var beamAlongX = !roof.alongX; /* cumbrera en X => vigas en Y */
+    var cutAxis = def.cut === 'x' ? 'x' : 'y';
+    var crossSection = (cutAxis === (beamAlongX ? 'x' : 'y'));
+    var fallbackTop = roof.baseZ + Math.max(0, Math.min(roof.peakZ - roof.baseZ, 200));
+    var prev = p.setSrc(roofSource());
+    if (crossSection) {
+      var n = clamp(Math.round(span / st.spacing), 1, 60);
+      var step = span / n;
+      for (var i = 0; i < n; i++) {
+        var h = hMin0 + step * (i + 0.5);
+        var top = ceilingZAt(segs, h, fallbackTop);
+        var rect = rectPts(h - st.width / 2, top - st.depth, h + st.width / 2, top);
+        if (!rect) continue;
+        p.poly(rect, { fill: cols.fill, stroke: cols.stroke, width: LW.thin });
+        p.hatch(h - st.width / 2, top - st.depth, h + st.width / 2, top, 70, { stroke: cols.hatch, width: LW.hatch });
+      }
+    } else {
+      /* viga longitudinal visible bajo el perfil de cubierta */
+      var steps = 24;
+      var topPts = [], botPts = [];
+      for (var k = 0; k <= steps; k++) {
+        var hh = hMin0 + span * k / steps;
+        var zz = ceilingZAt(segs, hh, fallbackTop);
+        topPts.push({ x: hh, y: zz });
+        botPts.push({ x: hh, y: zz - st.depth });
+      }
+      p.poly(topPts.concat(botPts.reverse()), { fill: cols.fill, stroke: cols.stroke, width: LW.thin });
+    }
+    p.setSrc(prev);
+  }
+
+  /* Aberturas tenues de los muros que quedan detrás del plano de corte. */
+  function addSectionBackgroundOpenings(p, ctx, def, planeDepth, items) {
+    items.forEach(function (it) {
+      if (it.cut || !(it.depthMax > planeDepth + 0.5)) return;
+      var openings = arr(it.wall.openings);
+      for (var i = 0; i < openings.length; i++) {
+        var o = openings[i];
+        if (!o) continue;
+        var span = openingAtDistance(it.wall, o);
+        if (!span) continue;
+        var pa = wallPointAtDistance(it.wall, span.from);
+        var pb = wallPointAtDistance(it.wall, span.to);
+        var h0 = Math.min(hOf(def, pa), hOf(def, pb));
+        var h1 = Math.max(hOf(def, pa), hOf(def, pb));
+        if (!(h1 - h0 > 10)) continue;
+        var zb = it.z0 + Math.max(0, num(o.sill, 0));
+        var zt = Math.min(it.z1, zb + Math.max(50, num(o.height, o.type === 'window' ? 1200 : 2100)));
+        var rect = rectPts(h0, zb, h1, zt);
+        if (!rect) continue;
+        var prev = p.setSrc(openingSource(it.wall, o));
+        p.poly(rect, { fill: 'rgba(79,127,143,0.10)', stroke: PALETTE.inkFaint, width: LW.hair });
+        p.setSrc(prev);
+      }
+    });
+  }
+
+  /* Siluetas tenues de mobiliario detrás del plano de corte (src kind item). */
+  function addSectionItems(p, ctx, def, planeDepth) {
+    arr(ctx.project.items).forEach(function (it) {
+      if (!it || !layerVisible(ctx.project, it.layerId)) return;
+      if (ctx.filterIds && it.level && !ctx.filterIds[it.level]) return;
+      var cx = num(it.x, NaN), cy = num(it.y, NaN);
+      if (!isFinite(cx) || !isFinite(cy)) return;
+      var w = Math.max(50, num(it.w, 600)), d = Math.max(50, num(it.d, 600)), h = Math.max(30, num(it.h, 800));
+      var ring = Geo && typeof Geo.rectPolygon === 'function'
+        ? Geo.rectPolygon(cx, cy, w, d, num(it.rotation, 0))
+        : [{ x: cx - w / 2, y: cy - d / 2 }, { x: cx + w / 2, y: cy - d / 2 },
+          { x: cx + w / 2, y: cy + d / 2 }, { x: cx - w / 2, y: cy + d / 2 }];
+      var hvals = [], dvals = [], i;
+      for (i = 0; i < arr(ring).length; i++) {
+        if (!validPt(ring[i])) continue;
+        hvals.push(hOf(def, ring[i]));
+        dvals.push(depthOf(def, ring[i]));
+      }
+      if (hvals.length < 2) return;
+      /* solo lo que queda detrás del plano de corte */
+      if (!(Math.max.apply(null, dvals) > planeDepth + 100)) return;
+      var lv = ctx.levelById[String(it.level)] || ctx.levels[0];
+      var rect = rectPts(Math.min.apply(null, hvals), lv.elevation, Math.max.apply(null, hvals), lv.elevation + h);
+      if (!rect) return;
+      var prev = p.setSrc(itemSource(it));
+      p.poly(rect, { fill: PALETTE.furniture, stroke: PALETTE.inkFaint, width: LW.hair });
+      p.setSrc(prev);
+    });
+  }
+
+  /* Nombres de ambientes visibles en la sección (src kind room, §17.5). */
+  function addSectionRooms(p, ctx, def, planeDepth) {
+    var count = 0;
+    var prev = p.src;
+    arr(ctx.project.rooms).forEach(function (room) {
+      if (!room || !Array.isArray(room.polygon) || room.polygon.length < 3) return;
+      if (!layerVisible(ctx.project, room.layerId)) return;
+      if (ctx.filterIds && room.level && !ctx.filterIds[room.level]) return;
+      if (count >= 24) return;
+      var hvals = [], dvals = [], i, q;
+      for (i = 0; i < room.polygon.length; i++) {
+        q = room.polygon[i];
+        if (!validPt(q)) continue;
+        hvals.push(hOf(def, q));
+        dvals.push(depthOf(def, q));
+      }
+      if (hvals.length < 3) return;
+      /* Solo si el ambiente queda detrás del plano de corte (o lo atraviesa). */
+      if (!(Math.max.apply(null, dvals) > planeDepth + 100)) return;
+      var lv = ctx.levelById[String(room.level)] || ctx.levels[0];
+      p.setSrc(roomSource(room));
+      var hc = hvals.reduce(function (a, b) { return a + b; }, 0) / hvals.length;
+      p.text({ x: hc, y: lv.elevation + Math.max(600, lv.height * 0.5) },
+        room.name || 'AMBIENTE', 210, { align: 'center', fill: PALETTE.inkFaint });
+      p.setSrc(prev);
+      count++;
+    });
+    p.src = prev;
+  }
+
   /* ------------------------------------------------------------ vistas */
   function elevation(ctx, def, roof) {
     var p = new Painter();
@@ -803,16 +1177,20 @@
     /* losas como líneas tenues bajo los muros */
     ctx.levels.forEach(function (lv) {
       if (lv.elevation <= groundZ + 40) return;
+      if (!levelHasContent(ctx, lv.id)) return;
       p.line({ x: hMin - pad, y: lv.elevation }, { x: hMax + pad, y: lv.elevation }, { stroke: PALETTE.inkFaint, width: LW.hair });
     });
     addElevationItems(p, ctx, def);
     info.forEach(function (it) {
       var rect = rectPts(it.h0, it.z0, it.h1, it.z1);
       if (!rect) return;
+      var prev = p.setSrc(wallSource(it.wall));
       p.poly(rect, { fill: PALETTE.wallFill, stroke: PALETTE.wallStroke, width: LW.normal });
       openingRectForWall(p, it, def);
+      p.setSrc(prev);
     });
     addRoofSilhouette(p, def, roof, 'fill');
+    addElevationBeams(p, def, roof);
     addLevelLabels(p, ctx, hMin - pad - 600, groundZ);
     addOverallDimension(p, hMin, hMax, groundZ - 1000, ctx);
     return p.list;
@@ -885,13 +1263,18 @@
       if (it.cut || !(it.depthMax > planeDepth + 0.5)) return;
       var rect = rectPts(it.h0, it.z0, it.h1, it.z1);
       if (!rect) return;
+      var prevB = p.setSrc(wallSource(it.wall));
       p.poly(rect, { fill: null, stroke: PALETTE.inkFaint, width: LW.hair });
+      p.setSrc(prevB);
     });
+    addSectionBackgroundOpenings(p, ctx, def, planeDepth, items);
+    addSectionItems(p, ctx, def, planeDepth);
     /* losa/fundación cortadas */
     var base = rectPts(hMin0 - 250, groundZ - 240, hMax0 + 250, groundZ);
     if (base) p.poly(base, { fill: PALETTE.cutFill, stroke: PALETTE.wallStroke, width: LW.normal });
     ctx.levels.forEach(function (lv) {
       if (lv.elevation <= groundZ + 40) return;
+      if (!levelHasContent(ctx, lv.id)) return;
       var slab = rectPts(hMin0 - 120, lv.elevation - 180, hMax0 + 120, lv.elevation);
       if (slab) p.poly(slab, { fill: PALETTE.slab, stroke: PALETTE.slabStroke, width: LW.thin });
     });
@@ -900,35 +1283,67 @@
       if (!it.cut) return;
       var rect = rectPts(it.cut.h0, it.z0, it.cut.h1, it.z1);
       if (!rect) return;
+      var prevW = p.setSrc(wallSource(it.wall));
       p.poly(rect, { fill: PALETTE.cutFill, stroke: PALETTE.wallStroke, width: LW.normal });
       p.hatch(it.cut.h0, it.z0, it.cut.h1, it.z1, 180, { stroke: PALETTE.cutHatch, width: LW.hatch });
-      /* aberturas que corta el plano: hueco en el relleno */
+      /* aberturas que corta el plano: hueco + detalle según subtipo */
+      var openings = arr(it.wall.openings);
       if (it.cut.transversal && it.cut.point && Geo && typeof Geo.distToWall === 'function') {
         var res = null;
         try { res = Geo.distToWall(it.cut.point, it.wall); } catch (e) { res = null; }
         if (res && isFinite(res.t)) {
           var len = wallAlignedTools(it.wall);
-          var openings = arr(it.wall.openings);
           for (var oi = 0; oi < openings.length; oi++) {
             var o = openings[oi];
             if (!o) continue;
             var span = openingAtDistance(it.wall, o);
             if (!span) continue;
-            var center = span.center;
             if (res.t * len < span.from - 1 || res.t * len > span.to + 1) continue;
             var zb = it.z0 + Math.max(0, num(o.sill, 0));
             var zt = Math.min(it.z1, zb + Math.max(50, num(o.height, o.type === 'window' ? 1200 : 2100)));
             var hole = rectPts(it.cut.h0, zb, it.cut.h1, zt);
             if (!hole) continue;
+            var prevO = p.setSrc(openingSource(it.wall, o));
             p.poly(hole, { fill: PALETTE.paper, stroke: null, width: LW.hair });
             p.line({ x: it.cut.h0, y: zt }, { x: it.cut.h1, y: zt }, { stroke: PALETTE.wallStroke, width: LW.thin });
             p.line({ x: it.cut.h0, y: zb }, { x: it.cut.h1, y: zb }, { stroke: PALETTE.wallStroke, width: LW.hatch });
+            drawSectionOpeningDetail(p, it.cut.h0, it.cut.h1, zb, zt, openingKind(o));
+            p.setSrc(prevO);
           }
         }
+      } else if (!it.cut.transversal) {
+        /* corte longitudinal del muro: los huecos se ven a lo largo del mismo */
+        for (var oj = 0; oj < openings.length; oj++) {
+          var o2 = openings[oj];
+          if (!o2) continue;
+          var span2 = openingAtDistance(it.wall, o2);
+          if (!span2) continue;
+          var pa2 = wallPointAtDistance(it.wall, span2.from);
+          var pb2 = wallPointAtDistance(it.wall, span2.to);
+          var oh0 = Math.min(hOf(def, pa2), hOf(def, pb2));
+          var oh1 = Math.max(hOf(def, pa2), hOf(def, pb2));
+          var hh0 = Math.max(oh0, it.cut.h0);
+          var hh1 = Math.min(oh1, it.cut.h1);
+          if (!(hh1 - hh0 > 5)) continue;
+          var zb2 = it.z0 + Math.max(0, num(o2.sill, 0));
+          var zt2 = Math.min(it.z1, zb2 + Math.max(50, num(o2.height, o2.type === 'window' ? 1200 : 2100)));
+          var hole2 = rectPts(hh0, zb2, hh1, zt2);
+          if (!hole2) continue;
+          var prevO2 = p.setSrc(openingSource(it.wall, o2));
+          p.poly(hole2, { fill: PALETTE.paper, stroke: null, width: LW.hair });
+          p.line({ x: hh0, y: zt2 }, { x: hh1, y: zt2 }, { stroke: PALETTE.wallStroke, width: LW.thin });
+          p.line({ x: hh0, y: zb2 }, { x: hh1, y: zb2 }, { stroke: PALETTE.wallStroke, width: LW.hatch });
+          drawSectionOpeningDetail(p, hh0, hh1, zb2, zt2, openingKind(o2));
+          p.setSrc(prevO2);
+        }
       }
+      p.setSrc(prevW);
     });
-    /* techo cortado: losa plana rellena; en los demás estilos, perfil grueso */
+    /* techo: perfil cortado, vigas de estructura y rótulos de ambientes */
     var segs = roofCutSegments(def, roof, axis, pos);
+    addSectionRooms(p, ctx, def, planeDepth);
+    addSectionBeams(p, def, roof, segs, hMin0, hMax0);
+    var prevR = p.setSrc(roofSource());
     if (roof && roof.style === 'flat' && segs.length >= 2) {
       var zs = [], hs = [];
       segs.forEach(function (s) { zs.push(s.a.y, s.b.y); hs.push(s.a.x, s.b.x); });
@@ -943,6 +1358,7 @@
         p.line(s.a, s.b, { stroke: PALETTE.roofStroke, width: LW.roofCut });
       });
     }
+    p.setSrc(prevR);
     addLevelLabels(p, ctx, hMin - 600, groundZ);
     addOverallDimension(p, hMin0, hMax0, groundZ - 1000, ctx);
     return p.list;
@@ -1039,6 +1455,12 @@
       levelName: ctx.levels.length === 1 ? ctx.levels[0].name : 'Todos los niveles',
       sectionPos: def.cut ? num(ctx.opts.sectionPos, NaN) : null,
       roofStyle: roof && roof.enabled ? roof.style : 'flat',
+      roofStructure: roof && roof.structure ? {
+        material: roof.structure.material,
+        spacing: roof.structure.spacing,
+        depth: roof.structure.depth,
+        width: roof.structure.width
+      } : { material: 'none', spacing: 800, depth: 200, width: 120 },
       units: ctx.units,
       primitives: prims.length
     };

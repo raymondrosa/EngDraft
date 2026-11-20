@@ -38,6 +38,20 @@
     concrete: '#e2e3df', marble: '#e9ecec', grass: '#dce8d4'
   };
 
+  // Snaps avanzados (CONTRACT §17.2): modos independientes persistentes.
+  var SNAP_MODES_KEY = 'engdraft.snaps';
+  var SNAP_MODE_KEYS = ['endpoint', 'midpoint', 'center', 'quadrant', 'tangent', 'perpendicular'];
+  var DEFAULT_SNAP_MODES = {
+    endpoint: true, midpoint: true, center: true,
+    quadrant: true, tangent: true, perpendicular: true
+  };
+
+  // Entidades de dibujo libre (CONTRACT §17.4).
+  var LINE_DEFAULTS = { color: '#3f6f86', width: 25, style: 'solid' };
+  var LINE_DASH = { solid: [], dash: [9, 5], dot: [2, 4] };
+  var SCALE_MIN = 0.1;
+  var SCALE_MAX = 20;
+
   var DEFAULT_ROOM_COLORS = [
     '#e7dfcc', '#dbe8e5', '#e9e0cf', '#dfe3e8', '#e8e3d8', '#dce9dd'
   ];
@@ -61,6 +75,10 @@
       gridSize: 250, gridMajor: 4, gridOriginX: 0, gridOriginY: 0,
       snapStep: 0, gridAdaptive: true, gridStyle: 'lines', showAxes: true
     };
+    // Modos de snap avanzados (persistencia en localStorage 'engdraft.snaps').
+    this.snapModes = Object.assign({}, DEFAULT_SNAP_MODES);
+    this.snap.modes = this.snapModes;
+    this._loadSnapModes();
     this.mouse = { sx: 0, sy: 0, inside: false };
     this.cursor = { x: 0, y: 0 };
     this.snapInfo = null;
@@ -70,6 +88,10 @@
     this.pan = null;
     this.marquee = null;
     this.spaceDown = false;
+    this.scaleInput = '';
+    this._touches = {};
+    this.pinch = null;
+    if (this.canvas.style) this.canvas.style.touchAction = 'none';
     this.w = 0;
     this.h = 0;
     this.dpr = 1;
@@ -99,6 +121,17 @@
         if (this.drawing.phase === 'end') return 'Clic en el final del arco · Esc cancela';
         return 'Mueve el cursor para dar curvatura y haz clic para fijar el arco · Esc cancela';
       case 'wallSpline': return this.drawing ? 'Clic para añadir puntos de la spline (mín. 2) · Enter o doble clic para terminar · Esc cancela' : 'Muro spline: clic en el inicio';
+      case 'line':
+        return this.drawing
+          ? 'Línea: clic para el siguiente vértice · Enter, Esc o doble clic para terminar'
+          : 'Clic para iniciar una línea encadenada · Esc sale';
+      case 'curve':
+        if (!this.drawing) return 'Curva: clic en el inicio del arco';
+        if (this.drawing.phase === 'end') return 'Curva: clic en el final del arco · Esc cancela';
+        return 'Mueve el cursor para dar la curvatura y haz clic para fijar · Esc cancela';
+      case 'scale':
+        if (!this.drawing || this.drawing.type !== 'scale') return 'Escalar: clic en el punto base (necesitas una selección)';
+        return 'Factor ×' + this._scaleFactorText() + ' · clic para aplicar · escribe un factor y Enter · Esc cancela';
       case 'door': return 'Clic sobre un muro para insertar una puerta';
       case 'window': return 'Clic sobre un muro para insertar una ventana';
       case 'furniture': return 'Clic para colocar · R para rotar · Esc para salir';
@@ -168,6 +201,9 @@
     this.drawing = null;
     this.drag = null;
     this.marquee = null;
+    this.scaleInput = '';
+    this.pinch = null;
+    this._touches = {};
     this.tool = tool || 'select';
     if (this.tool !== 'furniture') this.furnitureId = null;
     this._updateCursorStyle();
@@ -209,6 +245,64 @@
       }
     }
     this.requestRender();
+  };
+
+  // Modos de snap avanzados (CONTRACT §17.2): se cargan de localStorage
+  // 'engdraft.snaps' y se exponen en this.snapModes / this.snap.modes.
+  Editor2D.prototype._loadSnapModes = function () {
+    var modes = {};
+    for (var k = 0; k < SNAP_MODE_KEYS.length; k++) {
+      modes[SNAP_MODE_KEYS[k]] = DEFAULT_SNAP_MODES[SNAP_MODE_KEYS[k]];
+    }
+    try {
+      var store = (typeof localStorage !== 'undefined') ? localStorage : null;
+      var raw = store && typeof store.getItem === 'function' ? store.getItem(SNAP_MODES_KEY) : null;
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        for (var m = 0; m < SNAP_MODE_KEYS.length; m++) {
+          var key = SNAP_MODE_KEYS[m];
+          if (parsed && typeof parsed[key] === 'boolean') modes[key] = parsed[key];
+        }
+      }
+    } catch (err) { /* sin almacenamiento: valores por defecto */ }
+    this.snapModes = modes;
+    this.snap.modes = modes;
+    return modes;
+  };
+
+  Editor2D.prototype.getSnapModes = function () {
+    var out = {};
+    for (var i = 0; i < SNAP_MODE_KEYS.length; i++) {
+      out[SNAP_MODE_KEYS[i]] = this.snapModes[SNAP_MODE_KEYS[i]] !== false;
+    }
+    return out;
+  };
+
+  Editor2D.prototype.setSnapModes = function (patch) {
+    if (!patch || typeof patch !== 'object') return this.getSnapModes();
+    var changed = false;
+    for (var i = 0; i < SNAP_MODE_KEYS.length; i++) {
+      var key = SNAP_MODE_KEYS[i];
+      if (!Object.prototype.hasOwnProperty.call(patch, key)) continue;
+      var val = patch[key] !== false;
+      if (this.snapModes[key] !== val) { this.snapModes[key] = val; changed = true; }
+    }
+    if (changed) {
+      try {
+        if (typeof localStorage !== 'undefined' && localStorage &&
+          typeof localStorage.setItem === 'function') {
+          localStorage.setItem(SNAP_MODES_KEY, JSON.stringify(this.getSnapModes()));
+        }
+      } catch (err) { /* tolerar */ }
+      this.snapInfo = null;
+      this._emitStatus();
+      this.requestRender();
+    }
+    return this.getSnapModes();
+  };
+
+  Editor2D.prototype._snapModeOn = function (mode) {
+    return !mode || this.snapModes[mode] !== false;
   };
 
   // Rejilla saneada: espaciado menor, líneas maestras, origen y paso de ajuste.
@@ -333,6 +427,11 @@
     (this.store.project.texts || []).forEach(function (t) {
       if (t.level === level) all.push({ x: t.x, y: t.y });
     });
+    (this.store.project.lines || []).forEach(function (l) {
+      if (!l || l.level !== level || !l.a || !l.b) return;
+      all.push({ x: l.a.x, y: l.a.y }, { x: l.b.x, y: l.b.y });
+      if (l.curve && l.curve.pts) all = all.concat(l.curve.pts);
+    });
     if (!all.length) {
       this.view.x = 0; this.view.y = 0; this.view.zoom = 0.055;
       this.requestRender();
@@ -360,49 +459,181 @@
   };
 
   // ---------------------------------------------------------------- snapping
-  Editor2D.prototype._rawSnapCandidates = function () {
-    var c = [];
-    var level = this.store.activeLevel;
+  // Candidatos de snap tipados (CONTRACT §17.2). "ref" es el punto de
+  // referencia de dibujo desde el que se calculan tangentes y perpendiculares.
+  Editor2D.prototype._rawSnapCandidates = function (ref) {
     var self = this;
-    function add(p, type) { if (p && isFinite(p.x) && isFinite(p.y)) c.push({ point: { x: p.x, y: p.y }, type: type }); }
-    this.store.project.walls.forEach(function (w) {
-      if (w.level !== level) return;
-      add(w.a, 'EXT'); add(w.b, 'EXT');
-      add(Geo.wallPointAt(w, 0.5), 'MED');
+    var list = [];
+    var level = this.store.activeLevel;
+    var project = this.store.project;
+    function add(p, type, mode) {
+      if (!p || !isFinite(p.x) || !isFinite(p.y)) return;
+      if (mode && !self._snapModeOn(mode)) return;
+      list.push({ point: { x: p.x, y: p.y }, type: type });
+    }
+    function addArc(arc) {
+      if (!arc || !(arc.radius > 1e-6)) return;
+      add(arc.center, 'CENTRO', 'center');
+      if (self._snapModeOn('quadrant')) {
+        for (var q = 0; q < 4; q++) {
+          var qa = q * Math.PI / 2;
+          add({
+            x: arc.center.x + Math.cos(qa) * arc.radius,
+            y: arc.center.y + Math.sin(qa) * arc.radius
+          }, 'CUADRANTE', 'quadrant');
+        }
+      }
+      if (ref && self._snapModeOn('tangent')) {
+        self._tangentPoints(ref, arc).forEach(function (p) { add(p, 'TANGENTE', 'tangent'); });
+      }
+    }
+    function addEnds(a, b) {
+      add(a, 'EXTREMO', 'endpoint');
+      add(b, 'EXTREMO', 'endpoint');
+    }
+    function addPerp(refPoint, a, b) {
+      if (!refPoint || !self._snapModeOn('perpendicular')) return;
+      var foot = self._perpendicularFoot(refPoint, a, b);
+      if (foot) add(foot, 'PERPENDICULAR', 'perpendicular');
+    }
+
+    // Muros rectos y curvos.
+    (project.walls || []).forEach(function (w) {
+      if (!w || w.level !== level) return;
+      addEnds(w.a, w.b);
+      add(Geo.wallPointAt(w, 0.5), 'MEDIO', 'midpoint');
       if (Geo.wallIsCurved(w)) {
-        (w.curve.pts || []).forEach(function (p) { add(p, 'CURVA'); });
+        if (w.curve.type === 'arc') addArc(Geo.arcFromBulge(w.a, w.b, w.curve.bulge));
+        else (w.curve.pts || []).forEach(function (p) { add(p, 'CURVA'); });
       } else {
-        w.openings.forEach(function (o) {
+        (w.openings || []).forEach(function (o) {
           var sp = Geo.openingSpan(w, o);
-          add(Geo.lerp(w.a, w.b, sp.from / Math.max(1, Geo.wallLength(w))), 'JAMBA');
-          add(Geo.lerp(w.a, w.b, sp.to / Math.max(1, Geo.wallLength(w))), 'JAMBA');
+          var len = Math.max(1, Geo.wallLength(w));
+          add(Geo.lerp(w.a, w.b, sp.from / len), 'JAMBA');
+          add(Geo.lerp(w.a, w.b, sp.to / len), 'JAMBA');
+        });
+        addPerp(ref, w.a, w.b);
+      }
+    });
+
+    // Líneas y curvas de dibujo libre.
+    (project.lines || []).forEach(function (l) {
+      if (!l || l.level !== level) return;
+      addEnds(l.a, l.b);
+      add(self._linePointAt(l, 0.5), 'MEDIO', 'midpoint');
+      if (l.curve && l.curve.type === 'arc') {
+        addArc(Geo.arcFromBulge(l.a, l.b, l.curve.bulge));
+      } else if (l.curve && l.curve.type === 'spline') {
+        (l.curve.pts || []).forEach(function (p) { add(p, 'CURVA'); });
+      } else {
+        addPerp(ref, l.a, l.b);
+      }
+    });
+
+    // Ambientes: esquinas, medios de arista y centroide.
+    (project.rooms || []).forEach(function (r) {
+      if (!r || r.level !== level || !r.polygon || r.polygon.length < 3) return;
+      for (var i = 0; i < r.polygon.length; i++) {
+        var a = r.polygon[i];
+        var b = r.polygon[(i + 1) % r.polygon.length];
+        add(a, 'EXTREMO', 'endpoint');
+        add({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, 'MEDIO', 'midpoint');
+      }
+      add(Geo.polygonCentroid(r.polygon), 'CENTRO', 'center');
+    });
+
+    // Mobiliario: centro y esquinas.
+    (project.items || []).forEach(function (it) {
+      if (!it || it.level !== level) return;
+      add({ x: it.x, y: it.y }, 'CENTRO', 'center');
+      if (self._snapModeOn('endpoint')) {
+        Geo.rectPolygon(it.x, it.y, it.w, it.d, it.rotation || 0).forEach(function (p) {
+          add(p, 'EXTREMO', 'endpoint');
         });
       }
     });
-    this.store.project.rooms.forEach(function (r) {
-      if (r.level !== level) return;
-      r.polygon.forEach(function (p) { add(p, 'VÉRTICE'); });
+
+    // Textos: su punto de inserción actúa como centro.
+    (project.texts || []).forEach(function (t) {
+      if (!t || t.level !== level) return;
+      add({ x: t.x, y: t.y }, 'CENTRO', 'center');
     });
-    this.store.project.items.forEach(function (it) {
-      if (it.level !== level) return;
-      add({ x: it.x, y: it.y }, 'CENTRO');
+
+    return list;
+  };
+
+  // Punto de una línea/curva de dibujo libre a una fracción de su longitud.
+  Editor2D.prototype._linePointAt = function (line, t) {
+    if (!line || !line.a) return { x: 0, y: 0 };
+    return Geo.wallPointAt({ a: line.a, b: line.b, curve: line.curve }, t);
+  };
+
+  Editor2D.prototype._linePath = function (line) {
+    if (!line || !line.a || !line.b) return [];
+    return Geo.wallPath({ a: line.a, b: line.b, curve: line.curve });
+  };
+
+  Editor2D.prototype._lineLength = function (line) {
+    if (!line || !line.a || !line.b) return 0;
+    return Geo.wallLength({ a: line.a, b: line.b, curve: line.curve });
+  };
+
+  // Puntos de tangencia desde "ref" a la circunferencia del arco (sólo los que
+  // caen dentro del barrido dibujado).
+  Editor2D.prototype._tangentPoints = function (ref, arc) {
+    var out = [];
+    if (!ref || !arc || !(arc.radius > 1e-6)) return out;
+    var dx = ref.x - arc.center.x, dy = ref.y - arc.center.y;
+    var d = Math.sqrt(dx * dx + dy * dy);
+    if (!(d > arc.radius + 1e-6)) return out;
+    var base = Math.atan2(dy, dx);
+    var alpha = Math.acos(Geo.clamp(arc.radius / d, -1, 1));
+    var self = this;
+    [alpha, -alpha].forEach(function (da) {
+      var ang = base + da;
+      if (!self._angleOnArc(arc, ang)) return;
+      out.push({
+        x: arc.center.x + Math.cos(ang) * arc.radius,
+        y: arc.center.y + Math.sin(ang) * arc.radius
+      });
     });
-    this.store.project.texts.forEach(function (t) {
-      if (t.level !== level) return;
-      add({ x: t.x, y: t.y }, 'TEXTO');
-    });
-    return c;
+    return out;
+  };
+
+  Editor2D.prototype._angleOnArc = function (arc, ang) {
+    var TWO = Math.PI * 2;
+    var sweep = Number(arc.sweep) || 0;
+    if (Math.abs(sweep) < 1e-9) return false;
+    var delta;
+    if (sweep > 0) {
+      delta = ((ang - arc.startAngle) % TWO + TWO) % TWO;
+      return delta <= sweep + 1e-7;
+    }
+    delta = ((arc.startAngle - ang) % TWO + TWO) % TWO;
+    return delta <= -sweep + 1e-7;
+  };
+
+  // Pie de la perpendicular desde "ref" al segmento a-b (si cae dentro).
+  Editor2D.prototype._perpendicularFoot = function (ref, a, b) {
+    if (!ref || !a || !b) return null;
+    var d = Geo.distToSegment(ref, a, b);
+    if (!d || !isFinite(d.dist) || !isFinite(d.t)) return null;
+    if (d.dist < 1e-6) return null;
+    if (d.t <= 1e-6 || d.t >= 1 - 1e-6) return null;
+    return { x: d.point.x, y: d.point.y };
   };
 
   Editor2D.prototype.snapPoint = function (raw, opts) {
     opts = opts || {};
     var tol = 11 / this.view.zoom;
+    if (!isFinite(tol) || tol <= 0) tol = 11;
+    var ref = opts.ref || null;
     var best = null, bestD = Infinity;
     if (this.snap.snapping !== false && !opts.noObject) {
-      var cands = this._rawSnapCandidates();
+      var cands = this._rawSnapCandidates(ref);
       for (var i = 0; i < cands.length; i++) {
         var d = Geo.dist(raw, cands[i].point);
-        if (d < bestD && d <= tol) { bestD = d; best = cands[i]; }
+        if (isFinite(d) && d < bestD && d <= tol) { bestD = d; best = cands[i]; }
       }
     }
     if (best) {
@@ -448,6 +679,7 @@
     this._drawWalls();
     this._drawDims();
     this._drawItems();
+    this._drawLines();
     this._drawTexts();
     this._drawRoomLabels();
     this._drawSelectionOverlays();
@@ -792,8 +1024,11 @@
     ctx.restore();
   };
 
+  // Aberturas tipadas en planta (CONTRACT §17.1): puerta single/double/sliding,
+  // ventana fixed/sliding/double/awning, garaje sectional/sliding y paso libre.
   Editor2D.prototype._drawOpening = function (wall, opening, from, to) {
     var ctx = this.ctx;
+    var self = this;
     var len = Math.max(1, Geo.wallLength(wall));
     var ux = (wall.b.x - wall.a.x) / len;
     var uy = (wall.b.y - wall.a.y) / len;
@@ -801,77 +1036,167 @@
     var half = (wall.thickness || 150) / 2;
     var width = to - from;
     if (width < 5) return;
-    var a0 = { x: wall.a.x + ux * from, y: wall.a.y + uy * from };
-    var a1 = { x: wall.a.x + ux * to, y: wall.a.y + uy * to };
 
-    if (opening.type === 'window') {
-      var q = [
-        { x: a0.x + nx * half, y: a0.y + ny * half },
-        { x: a1.x + nx * half, y: a1.y + ny * half },
-        { x: a1.x - nx * half, y: a1.y - ny * half },
-        { x: a0.x - nx * half, y: a0.y - ny * half }
-      ].map(function (p) { return this.worldToScreen(p); }, this);
+    function W(along, normal) {
+      return { x: wall.a.x + ux * along + nx * normal, y: wall.a.y + uy * along + ny * normal };
+    }
+    function stroke(pts, color, lw, dash) {
+      if (!pts || pts.length < 2) return;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = lw || 1;
+      ctx.setLineDash(dash || []);
       ctx.beginPath();
-      ctx.moveTo(q[0].x, q[0].y);
-      for (var i = 1; i < q.length; i++) ctx.lineTo(q[i].x, q[i].y);
+      var p0 = self.worldToScreen(pts[0]);
+      ctx.moveTo(p0.x, p0.y);
+      for (var i = 1; i < pts.length; i++) {
+        var pi = self.worldToScreen(pts[i]);
+        ctx.lineTo(pi.x, pi.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+    function fillQuad(a0, a1, fill) {
+      var q = [W(a0, half), W(a1, half), W(a1, -half), W(a0, -half)];
+      ctx.beginPath();
+      var p0 = self.worldToScreen(q[0]);
+      ctx.moveTo(p0.x, p0.y);
+      for (var i = 1; i < q.length; i++) {
+        var pi = self.worldToScreen(q[i]);
+        ctx.lineTo(pi.x, pi.y);
+      }
       ctx.closePath();
-      ctx.fillStyle = C.windowFill;
+      ctx.fillStyle = fill;
       ctx.fill();
       ctx.strokeStyle = C.window;
       ctx.lineWidth = 1;
-      [-1 / 3, 1 / 3].forEach(function (f) {
-        var p0 = this.worldToScreen({ x: a0.x + nx * half * f, y: a0.y + ny * half * f });
-        var p1 = this.worldToScreen({ x: a1.x + nx * half * f, y: a1.y + ny * half * f });
-        ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
-      }, this);
-      return;
+      ctx.stroke();
+    }
+    function jambs() {
+      stroke([W(from, -half), W(from, half)], C.opening, 1.1);
+      stroke([W(to, -half), W(to, half)], C.opening, 1.1);
+    }
+    // Flecha de sentido de deslizamiento, paralela al muro.
+    function arrow(centerAlong, dir) {
+      var d = dir < 0 ? -1 : 1;
+      stroke([W(centerAlong - 150 * d, 0), W(centerAlong + 150 * d, 0)], C.opening, 1.1);
+      var tip = self.worldToScreen(W(centerAlong + 150 * d, 0));
+      var b1 = self.worldToScreen(W(centerAlong + 60 * d, 90));
+      var b2 = self.worldToScreen(W(centerAlong + 60 * d, -90));
+      ctx.save();
+      ctx.strokeStyle = C.opening;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(b1.x, b1.y);
+      ctx.lineTo(tip.x, tip.y);
+      ctx.lineTo(b2.x, b2.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // Hoja abatible con su abanico de apertura.
+    function doorLeaf(hingeAlong, otherAlong, swing) {
+      var hinge = W(hingeAlong, 0);
+      var other = W(otherAlong, 0);
+      var leafLen = Geo.dist(hinge, other);
+      if (!(leafLen > 1)) return;
+      var swingDir = { x: nx * swing, y: ny * swing };
+      var openEnd = { x: hinge.x + swingDir.x * leafLen, y: hinge.y + swingDir.y * leafLen };
+      var closedAng = Math.atan2(other.y - hinge.y, other.x - hinge.x);
+      var openAng = Math.atan2(swingDir.y, swingDir.x);
+      var delta = openAng - closedAng;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      var hs = self.worldToScreen(hinge);
+      var os = self.worldToScreen(openEnd);
+      ctx.save();
+      ctx.strokeStyle = C.opening;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(hs.x, hs.y);
+      ctx.lineTo(os.x, os.y);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      var steps = 18;
+      for (var k = 0; k <= steps; k++) {
+        var ang = closedAng + delta * (k / steps);
+        var p = { x: hinge.x + Math.cos(ang) * leafLen, y: hinge.y + Math.sin(ang) * leafLen };
+        var sp2 = self.worldToScreen(p);
+        if (k === 0) ctx.moveTo(sp2.x, sp2.y); else ctx.lineTo(sp2.x, sp2.y);
+      }
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(hs.x, hs.y, 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = C.opening;
+      ctx.fill();
+      ctx.restore();
     }
 
-    if (opening.type === 'garage' || opening.type === 'pass') {
-      var s0 = this.worldToScreen(a0), s1 = this.worldToScreen(a1);
-      ctx.strokeStyle = opening.type === 'garage' ? '#8c6a3c' : C.opening;
-      ctx.lineWidth = 1.2;
-      ctx.setLineDash([9, 5]);
-      ctx.beginPath(); ctx.moveTo(s0.x, s0.y); ctx.lineTo(s1.x, s1.y); ctx.stroke();
-      ctx.setLineDash([]);
-      return;
-    }
-
-    // Puerta: hoja y abanico
-    var hingeAtStart = opening.hinge !== -1;
-    var hinge = hingeAtStart ? a0 : a1;
-    var other = hingeAtStart ? a1 : a0;
+    jambs();
+    var type = opening.type || 'door';
+    var subtype = opening.subtype ||
+      (type === 'door' ? 'single' : (type === 'window' ? 'fixed' : (type === 'garage' ? 'sectional' : '')));
     var swing = opening.swing === -1 ? -1 : 1;
-    var swingDir = { x: nx * swing, y: ny * swing };
-    var leafLen = width;
-    var openEnd = { x: hinge.x + swingDir.x * leafLen, y: hinge.y + swingDir.y * leafLen };
-    var closedVec = { x: other.x - hinge.x, y: other.y - hinge.y };
-    var closedAng = Math.atan2(closedVec.y, closedVec.x);
-    var openAng = Math.atan2(swingDir.y, swingDir.x);
-    var delta = openAng - closedAng;
-    while (delta > Math.PI) delta -= Math.PI * 2;
-    while (delta < -Math.PI) delta += Math.PI * 2;
+    var mid = (from + to) / 2;
 
-    ctx.strokeStyle = C.opening;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    var hs = this.worldToScreen(hinge);
-    var os = this.worldToScreen(openEnd);
-    ctx.moveTo(hs.x, hs.y); ctx.lineTo(os.x, os.y);
-    ctx.stroke();
-
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    var steps = 20;
-    for (var k = 0; k <= steps; k++) {
-      var ang = closedAng + delta * (k / steps);
-      var p = { x: hinge.x + Math.cos(ang) * leafLen, y: hinge.y + Math.sin(ang) * leafLen };
-      var sp = this.worldToScreen(p);
-      if (k === 0) ctx.moveTo(sp.x, sp.y); else ctx.lineTo(sp.x, sp.y);
+    if (type === 'pass') {
+      stroke([W(from, 0), W(to, 0)], C.opening, 1.2, [9, 5]);
+      return;
     }
-    ctx.stroke();
-    ctx.fillStyle = C.opening;
-    ctx.beginPath(); ctx.arc(hs.x, hs.y, 2.4, 0, Math.PI * 2); ctx.fill();
+
+    if (type === 'garage') {
+      if (subtype === 'sliding') {
+        stroke([W(from, 0), W(to, 0)], '#8c6a3c', 1.2, [9, 5]);
+        stroke([W(from, half * 0.9), W(to, half * 0.9)], '#8c6a3c', 1.6);
+        stroke([W(from, half * 0.9), W(from, half * 1.9)], '#8c6a3c', 1);
+        stroke([W(to, half * 0.9), W(to, half * 1.9)], '#8c6a3c', 1);
+        arrow(mid + width * 0.3, swing);
+      } else {
+        stroke([W(from, 0), W(to, 0)], '#8c6a3c', 1.2, [9, 5]);
+        for (var pn = 1; pn <= 3; pn++) {
+          var along = from + (width * pn) / 4;
+          stroke([W(along, -half), W(along, half)], '#8c6a3c', 1);
+        }
+        stroke([W(from, half * 0.6), W(to, half * 0.6)], '#8c6a3c', 1);
+      }
+      return;
+    }
+
+    if (type === 'window') {
+      fillQuad(from, to, C.windowFill);
+      [-1 / 3, 0, 1 / 3].forEach(function (f) {
+        stroke([W(from, half * f), W(to, half * f)], C.window, 0.8);
+      });
+      if (subtype === 'fixed') {
+        stroke([W(mid - width / 6, -half), W(mid - width / 6, half)], C.window, 1.1);
+        stroke([W(mid + width / 6, -half), W(mid + width / 6, half)], C.window, 1.1);
+      } else if (subtype === 'double') {
+        stroke([W(mid, -half), W(mid, half)], C.window, 1.2);
+      } else if (subtype === 'sliding') {
+        stroke([W(from + width * 0.06, half * 0.45), W(mid + width * 0.06, half * 0.45)], C.window, 1.6);
+        stroke([W(mid - width * 0.06, -half * 0.45), W(to - width * 0.06, -half * 0.45)], C.window, 1.6);
+        arrow(mid, swing);
+      } else if (subtype === 'awning') {
+        stroke([W(from, half), W(from + width * 0.55, half * 2.4)], C.window, 1.4);
+        stroke([W(from + width * 0.55, half * 2.4), W(to, half)], C.window, 0.9, [4, 3]);
+        stroke([W(to, -half), W(to, half)], C.window, 1.1);
+      }
+      return;
+    }
+
+    // Puertas.
+    if (subtype === 'double') {
+      doorLeaf(from, mid, swing);
+      doorLeaf(to, mid, swing);
+    } else if (subtype === 'sliding') {
+      stroke([W(from + width * 0.05, half * 0.5), W(mid + width * 0.05, half * 0.5)], C.opening, 1.8);
+      stroke([W(mid - width * 0.05, -half * 0.5), W(to - width * 0.05, -half * 0.5)], C.opening, 1.8);
+      arrow(mid, swing);
+    } else {
+      var hingeAtStart = opening.hinge !== -1;
+      if (hingeAtStart) doorLeaf(from, to, swing);
+      else doorLeaf(to, from, swing);
+    }
   };
 
   Editor2D.prototype._drawDims = function () {
@@ -1057,6 +1382,71 @@
     });
   };
 
+  // Líneas y curvas de dibujo libre (CONTRACT §17.4).
+  Editor2D.prototype._lineHandles = function (line) {
+    var out = [];
+    if (!line || !line.curve) return out;
+    if (line.curve.type === 'arc') {
+      out.push({ point: this._linePointAt(line, 0.5), kind: 'bulge', index: 0 });
+    } else if (line.curve.type === 'spline') {
+      (line.curve.pts || []).forEach(function (p, i) {
+        out.push({ point: { x: p.x, y: p.y }, kind: 'spline', index: i });
+      });
+    }
+    return out;
+  };
+
+  Editor2D.prototype._lineHit = function (p, line, tol) {
+    var path = this._linePath(line);
+    var best = tol;
+    for (var i = 1; i < path.length; i++) {
+      var d = Geo.distToSegment(p, path[i - 1], path[i]);
+      if (d.dist <= best) return true;
+    }
+    return false;
+  };
+
+  Editor2D.prototype._drawLines = function () {
+    var self = this;
+    var ctx = this.ctx;
+    var zoom = this.view.zoom;
+    var selected = {};
+    this.store.selection.forEach(function (s) { selected[s.kind + ':' + s.id] = true; });
+    var hoverId = this.hover && this.hover.kind === 'line' ? this.hover.id : null;
+    (this.store.project.lines || []).forEach(function (line) {
+      if (!line || line.level !== self.store.activeLevel) return;
+      if (!self.store.isVisible(line.layerId)) return;
+      var path = self._linePath(line);
+      if (path.length < 2) return;
+      var pts = path.map(function (q) { return self.worldToScreen(q); });
+      var isSel = !!selected['line:' + line.id];
+      var isHover = hoverId === line.id;
+      var lw = Geo.clamp((line.width || LINE_DEFAULTS.width) * zoom, 0.5, 6);
+      ctx.save();
+      ctx.strokeStyle = isSel ? C.selection : (isHover ? C.hover : (line.color || LINE_DEFAULTS.color));
+      ctx.lineWidth = isSel ? Math.max(lw, 1.8) : lw;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.setLineDash(LINE_DASH[line.style] || LINE_DASH.solid);
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+      ctx.stroke();
+      ctx.restore();
+      if (isSel) {
+        self._drawHandle(line.a, C.selection);
+        self._drawHandle(line.b, C.selection);
+        self._lineHandles(line).forEach(function (h) {
+          self._drawCurveHandle(h.point, C.selection);
+        });
+        var mid = self.worldToScreen(self._linePointAt(line, 0.5));
+        var txt = (line.type === 'curve' ? 'Curva' : 'Línea') + ' · ' +
+          Geo.formatLength(self._lineLength(line), self._units());
+        self._labelChip(txt, mid.x, mid.y - 16);
+      }
+    });
+  };
+
   function ctxLine(ctx, a, b, color, width, dash) {
     ctx.save();
     ctx.strokeStyle = color;
@@ -1170,6 +1560,26 @@
         var pa = self.worldToScreen(g.pa), pb = self.worldToScreen(g.pb);
         self._drawHandle(pa, C.selection);
         self._drawHandle(pb, C.selection);
+      } else if (sel.kind === 'line') {
+        var path = self._linePath(obj);
+        if (path.length >= 2) {
+          var pts = path.map(function (p) { return self.worldToScreen(p); });
+          ctx.save();
+          ctx.strokeStyle = C.selection;
+          ctx.lineWidth = 2;
+          ctx.setLineDash([7, 4]);
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (var li = 1; li < pts.length; li++) ctx.lineTo(pts[li].x, pts[li].y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+        self._drawHandle(obj.a, C.selection);
+        self._drawHandle(obj.b, C.selection);
+        self._lineHandles(obj).forEach(function (h) {
+          self._drawCurveHandle(h.point, C.selection);
+        });
       }
     });
   };
@@ -1296,6 +1706,101 @@
       var len3 = Geo.dist(this.drawing.start, this.cursor);
       if (len3 > 1) this._labelChip(Geo.formatLength(len3, this._units()), (a.x + b.x) / 2, (a.y + b.y) / 2 - 14);
       ctx.restore();
+    }
+
+    if (tool === 'line' && this.drawing && this.drawing.type === 'line') {
+      var lastL = this.drawing.last || this.drawing.start;
+      var snapL = this.snapPoint(this.cursor, { ref: lastL });
+      var endL = snapL.point;
+      if (this.snap.ortho) endL = this._constrainOrtho(lastL, endL);
+      this.snapInfo = snapL;
+      var sl = this.worldToScreen(lastL), el = this.worldToScreen(endL);
+      ctx.save();
+      ctx.strokeStyle = C.selection;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([7, 4]);
+      ctx.beginPath();
+      ctx.moveTo(sl.x, sl.y);
+      ctx.lineTo(el.x, el.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      this._drawHandle(lastL, C.selection);
+      var lenL = Geo.dist(lastL, endL);
+      if (lenL > 1) {
+        this._labelChip(Geo.formatLength(lenL, this._units()),
+          (sl.x + el.x) / 2, (sl.y + el.y) / 2 - 14);
+      }
+    }
+
+    if (tool === 'curve' && this.drawing) {
+      var dc = this.drawing;
+      if (dc.phase === 'end') {
+        var snapC = this.snapPoint(this.cursor, { ref: dc.start });
+        this.snapInfo = snapC;
+        var startC = dc.start, endC = snapC.point;
+        if (Geo.dist(startC, endC) > 1) {
+          var sc0 = this.worldToScreen(startC), sc1 = this.worldToScreen(endC);
+          ctx.save();
+          ctx.strokeStyle = C.selection;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([7, 4]);
+          ctx.beginPath();
+          ctx.moveTo(sc0.x, sc0.y);
+          ctx.lineTo(sc1.x, sc1.y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+        }
+      } else {
+        var pseudoC = { a: dc.start, b: dc.end, curve: { type: 'arc', bulge: dc.bulge || 0 } };
+        var pathC = Geo.wallPath(pseudoC);
+        if (pathC.length >= 2) {
+          var ptsC = pathC.map(function (p) { return this.worldToScreen(p); }, this);
+          ctx.save();
+          ctx.strokeStyle = C.selection;
+          ctx.lineWidth = 1.6;
+          ctx.setLineDash([8, 4]);
+          ctx.beginPath();
+          ctx.moveTo(ptsC[0].x, ptsC[0].y);
+          for (var pc = 1; pc < ptsC.length; pc++) ctx.lineTo(ptsC[pc].x, ptsC[pc].y);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
+          var midC = this.worldToScreen(Geo.wallPointAt(pseudoC, 0.5));
+          this._labelChip('Curva · ' + Geo.formatLength(Geo.wallLength(pseudoC), this._units()),
+            midC.x, midC.y - 16);
+        }
+      }
+    }
+
+    if (tool === 'scale' && this.drawing && this.drawing.type === 'scale' && this.drawing.base) {
+      var dsc = this.drawing;
+      var baseS = this.worldToScreen(dsc.base);
+      this._drawHandle(dsc.base, C.selection);
+      var sb = this._selectionBounds();
+      if (sb) {
+        var corners = [[sb.minX, sb.minY], [sb.maxX, sb.minY], [sb.maxX, sb.maxY], [sb.minX, sb.maxY]];
+        var polyS = corners.map(function (c) { return this.worldToScreen({ x: c[0], y: c[1] }); }, this);
+        this._strokePoly(polyS, 'rgba(245,166,35,0.55)', 1.1, [5, 4]);
+      }
+      var cursorS = this.worldToScreen(this.cursor);
+      var fNow = this._scaleFactor(this.cursor);
+      var rr = Math.max(2, (dsc.refLen || 0) * this.view.zoom);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(245,166,35,0.55)';
+      ctx.lineWidth = 1.1;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.arc(baseS.x, baseS.y, rr, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(baseS.x, baseS.y);
+      ctx.lineTo(cursorS.x, cursorS.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      this._labelChip('Factor ×' + fNow.toFixed(2), cursorS.x, cursorS.y - 20);
     }
   };
 
@@ -1435,6 +1940,64 @@
     }
     ctx.stroke();
     ctx.restore();
+
+    // HUD del factor de escalado (CONTRACT §17.4).
+    if (this.tool === 'scale' && this.drawing && this.drawing.type === 'scale') {
+      var fHud = this._scaleFactor(this.cursor);
+      this._labelChip('FACTOR ×' + fHud.toFixed(2), this.w / 2, this.h - 44);
+    }
+  };
+
+  // ---------------------------------------------------------------- táctil
+  Editor2D.prototype._touchKey = function (e) {
+    return (e && e.pointerId != null) ? String(e.pointerId) : 'touch';
+  };
+
+  Editor2D.prototype._touchPair = function () {
+    var pts = [];
+    var touches = this._touches || {};
+    for (var id in touches) {
+      if (!Object.prototype.hasOwnProperty.call(touches, id)) continue;
+      var p = touches[id];
+      if (p && isFinite(p.sx) && isFinite(p.sy)) pts.push({ x: p.sx, y: p.sy });
+      if (pts.length === 2) break;
+    }
+    return pts;
+  };
+
+  // Zoom con dos dedos: multiplica el zoom por dist/prevDist y mantiene fijo el
+  // punto medio entre los dedos.
+  Editor2D.prototype.pinchStart = function (a, b) {
+    if (!a || !b || !isFinite(a.x) || !isFinite(a.y) || !isFinite(b.x) || !isFinite(b.y)) return null;
+    this.pinch = { dist: Math.max(1, Geo.dist({ x: a.x, y: a.y }, { x: b.x, y: b.y })) };
+    return this.pinch;
+  };
+
+  Editor2D.prototype.pinchMove = function (a, b) {
+    if (!a || !b || !isFinite(a.x) || !isFinite(a.y) || !isFinite(b.x) || !isFinite(b.y)) return null;
+    if (!this.pinch) this.pinchStart(a, b);
+    var p = this.pinch;
+    if (!p) return null;
+    var dist = Math.max(1, Geo.dist({ x: a.x, y: a.y }, { x: b.x, y: b.y }));
+    var mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    var worldMid = this.screenToWorld(mid.x, mid.y);
+    var factor = dist / Math.max(1, p.dist);
+    if (!isFinite(factor) || factor <= 0) return p;
+    this.view.zoom = Geo.clamp(this.view.zoom * factor, 0.002, 1.5);
+    this.view.x = worldMid.x - (mid.x - this.w / 2) / this.view.zoom;
+    this.view.y = worldMid.y + (mid.y - this.h / 2) / this.view.zoom;
+    p.dist = dist;
+    this.requestRender();
+    return p;
+  };
+
+  Editor2D.prototype._pinchBegin = function (e) {
+    var pts = this._touchPair();
+    if (pts.length < 2) return false;
+    if (this.drawing || this.drag || this.marquee || this.pan) this.cancel();
+    this.pinchStart(pts[0], pts[1]);
+    if (e && e.preventDefault) e.preventDefault();
+    return true;
   };
 
   // ---------------------------------------------------------------- interacción
@@ -1445,6 +2008,11 @@
     var raw = this.screenToWorld(p.sx, p.sy);
     this.cursor = raw;
     call(this.callbacks.onCursor, [raw]);
+
+    if (e.pointerType === 'touch') {
+      this._touches[this._touchKey(e)] = { sx: p.sx, sy: p.sy };
+      if (this._pinchBegin(e)) return;
+    }
 
     if (e.button === 1 || this.spaceDown || this.tool === 'pan') {
       this.pan = { sx: p.sx, sy: p.sy, viewX: this.view.x, viewY: this.view.y };
@@ -1462,6 +2030,12 @@
       this._arcDown(raw);
     } else if (this.tool === 'wallSpline') {
       this._splineDown(raw);
+    } else if (this.tool === 'line') {
+      this._lineDown(raw);
+    } else if (this.tool === 'curve') {
+      this._curveLineDown(raw);
+    } else if (this.tool === 'scale') {
+      this._scaleDown(raw);
     } else if (this.tool === 'door' || this.tool === 'window') {
       this._openingDown(raw, this.tool);
     } else if (this.tool === 'furniture') {
@@ -1485,6 +2059,19 @@
     this.mouse.sx = p.sx; this.mouse.sy = p.sy; this.mouse.inside = true;
     var raw = this.screenToWorld(p.sx, p.sy);
     this.cursor = raw;
+
+    if (e.pointerType === 'touch') {
+      this._touches[this._touchKey(e)] = { sx: p.sx, sy: p.sy };
+      if (this.pinch) {
+        var tpts = this._touchPair();
+        if (tpts.length >= 2) {
+          this.pinchMove(tpts[0], tpts[1]);
+          if (e.preventDefault) e.preventDefault();
+          return;
+        }
+        this.pinch = null;
+      }
+    }
 
     if (this.pan) {
       this.view.x = this.pan.viewX - (p.sx - this.pan.sx) / this.view.zoom;
@@ -1514,7 +2101,7 @@
 
     if (this.tool === 'wallArc' && this.drawing) {
       if (this.drawing.phase === 'end') {
-        this.snapInfo = this.snapPoint(raw);
+        this.snapInfo = this.snapPoint(raw, { ref: this.drawing.start });
         this._emitCursor(this.snapInfo.point);
       } else {
         this.drawing.bulge = Geo.bulgeFromPoint(this.drawing.start, this.drawing.end, raw);
@@ -1526,14 +2113,47 @@
     }
 
     if (this.tool === 'wallSpline' && this.drawing) {
-      this.snapInfo = this.snapPoint(raw);
+      var lastS = this.drawing.pts[this.drawing.pts.length - 1];
+      this.snapInfo = this.snapPoint(raw, { ref: lastS });
       this._emitCursor(this.snapInfo.point);
       this.requestRender();
       return;
     }
 
+    if (this.tool === 'line' && this.drawing) {
+      var lastLine = this.drawing.last || this.drawing.start;
+      var snapLn = this.snapPoint(raw, { ref: lastLine });
+      this.snapInfo = snapLn;
+      var endLn = snapLn.point;
+      if (this.snap.ortho) endLn = this._constrainOrtho(lastLine, endLn);
+      this._emitCursor(endLn);
+      this.requestRender();
+      return;
+    }
+
+    if (this.tool === 'curve' && this.drawing) {
+      if (this.drawing.phase === 'end') {
+        this.snapInfo = this.snapPoint(raw, { ref: this.drawing.start });
+        this._emitCursor(this.snapInfo.point);
+      } else {
+        this.drawing.bulge = Geo.bulgeFromPoint(this.drawing.start, this.drawing.end, raw);
+        this.snapInfo = null;
+        this._emitCursor(raw);
+      }
+      this.requestRender();
+      return;
+    }
+
+    if (this.tool === 'scale' && this.drawing && this.drawing.type === 'scale') {
+      this.snapInfo = null;
+      this._emitCursor(raw);
+      this._emitStatus();
+      this.requestRender();
+      return;
+    }
+
     if (this.tool === 'dim' && this.drawing) {
-      this.snapInfo = this.snapPoint(raw);
+      this.snapInfo = this.snapPoint(raw, { ref: this.drawing.start });
       this._emitCursor(raw);
       this.requestRender();
       return;
@@ -1554,6 +2174,18 @@
   };
 
   Editor2D.prototype._pointerUp = function (e) {
+    if (e && e.pointerType === 'touch') {
+      delete this._touches[this._touchKey(e)];
+      if (this.pinch) {
+        var tpts = this._touchPair();
+        if (tpts.length >= 2) this.pinchStart(tpts[0], tpts[1]);
+        else {
+          this.pinch = null;
+          this.requestRender();
+        }
+        return;
+      }
+    }
     if (this.pan) {
       this.pan = null;
       this._updateCursorStyle();
@@ -1589,7 +2221,7 @@
     if (this.snap.ortho) {
       raw = this._constrainOrtho(this.drawing.start, raw);
     }
-    var snap = this.snapPoint(raw);
+    var snap = this.snapPoint(raw, { ref: this.drawing.start });
     this.snapInfo = snap;
     return snap.point;
   };
@@ -1618,7 +2250,9 @@
   };
 
   Editor2D.prototype._wallDown = function (raw) {
-    var snap = this.snapPoint(raw);
+    var snap = this.snapPoint(raw, {
+      ref: this.drawing ? this.drawing.start : null
+    });
     if (!this.drawing) {
       this.drawing = { type: 'wall', start: snap.point, chainStart: snap.point, count: 0 };
       this._emitStatus();
@@ -1635,7 +2269,9 @@
 
   // Muro en arco: 1.er clic inicio, 2.º clic fin, 3.er clic fija la curvatura.
   Editor2D.prototype._arcDown = function (raw) {
-    var snap = this.snapPoint(raw).point;
+    var snap = this.snapPoint(raw, {
+      ref: (this.drawing && this.drawing.start) ? this.drawing.start : null
+    }).point;
     if (!this.drawing || this.drawing.type !== 'wallArc') {
       this.drawing = { type: 'wallArc', phase: 'end', start: snap, bulge: 0.3 };
       this._emitStatus();
@@ -1660,7 +2296,9 @@
 
   // Muro spline: clics sucesivos; Enter/doble clic cierra con el último punto.
   Editor2D.prototype._splineDown = function (raw) {
-    var snap = this.snapPoint(raw).point;
+    var last = (this.drawing && this.drawing.type === 'wallSpline' && this.drawing.pts.length)
+      ? this.drawing.pts[this.drawing.pts.length - 1] : null;
+    var snap = this.snapPoint(raw, { ref: last }).point;
     if (!this.drawing || this.drawing.type !== 'wallSpline') {
       this.drawing = { type: 'wallSpline', pts: [snap] };
       this._emitStatus();
@@ -1695,8 +2333,10 @@
     if (!this.drawing) return false;
     if (this.drawing.type === 'wall') { this._finishChain(silent); return true; }
     if (this.drawing.type === 'wallSpline') return this._finishSpline(silent);
-    if (this.drawing.type === 'wallArc') {
+    if (this.drawing.type === 'line') return this._finishLineChain(silent);
+    if (this.drawing.type === 'wallArc' || this.drawing.type === 'curve' || this.drawing.type === 'scale') {
       this.drawing = null;
+      this.scaleInput = '';
       this._emitStatus();
       this.requestRender();
       return true;
@@ -1711,6 +2351,347 @@
       this.requestRender();
       if (!silent) call(this.callbacks.onStatus, ['Muro terminado']);
     }
+  };
+
+  // ------------------------------------------------ línea y curva (17.4)
+  Editor2D.prototype._createLine = function (a, b, curve, type) {
+    var self = this;
+    var finalType = type || (curve ? 'curve' : 'line');
+    var line = this.store.act(curve ? 'Crear curva' : 'Crear línea', function () {
+      var l = {
+        id: self.store.newId('ln'), type: finalType,
+        level: self.store.activeLevel, layerId: 'annotation',
+        a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y },
+        color: LINE_DEFAULTS.color, width: LINE_DEFAULTS.width, style: LINE_DEFAULTS.style
+      };
+      if (curve) l.curve = curve;
+      self.store.project.lines.push(l);
+      return l;
+    });
+    this.store.setSelection([{ kind: 'line', id: line.id }]);
+    call(this.callbacks.onPlaced, ['line', line]);
+    this._emitStatus();
+    this.requestRender();
+    return line;
+  };
+
+  Editor2D.prototype._lineDown = function (raw) {
+    var lastRef = (this.drawing && this.drawing.type === 'line')
+      ? (this.drawing.last || this.drawing.start) : null;
+    var snap = this.snapPoint(raw, { ref: lastRef });
+    if (!this.drawing || this.drawing.type !== 'line') {
+      this.drawing = { type: 'line', start: snap.point, last: snap.point, count: 0 };
+      this._emitStatus();
+      this.requestRender();
+      return;
+    }
+    var end = snap.point;
+    if (this.snap.ortho) end = this._constrainOrtho(this.drawing.last, end);
+    if (Geo.dist(this.drawing.last, end) < 20) return;
+    this._createLine(this.drawing.last, end, null, 'line');
+    this.drawing.count++;
+    this.drawing.last = end;
+    this._emitStatus();
+    this.requestRender();
+  };
+
+  Editor2D.prototype._finishLineChain = function (silent) {
+    if (!this.drawing || this.drawing.type !== 'line') return false;
+    this.drawing = null;
+    this._emitStatus();
+    this.requestRender();
+    if (!silent) call(this.callbacks.onStatus, ['Línea terminada']);
+    return true;
+  };
+
+  // Curva: 1.er clic inicio, 2.º clic fin y 3.er clic curvatura (como el arco).
+  Editor2D.prototype._curveLineDown = function (raw) {
+    var ref = (this.drawing && this.drawing.type === 'curve') ? this.drawing.start : null;
+    var snap = this.snapPoint(raw, { ref: ref });
+    if (!this.drawing || this.drawing.type !== 'curve') {
+      this.drawing = { type: 'curve', phase: 'end', start: snap.point, bulge: 0.3 };
+      this._emitStatus();
+      this.requestRender();
+      return;
+    }
+    if (this.drawing.phase === 'end') {
+      if (Geo.dist(this.drawing.start, snap.point) < 40) return;
+      this.drawing.end = snap.point;
+      this.drawing.phase = 'bulge';
+      this.drawing.bulge = 0.3;
+      this._emitStatus();
+      this.requestRender();
+      return;
+    }
+    var start = this.drawing.start;
+    var end = this.drawing.end;
+    var bulge = Geo.bulgeFromPoint(start, end, raw);
+    if (!isFinite(bulge)) bulge = this.drawing.bulge || 0;
+    bulge = Geo.clamp(bulge, -4, 4);
+    this.drawing = null;
+    if (Math.abs(bulge) < 0.02) this._createLine(start, end, null, 'line');
+    else this._createLine(start, end, { type: 'arc', bulge: Math.round(bulge * 1000) / 1000 }, 'curve');
+    this._emitStatus();
+  };
+
+  // ------------------------------------------------ escalado (17.4)
+  Editor2D.prototype._findEntity = function (kind, id) {
+    if (kind === 'line') {
+      var lines = this.store.project.lines || [];
+      for (var i = 0; i < lines.length; i++) if (lines[i].id === id) return lines[i];
+      return null;
+    }
+    return this.store.find(kind, id);
+  };
+
+  Editor2D.prototype._selectionBounds = function () {
+    var self = this;
+    var pts = [];
+    this.store.selection.forEach(function (s) {
+      var obj = self._findEntity(s.kind, s.id);
+      if (!obj) return;
+      if (s.kind === 'wall') {
+        pts.push(obj.a, obj.b);
+        if (obj.curve && obj.curve.pts) pts = pts.concat(obj.curve.pts);
+      } else if (s.kind === 'item') {
+        pts = pts.concat(Geo.rectPolygon(obj.x, obj.y, obj.w, obj.d, obj.rotation || 0));
+      } else if (s.kind === 'room') {
+        pts = pts.concat(obj.polygon || []);
+      } else if (s.kind === 'text') {
+        pts.push({ x: obj.x, y: obj.y });
+      } else if (s.kind === 'dim') {
+        pts.push(obj.a, obj.b);
+      } else if (s.kind === 'line') {
+        pts.push(obj.a, obj.b);
+        if (obj.curve && obj.curve.pts) pts = pts.concat(obj.curve.pts);
+      }
+    });
+    pts = pts.filter(function (p) { return p && isFinite(p.x) && isFinite(p.y); });
+    if (!pts.length) return null;
+    return Geo.bounds(pts);
+  };
+
+  Editor2D.prototype._selectionRefLen = function (base) {
+    var b = this._selectionBounds();
+    if (!b || !base) return 0;
+    var corners = [
+      { x: b.minX, y: b.minY }, { x: b.maxX, y: b.minY },
+      { x: b.maxX, y: b.maxY }, { x: b.minX, y: b.maxY }
+    ];
+    var max = 0;
+    for (var i = 0; i < corners.length; i++) {
+      var d = Geo.dist(base, corners[i]);
+      if (isFinite(d) && d > max) max = d;
+    }
+    return max;
+  };
+
+  Editor2D.prototype._scaleTyped = function () {
+    if (!this.scaleInput) return null;
+    var v = parseFloat(String(this.scaleInput).replace(',', '.'));
+    if (!isFinite(v) || v <= 0) return null;
+    return Geo.clamp(v, SCALE_MIN, SCALE_MAX);
+  };
+
+  Editor2D.prototype._scaleFactor = function (raw) {
+    var d = this.drawing;
+    if (!d || d.type !== 'scale' || !d.base) return 1;
+    var typed = this._scaleTyped();
+    if (typed != null) return typed;
+    var refLen = d.refLen || this._selectionRefLen(d.base);
+    if (!(refLen > 1)) refLen = 1000;
+    var dist = Geo.dist(d.base, raw || this.cursor);
+    if (!isFinite(dist)) return 1;
+    return Geo.clamp(dist / refLen, SCALE_MIN, SCALE_MAX);
+  };
+
+  Editor2D.prototype._scaleFactorText = function () {
+    return this._scaleFactor(this.cursor).toFixed(2);
+  };
+
+  Editor2D.prototype._applyScaleTransform = function (obj, kind, base, factor) {
+    var self = this;
+    function sp(p) {
+      return { x: base.x + (p.x - base.x) * factor, y: base.y + (p.y - base.y) * factor };
+    }
+    if (!obj || !base) return;
+    if (kind === 'wall') {
+      obj.a = sp(obj.a);
+      obj.b = sp(obj.b);
+      if (obj.curve && obj.curve.type === 'spline' && Array.isArray(obj.curve.pts)) {
+        obj.curve.pts = obj.curve.pts.map(sp);
+      }
+      (obj.openings || []).forEach(function (o) {
+        o.width = Geo.clamp((Number(o.width) || 900) * factor, 100, 20000);
+      });
+    } else if (kind === 'item') {
+      obj.x = base.x + (obj.x - base.x) * factor;
+      obj.y = base.y + (obj.y - base.y) * factor;
+      obj.w = Geo.clamp((Number(obj.w) || 600) * factor, 20, 20000);
+      obj.d = Geo.clamp((Number(obj.d) || 600) * factor, 20, 20000);
+    } else if (kind === 'room') {
+      obj.polygon = (obj.polygon || []).map(sp);
+    } else if (kind === 'text') {
+      obj.x = base.x + (obj.x - base.x) * factor;
+      obj.y = base.y + (obj.y - base.y) * factor;
+      obj.size = Geo.clamp((Number(obj.size) || 300) * factor, 60, 3000);
+    } else if (kind === 'dim') {
+      obj.a = sp(obj.a);
+      obj.b = sp(obj.b);
+      var off = obj.offset == null ? 700 : Number(obj.offset);
+      obj.offset = (isFinite(off) ? off : 700) * factor;
+    } else if (kind === 'line') {
+      obj.a = sp(obj.a);
+      obj.b = sp(obj.b);
+      if (obj.curve && obj.curve.type === 'spline' && Array.isArray(obj.curve.pts)) {
+        obj.curve.pts = obj.curve.pts.map(sp);
+      }
+    }
+  };
+
+  // Aplica una escala uniforme 2D alrededor de "base" con una sola operación.
+  Editor2D.prototype._applyScale = function (base, factor) {
+    var f = Number(factor);
+    if (!isFinite(f) || f <= 0) return 0;
+    f = Geo.clamp(f, SCALE_MIN, SCALE_MAX);
+    var self = this;
+    if (!base || !this.store.selection.length) return 0;
+    var applied = 0;
+    this.store.act('Escalar selección', function () {
+      self.store.selection.forEach(function (s) {
+        var obj = self._findEntity(s.kind, s.id);
+        if (!obj) return;
+        self._applyScaleTransform(obj, s.kind, base, f);
+        applied++;
+      });
+    });
+    if (applied) {
+      call(this.callbacks.onStatus, ['Escalado ×' + f.toFixed(2) + ' (' + applied + ' objeto(s))']);
+    }
+    this.requestRender();
+    return applied;
+  };
+
+  Editor2D.prototype._finishScale = function (silent) {
+    var d = this.drawing;
+    if (!d || d.type !== 'scale') return false;
+    var factor = this._scaleFactor(this.cursor);
+    var applied = this._applyScale(d.base, factor);
+    this.drawing = null;
+    this.scaleInput = '';
+    if (!silent && applied) call(this.callbacks.onStatus, ['Escalado ×' + factor.toFixed(2)]);
+    this._emitStatus();
+    this.requestRender();
+    return true;
+  };
+
+  Editor2D.prototype._scaleDown = function (raw) {
+    if (!this.drawing || this.drawing.type !== 'scale') {
+      if (!this.store.selection.length) {
+        call(this.callbacks.onError, ['Selecciona uno o varios objetos antes de escalar.']);
+        return;
+      }
+      var base = this.snapPoint(raw).point;
+      var refLen = this._selectionRefLen(base);
+      if (!(refLen > 1)) refLen = 1000;
+      this.drawing = { type: 'scale', phase: 'factor', base: base, refLen: refLen };
+      this.scaleInput = '';
+      this._emitStatus();
+      this.requestRender();
+      return;
+    }
+    var factor = this._scaleFactor(raw);
+    var applied = this._applyScale(this.drawing.base, factor);
+    this.drawing = null;
+    this.scaleInput = '';
+    this._emitStatus();
+    if (!applied) call(this.callbacks.onError, ['No hay objetos válidos en la selección para escalar.']);
+    return applied;
+  };
+
+  Editor2D.prototype.getScaleState = function () {
+    var d = this.drawing && this.drawing.type === 'scale' ? this.drawing : null;
+    return {
+      active: !!d,
+      base: d && d.base ? { x: d.base.x, y: d.base.y } : null,
+      factor: d ? this._scaleFactor(this.cursor) : 1,
+      typed: this._scaleTyped()
+    };
+  };
+
+  // API de apoyo para app.js: aplica escala directa desde un factor numérico.
+  Editor2D.prototype.scaleSelection = function (base, factor) {
+    return this._applyScale(base, factor);
+  };
+
+  Editor2D.prototype.deleteSelection = function () {
+    var sel = this.store.selection.slice();
+    if (!sel.length) return 0;
+    var self = this;
+    var removed = 0;
+    this.store.act('Eliminar selección', function () {
+      sel.forEach(function (s) {
+        if (s.kind === 'line') {
+          var lines = self.store.project.lines || [];
+          for (var i = lines.length - 1; i >= 0; i--) {
+            if (lines[i].id === s.id) { lines.splice(i, 1); removed++; }
+          }
+        } else if (self.store.remove(s.kind, s.id)) {
+          removed++;
+        }
+      });
+    });
+    this.store.setSelection([]);
+    this.hover = null;
+    this.requestRender();
+    return removed;
+  };
+
+  Editor2D.prototype.duplicateSelection = function () {
+    var sel = this.store.selection.slice();
+    if (!sel.length) return [];
+    var self = this;
+    var copies = [];
+    var listOf = { wall: 'walls', room: 'rooms', item: 'items', text: 'texts', dim: 'dims' };
+    var prefix = { wall: 'w', room: 'r', item: 'i', text: 't', dim: 'd', line: 'ln' };
+    this.store.act('Duplicar selección', function () {
+      sel.forEach(function (s) {
+        var obj = self._findEntity(s.kind, s.id);
+        if (!obj) return;
+        var copy = Geo.deepClone(obj);
+        copy.id = self.store.newId(prefix[s.kind] || s.kind);
+        if (copy.openings && s.kind === 'wall') {
+          copy.openings.forEach(function (o) { o.id = self.store.newId('o'); });
+        }
+        if (copy.polygon) {
+          copy.polygon = copy.polygon.map(function (p) { return { x: p.x + 400, y: p.y - 400 }; });
+        } else if (copy.a && copy.b) {
+          copy.a = { x: copy.a.x + 400, y: copy.a.y - 400 };
+          copy.b = { x: copy.b.x + 400, y: copy.b.y - 400 };
+          if (copy.curve && copy.curve.pts) {
+            copy.curve.pts = copy.curve.pts.map(function (p) { return { x: p.x + 400, y: p.y - 400 }; });
+          }
+        } else if (copy.x != null) {
+          copy.x += 400;
+          copy.y -= 400;
+        }
+        var list = s.kind === 'line' ? self.store.project.lines : self.store.project[listOf[s.kind]];
+        if (!list) return;
+        list.push(copy);
+        copies.push({ kind: s.kind, id: copy.id });
+      });
+    });
+    if (copies.length) this.store.setSelection(copies);
+    this.requestRender();
+    return copies;
+  };
+
+  Editor2D.prototype._objectSnapDelta = function (raw, drag) {
+    if (this.snap.snapping === false) return null;
+    var cand = this.snapPoint(raw, { noGrid: true, ref: drag && drag.refPoint });
+    if (!cand || !cand.snapped || !cand.type || cand.type === 'REJILLA') return null;
+    this.snapInfo = cand;
+    return { x: cand.point.x - drag.startWorld.x, y: cand.point.y - drag.startWorld.y };
   };
 
   Editor2D.prototype._furnitureDown = function (raw) {
@@ -1798,7 +2779,9 @@
   };
 
   Editor2D.prototype._dimDown = function (raw) {
-    var snap = this.snapPoint(raw);
+    var snap = this.snapPoint(raw, {
+      ref: (this.drawing && this.drawing.start) ? this.drawing.start : null
+    });
     if (!this.drawing || this.drawing.type !== 'dim') {
       this.drawing = { type: 'dim', start: snap.point };
       this._emitStatus();
@@ -1836,6 +2819,12 @@
       else if (hit.kind === 'room') self.store.remove('room', hit.id);
       else if (hit.kind === 'text') self.store.remove('text', hit.id);
       else if (hit.kind === 'dim') self.store.remove('dim', hit.id);
+      else if (hit.kind === 'line') {
+        var linesToErase = self.store.project.lines || [];
+        for (var le = linesToErase.length - 1; le >= 0; le--) {
+          if (linesToErase[le].id === hit.id) { linesToErase.splice(le, 1); break; }
+        }
+      }
     });
     this.hover = null;
     this.store.setSelection([]);
@@ -1866,6 +2855,24 @@
         for (var chi = 0; chi < chs.length; chi++) {
           if (Geo.dist(mp, this.worldToScreen(chs[chi].point)) <= 9) {
             this._startDrag('wall', selObj.obj, 'curve-' + chi, raw);
+            return;
+          }
+        }
+      }
+      if (selObj.kind === 'line') {
+        var lp = this.worldToScreen(raw);
+        if (Geo.dist(lp, this.worldToScreen(selObj.obj.a)) <= 9) {
+          this._startDrag('line', selObj.obj, 'endpoint-a', raw);
+          return;
+        }
+        if (Geo.dist(lp, this.worldToScreen(selObj.obj.b)) <= 9) {
+          this._startDrag('line', selObj.obj, 'endpoint-b', raw);
+          return;
+        }
+        var lhs = this._lineHandles(selObj.obj);
+        for (var lhi = 0; lhi < lhs.length; lhi++) {
+          if (Geo.dist(lp, this.worldToScreen(lhs[lhi].point)) <= 9) {
+            this._startDrag('line', selObj.obj, 'curve-' + lhs[lhi].kind + '-' + lhs[lhi].index, raw);
             return;
           }
         }
@@ -1924,6 +2931,9 @@
     var obj = d.obj;
     var gc = this._gridConfig();
     var grid = this.snap.grid !== false ? gc.step : 0;
+    var snapDelta = this._objectSnapDelta(raw, d);
+    var dxRaw = raw.x - d.startWorld.x, dyRaw = raw.y - d.startWorld.y;
+    if (snapDelta) { dxRaw = snapDelta.x; dyRaw = snapDelta.y; }
 
     if (d.kind === 'item') {
       if (d.mode === 'rotate') {
@@ -1932,21 +2942,20 @@
         if (shift) rot = Math.round(rot / 15) * 15;
         obj.rotation = Geo.round(rot, 1);
       } else {
-        var dx = raw.x - d.startWorld.x;
-        var dy = raw.y - d.startWorld.y;
-        if (shift) {
-          if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0;
-        }
-        var nx = d.orig.x + dx, ny = d.orig.y + dy;
-        if (grid) {
+        var dxi = dxRaw, dyi = dyRaw;
+        if (shift) { if (Math.abs(dxi) > Math.abs(dyi)) dyi = 0; else dxi = 0; }
+        var nx = d.orig.x + dxi, ny = d.orig.y + dyi;
+        if (!snapDelta && grid) {
           nx = gridAxis(nx, gc.ox, grid);
           ny = gridAxis(ny, gc.oy, grid);
         }
-        obj.x = nx; obj.y = ny;
+        obj.x = nx;
+        obj.y = ny;
       }
     } else if (d.kind === 'wall') {
       if (d.mode === 'endpoint-a' || d.mode === 'endpoint-b') {
-        var snapW = this.snapPoint(raw);
+        var refWall = d.mode === 'endpoint-a' ? d.orig.b : d.orig.a;
+        var snapW = this.snapPoint(raw, { ref: { x: refWall.x, y: refWall.y } });
         var ptW = snapW.point;
         if (d.mode === 'endpoint-a') { obj.a.x = ptW.x; obj.a.y = ptW.y; }
         else { obj.b.x = ptW.x; obj.b.y = ptW.y; }
@@ -1969,11 +2978,10 @@
           call(this.callbacks.onStatus, ['Spline · ' + pts2.length + ' punto(s) de control']);
         }
       } else {
-        var wdx = raw.x - d.startWorld.x;
-        var wdy = raw.y - d.startWorld.y;
+        var wdx = dxRaw, wdy = dyRaw;
         if (shift) { if (Math.abs(wdx) > Math.abs(wdy)) wdy = 0; else wdx = 0; }
         var ax = d.orig.a.x + wdx, ay = d.orig.a.y + wdy;
-        if (grid) { ax = gridAxis(ax, gc.ox, grid); ay = gridAxis(ay, gc.oy, grid); }
+        if (!snapDelta && grid) { ax = gridAxis(ax, gc.ox, grid); ay = gridAxis(ay, gc.oy, grid); }
         var realDx = ax - d.orig.a.x, realDy = ay - d.orig.a.y;
         obj.a.x = ax; obj.a.y = ay;
         obj.b.x = d.orig.b.x + realDx; obj.b.y = d.orig.b.y + realDy;
@@ -1984,16 +2992,61 @@
           };
         }
       }
+    } else if (d.kind === 'line') {
+      if (d.mode === 'endpoint-a' || d.mode === 'endpoint-b') {
+        var refLn = d.mode === 'endpoint-a' ? d.orig.b : d.orig.a;
+        var snapLn = this.snapPoint(raw, { ref: { x: refLn.x, y: refLn.y } });
+        if (d.mode === 'endpoint-a') { obj.a.x = snapLn.point.x; obj.a.y = snapLn.point.y; }
+        else { obj.b.x = snapLn.point.x; obj.b.y = snapLn.point.y; }
+      } else if (d.mode.indexOf('curve-') === 0) {
+        if (!obj.curve) return;
+        if (obj.curve.type === 'arc') {
+          var bglL = Geo.bulgeFromPoint(obj.a, obj.b, raw);
+          obj.curve = { type: 'arc', bulge: Math.round(bglL * 1000) / 1000 };
+        } else if (obj.curve.type === 'spline') {
+          var idxL = Number(d.mode.split('-')[2]) || 0;
+          var origPtsL = (d.orig.curve && d.orig.curve.pts) ? d.orig.curve.pts : obj.curve.pts;
+          var ptsLn = origPtsL.map(function (p) { return { x: p.x, y: p.y }; });
+          if (ptsLn[idxL]) {
+            var spLn = this.snapPoint(raw).point;
+            ptsLn[idxL] = { x: spLn.x, y: spLn.y };
+          }
+          obj.curve = { type: 'spline', pts: ptsLn };
+        }
+      } else {
+        var ldx = dxRaw, ldy = dyRaw;
+        if (shift) { if (Math.abs(ldx) > Math.abs(ldy)) ldy = 0; else ldx = 0; }
+        var la = { x: d.orig.a.x + ldx, y: d.orig.a.y + ldy };
+        var lb = { x: d.orig.b.x + ldx, y: d.orig.b.y + ldy };
+        if (!snapDelta && grid) {
+          la = { x: gridAxis(la.x, gc.ox, grid), y: gridAxis(la.y, gc.oy, grid) };
+          var rdx = la.x - d.orig.a.x, rdy = la.y - d.orig.a.y;
+          lb = { x: d.orig.b.x + rdx, y: d.orig.b.y + rdy };
+        }
+        obj.a = la;
+        obj.b = lb;
+        if (obj.curve && obj.curve.type === 'spline' && d.orig.curve && d.orig.curve.pts) {
+          var dxf = la.x - d.orig.a.x, dyf = la.y - d.orig.a.y;
+          obj.curve = {
+            type: 'spline',
+            pts: d.orig.curve.pts.map(function (p) { return { x: p.x + dxf, y: p.y + dyf }; })
+          };
+        }
+      }
     } else if (d.kind === 'room') {
-      var rdx = raw.x - d.startWorld.x, rdy = raw.y - d.startWorld.y;
-      if (shift) { if (Math.abs(rdx) > Math.abs(rdy)) rdy = 0; else rdx = 0; }
-      obj.polygon = d.orig.polygon.map(function (p) { return { x: p.x + rdx, y: p.y + rdy }; });
+      var rdx2 = dxRaw, rdy2 = dyRaw;
+      if (shift) { if (Math.abs(rdx2) > Math.abs(rdy2)) rdy2 = 0; else rdx2 = 0; }
+      obj.polygon = d.orig.polygon.map(function (p) { return { x: p.x + rdx2, y: p.y + rdy2 }; });
     } else if (d.kind === 'text' || d.kind === 'dim') {
-      var tdx = raw.x - d.startWorld.x, tdy = raw.y - d.startWorld.y;
+      var tdx = dxRaw, tdy = dyRaw;
       if (shift) { if (Math.abs(tdx) > Math.abs(tdy)) tdy = 0; else tdx = 0; }
       if (d.kind === 'text') {
-        obj.x = d.orig.x + tdx; obj.y = d.orig.y + tdy;
-        if (grid) { obj.x = gridAxis(obj.x, gc.ox, grid); obj.y = gridAxis(obj.y, gc.oy, grid); }
+        obj.x = d.orig.x + tdx;
+        obj.y = d.orig.y + tdy;
+        if (!snapDelta && grid) {
+          obj.x = gridAxis(obj.x, gc.ox, grid);
+          obj.y = gridAxis(obj.y, gc.oy, grid);
+        }
       } else {
         obj.a = { x: d.orig.a.x + tdx, y: d.orig.a.y + tdy };
         obj.b = { x: d.orig.b.x + tdx, y: d.orig.b.y + tdy };
@@ -2034,6 +3087,11 @@
     this.store.rooms().forEach(function (r) {
       var c = Geo.polygonCentroid(r.polygon);
       if (c.x >= b.minX && c.x <= b.maxX && c.y >= b.minY && c.y <= b.maxY) addHit('room', r.id);
+    });
+    (this.store.project.lines || []).forEach(function (l) {
+      if (!l || l.level !== self.store.activeLevel) return;
+      var mid = self._linePointAt(l, 0.5);
+      if (mid.x >= b.minX && mid.x <= b.maxX && mid.y >= b.minY && mid.y <= b.maxY) addHit('line', l.id);
     });
     this.store.setSelection(existing.concat(hits));
     this.requestRender();
@@ -2078,6 +3136,15 @@
         return { kind: 'dim', id: obj.id, obj: obj };
       }
     }
+    // líneas y curvas de dibujo libre
+    var linesProject = this.store.project.lines || [];
+    for (i = linesProject.length - 1; i >= 0; i--) {
+      obj = linesProject[i];
+      if (!obj || obj.level !== this.store.activeLevel || !this.store.isVisible(obj.layerId) || this.store.isLocked(obj.layerId)) continue;
+      if (this._lineHit(p, obj, Math.max(40, 6 / this.view.zoom))) {
+        return { kind: 'line', id: obj.id, obj: obj };
+      }
+    }
     // muros
     for (i = this.store.project.walls.length - 1; i >= 0; i--) {
       obj = this.store.project.walls[i];
@@ -2114,14 +3181,25 @@
     if (e.key === 'Escape') {
       if (this.cancel()) e.preventDefault();
     } else if (e.key === 'Enter') {
-      if (this.drawing && (this.drawing.type === 'wall' || this.drawing.type === 'wallSpline')) {
-        this._finishDraw();
-        e.preventDefault();
+      var did = false;
+      if (this.drawing && this.drawing.type === 'scale') {
+        did = this._finishScale(false);
+      } else if (this.drawing && (this.drawing.type === 'wall' ||
+        this.drawing.type === 'wallSpline' || this.drawing.type === 'line')) {
+        did = this._finishDraw();
       } else if (this.drawing && this.drawing.type === 'wallArc') {
         if (this.drawing.phase === 'bulge') this._arcDown(this.cursor);
-        else this._finishDraw(true);
-        e.preventDefault();
-      } else if (this.drawing && this.drawing.type === 'dim') { this.cancel(); e.preventDefault(); }
+        else did = this._finishDraw(true);
+        did = true;
+      } else if (this.drawing && this.drawing.type === 'curve') {
+        if (this.drawing.phase === 'bulge') this._curveLineDown(this.cursor);
+        else did = this._finishDraw(true);
+        did = true;
+      } else if (this.drawing && this.drawing.type === 'dim') {
+        this.cancel();
+        did = true;
+      }
+      if (did) e.preventDefault();
     } else if (e.key === ' ') {
       if (!this.spaceDown) {
         this.spaceDown = true;
@@ -2131,6 +3209,18 @@
     } else if (e.key === 'r' || e.key === 'R') {
       if (this.tool === 'furniture') {
         this.furnitureRotation = Geo.normDeg(this.furnitureRotation + 90);
+        this.requestRender();
+        e.preventDefault();
+      }
+    } else if (this.tool === 'scale' && this.drawing && this.drawing.type === 'scale') {
+      if (e.key === 'Backspace') {
+        this.scaleInput = this.scaleInput.slice(0, -1);
+        this._emitStatus();
+        this.requestRender();
+        e.preventDefault();
+      } else if (/^[0-9]$/.test(e.key) || e.key === '.' || e.key === ',') {
+        if (this.scaleInput.length < 7) this.scaleInput += e.key;
+        this._emitStatus();
         this.requestRender();
         e.preventDefault();
       }
@@ -2146,7 +3236,13 @@
   };
 
   Editor2D.prototype._dblClick = function () {
-    if (this.tool === 'wall' || this.tool === 'wallSpline') this._finishDraw();
+    if (this.tool === 'wall' || this.tool === 'wallSpline' || this.tool === 'line') {
+      this._finishDraw();
+    } else if (this.tool === 'wallArc' && this.drawing && this.drawing.phase === 'bulge') {
+      this._arcDown(this.cursor);
+    } else if (this.tool === 'curve' && this.drawing && this.drawing.phase === 'bulge') {
+      this._curveLineDown(this.cursor);
+    }
   };
 
   Editor2D.prototype.cancel = function () {
@@ -2159,6 +3255,8 @@
     if (this.drawing) { this.drawing = null; did = true; }
     if (this.marquee) { this.marquee = null; did = true; }
     if (this.pan) { this.pan = null; did = true; }
+    if (this.pinch) { this.pinch = null; did = true; }
+    this.scaleInput = '';
     this.snapInfo = null;
     this._updateCursorStyle();
     this.requestRender();
@@ -2196,6 +3294,8 @@
 
   Editor2D.prototype.destroy = function () {
     this._destroyed = true;
+    this._touches = {};
+    this.pinch = null;
     if (this._resizeObserver) this._resizeObserver.disconnect();
     if (this._resizeFallback) window.removeEventListener('resize', this._resizeFallback);
     this.canvas.removeEventListener('pointerdown', this._onDown);
@@ -2211,5 +3311,7 @@
     window.removeEventListener('blur', this._onBlur);
   };
 
+  Editor2D.SNAP_MODE_KEYS = SNAP_MODE_KEYS.slice();
+  Editor2D.DEFAULT_SNAP_MODES = JSON.parse(JSON.stringify(DEFAULT_SNAP_MODES));
   ED.Editor2D = Editor2D;
 })(window.EngDraft = window.EngDraft || {});
