@@ -89,7 +89,9 @@
     iso: { yaw: -52, pitch: 29 },
     top: { yaw: -90, pitch: 89.2 },
     front: { yaw: -90, pitch: 4.5 },
-    right: { yaw: 0, pitch: 4.5 }
+    rear: { yaw: 90, pitch: 4.5 },
+    right: { yaw: 0, pitch: 4.5 },
+    left: { yaw: 180, pitch: 4.5 }
   };
 
   var FINISH_COLORS = {

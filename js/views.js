@@ -3,7 +3,7 @@
  * (Y hacia arriba) y ED.Views.render() las dibuja ajustadas a un canvas 2D.
  * Usa ED.Geo cuando existe (muros curvos) y no depende de nada más.
  *
- *   ED.Views.TYPES  -> front | right | left | sectionX | sectionY
+ *   ED.Views.TYPES  -> front | rear | right | left | sectionX | sectionY
  *   ED.Views.build(project, opts) -> { type, title, bounds, primitives, meta }
  *   ED.Views.render(canvas, project, opts) -> mismo objeto (dibuja si hay canvas)
  *
@@ -21,6 +21,7 @@
 
   var TYPES = [
     { id: 'front', name: 'Frontal' },
+    { id: 'rear', name: 'Posterior' },
     { id: 'right', name: 'Lateral derecho' },
     { id: 'left', name: 'Lateral izquierdo' },
     { id: 'sectionX', name: 'Sección transversal' },
@@ -31,6 +32,7 @@
    * (mayor = más lejos del observador): depth = dx*x + dy*y. */
   var VIEWS = {
     front: { hx: 1, hy: 0, dx: 0, dy: 1 },
+    rear: { hx: -1, hy: 0, dx: 0, dy: -1 },
     right: { hx: 0, hy: 1, dx: -1, dy: 0 },
     left: { hx: 0, hy: -1, dx: 1, dy: 0 },
     sectionX: { hx: 0, hy: 1, dx: -1, dy: 0, cut: 'x', viewer: 'este' },

@@ -52,8 +52,8 @@
       },
       layers: JSON.parse(JSON.stringify(LAYERS)),
       levels: [
-        { id: 'l0', name: 'Planta baja', elevation: 0, height: 2800 },
-        { id: 'l1', name: 'Planta alta', elevation: 2800, height: 2800 }
+        { id: 'l0', name: 'Planta', elevation: 0, height: 2800 },
+        { id: 'l1', name: 'Planta 2', elevation: 2800, height: 2800 }
       ],
       walls: [], rooms: [], items: [], texts: [], dims: [], sheets: []
     };
@@ -291,8 +291,8 @@
     groundFloor(p);
     upperFloor(p);
 
-    sheet(p, 'Planta baja', 'A3', 'landscape', 'modern', 'plan', 'l0', 50, 'A-01', 'PLANTA BAJA');
-    sheet(p, 'Planta alta', 'A3', 'landscape', 'classic', 'plan', 'l1', 50, 'A-02', 'PLANTA ALTA');
+    sheet(p, 'Planta', 'A3', 'landscape', 'modern', 'plan', 'l0', 50, 'A-01', 'PLANTA');
+    sheet(p, 'Planta 2', 'A3', 'landscape', 'classic', 'plan', 'l1', 50, 'A-02', 'PLANTA 2');
     sheet(p, 'Notas y cuadros', 'A3', 'landscape', 'technical', 'notes', 'l0', 100, 'A-03', 'NOTAS Y CUADROS');
     sheet(p, 'Portada', 'A3', 'landscape', 'municipal', 'cover', 'l0', 100, 'A-04', 'PORTADA');
     return p;
@@ -301,7 +301,8 @@
   function blank() {
     var p = baseProject('Proyecto nuevo', 'Plano residencial');
     p.meta.engineer = '';
-    sheet(p, 'Planta baja', 'A3', 'landscape', 'modern', 'plan', 'l0', 100, 'A-01', 'PLANTA BAJA');
+    p.levels = [p.levels[0]];
+    sheet(p, 'Planta', 'A3', 'landscape', 'modern', 'plan', 'l0', 100, 'A-01', 'PLANTA');
     return p;
   }
 
@@ -316,8 +317,8 @@
     });
     p.items = p.items.filter(function (o) { return o.libId !== 'stairs'; });
     p.sheets = p.sheets.filter(function (s) { return s.content === 'plan' && s.levelId === 'l0'; }).slice(0, 1);
-    p.sheets[0].name = 'Planta única';
-    p.sheets[0].title = 'PLANTA ÚNICA';
+    p.sheets[0].name = 'Planta';
+    p.sheets[0].title = 'PLANTA';
     p.sheets[0].sheetNo = 'A-01';
     p.sheets[0].template = 'modern';
     p.meta.notes = 'Vivienda de un nivel con estructura de hormigón armado y cubierta de losa.';
@@ -338,7 +339,7 @@
 
   var Templates = {
     list: [
-      { id: 'blank', name: 'Plano en blanco', desc: 'Proyecto vacío con capas, dos niveles y hoja A3 lista.' },
+      { id: 'blank', name: 'Plano en blanco', desc: 'Proyecto vacío con capas, una planta y hoja A3 lista.' },
       { id: 'casa1', name: 'Casa de un nivel', desc: 'Vivienda de 2 dormitorios, sala, cocina, baño y hall.' },
       { id: 'casa2', name: 'Casa de dos niveles', desc: 'Dúplex de 4 dormitorios con planos y portada.' },
       { id: 'demo', name: 'Residencia Aurora', desc: 'Proyecto demostración completo, 2 niveles amueblados.' }

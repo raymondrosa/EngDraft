@@ -222,6 +222,13 @@
       l.height = Number(l.height) || s.wallHeight || 2700;
       return l;
     });
+    // Migración de nombres antiguos: la primera planta pasa a llamarse "Planta".
+    if (p.levels[0] && /^planta\s+baja$/i.test(String(p.levels[0].name || ''))) {
+      p.levels[0].name = 'Planta';
+    }
+    if (p.levels[1] && /^planta\s+alta$/i.test(String(p.levels[1].name || ''))) {
+      p.levels[1].name = 'Planta 2';
+    }
     if (!p.levels.length) throw new Error('El proyecto no tiene niveles definidos.');
     var levelIds = {};
     p.levels.forEach(function (l) { levelIds[l.id] = true; });
@@ -395,6 +402,11 @@
       sh.showFurniture = sh.showFurniture !== false;
       sh.showRooms = sh.showRooms !== false;
       sh.showGrid = !!sh.showGrid;
+      // Nombres antiguos de plantas en las láminas.
+      if (/^planta\s+baja$/i.test(String(sh.name || ''))) sh.name = 'Planta';
+      if (/^planta\s+alta$/i.test(String(sh.name || ''))) sh.name = 'Planta 2';
+      if (/^planta\s+baja$/i.test(String(sh.title || ''))) sh.title = 'PLANTA';
+      if (/^planta\s+alta$/i.test(String(sh.title || ''))) sh.title = 'PLANTA 2';
     });
 
     return p;

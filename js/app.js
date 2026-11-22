@@ -537,7 +537,7 @@
         { id: 'annotation', name: 'Anotaciones', color: '#1f2937', visible: true, locked: false },
         { id: 'dimensions', name: 'Cotas', color: '#b5651d', visible: true, locked: false }
       ],
-      levels: [{ id: 'l0', name: 'Planta baja', elevation: 0, height: 2800 }],
+      levels: [{ id: 'l0', name: 'Planta', elevation: 0, height: 2800 }],
       walls: [], rooms: [], items: [], texts: [], dims: [],
       sheets: [{ id: 's_blank', name: 'Planta', size: 'A3', orientation: 'landscape', template: 'modern', scale: 100, content: 'plan', levelId: 'l0', sheetNo: 'A-01', title: 'PLANTA', notes: '', showDims: true, showFurniture: true, showRooms: true, showGrid: false }]
     };
@@ -548,6 +548,7 @@
   var VIEW_MODES = [
     { id: 'plan', label: 'Planta', abbr: 'P' },
     { id: 'front', label: 'Frontal', abbr: 'F' },
+    { id: 'rear', label: 'Posterior', abbr: 'PO' },
     { id: 'right', label: 'Lateral der.', abbr: 'LD' },
     { id: 'left', label: 'Lateral izq.', abbr: 'LI' },
     { id: 'sectionX', label: 'Sección transversal', abbr: 'ST' },
@@ -1102,17 +1103,28 @@
     setSaveState('saving');
     refreshUndo();
     refreshHeader();
+    refreshLevelTabs();
     refreshProps();
+    refreshLayers();
     App.editor.render();
     if (App.view === '3d') schedule3D();
+    if (App.view === 'sheets') scheduleSheetPreviews(120);
+    if (App.view === '2d' && App.viewMode !== 'plan') renderViews();
     $('#statusTool').textContent = label || 'Historial actualizado';
   }
 
   function refreshUndo() {
     var u = $('#btnUndo'), r = $('#btnRedo');
     if (!App.store) return;
-    u.disabled = !App.store.canUndo();
-    r.disabled = !App.store.canRedo();
+    var canUndo = App.store.canUndo();
+    var canRedo = App.store.canRedo();
+    var label = App.store.undoLabel ? App.store.undoLabel() : '';
+    if (u) { u.disabled = !canUndo; u.title = canUndo ? 'Deshacer' + (label ? ': ' + label : '') + ' (Ctrl+Z)' : 'Deshacer (Ctrl+Z)'; }
+    if (r) { r.disabled = !canRedo; r.title = 'Rehacer (Ctrl+Y)'; }
+    var su = $('[data-stage-action="undo"]');
+    var sr = $('[data-stage-action="redo"]');
+    if (su) { su.disabled = !canUndo; su.title = u ? u.title : 'Deshacer (Ctrl+Z)'; }
+    if (sr) { sr.disabled = !canRedo; sr.title = 'Rehacer (Ctrl+Y)'; }
   }
 
   function refreshHeader() {
@@ -1161,8 +1173,8 @@
     wrap.innerHTML = App.store.levels().map(function (l) {
       return '<button class="level-tab' + (l.id === active ? ' active' : '') + '" data-level="' + esc(l.id) + '">' +
         '<span class="lvl-dot"></span>' + esc(l.name) + '</button>';
-    }).join('') + '<button class="level-add" data-level-add title="Añadir nivel">+</button>' +
-      '<button class="level-add" data-level-remove title="Eliminar el nivel activo" aria-label="Eliminar el nivel activo">−</button>';
+    }).join('') + '<button class="level-add" data-level-add title="Añadir planta">+</button>' +
+      '<button class="level-add" data-level-remove title="Eliminar la planta activa" aria-label="Eliminar la planta activa">−</button>';
   }
 
   function setSaveState(mode, text) {
@@ -2639,6 +2651,7 @@
     App.store.act('Captura 3D a lámina', function () {
       if (App.store.project.sheets.indexOf(sheet) < 0) App.store.project.sheets.push(sheet);
       sheet.imageDataUrl = shot;
+      sheet.imagePreset = 'custom';
       sheet.content = '3d';
       if (!sheet.name) sheet.name = 'Vista 3D';
     });
@@ -2664,10 +2677,205 @@
   }
 
   function sheetTypeName(content) {
-    return { plan: 'Planta', notes: 'Notas', cover: 'Portada', '3d': 'Vista 3D' }[content] || 'Planta';
+    return {
+      plan: 'Planta', notes: 'Notas', cover: 'Portada', '3d': 'Vista 3D',
+      front: 'Fachada frontal', rear: 'Fachada posterior',
+      right: 'Lateral derecha', left: 'Lateral izquierda'
+    }[content] || 'Planta';
+  }
+
+  function sheetDefaultTitle(content) {
+    return {
+      plan: 'PLANTA', notes: 'NOTAS Y CUADROS', cover: 'PORTADA', '3d': 'VISTA 3D',
+      front: 'FACHADA FRONTAL', rear: 'FACHADA POSTERIOR',
+      right: 'FACHADA LATERAL DERECHA', left: 'FACHADA LATERAL IZQUIERDA'
+    }[content] || 'PLANTA';
+  }
+
+  var SHEET_IMAGE_CONTENTS = { '3d': 'Perspectiva', front: 'Fachada frontal', rear: 'Fachada posterior', right: 'Lateral derecha', left: 'Lateral izquierda' };
+
+  function isSheetImageContent(content) {
+    return !!(SHEET_IMAGE_CONTENTS[content]);
+  }
+
+  function sheetImagePreset(content) {
+    return content === '3d' ? 'iso' : content;
+  }
+
+  function sheet3DOptions() {
+    var sc = sceneSettings();
+    return {
+      roof: true,
+      roofStyle: sc.roofStyle,
+      roofRidge: sc.ridge,
+      roofProfile: sc.roofProfile,
+      roofStructure: sc.roofStructure,
+      roofHeight: sc.roofHeight,
+      roofOverhang: sc.roofOverhang,
+      roofColor: sc.materials.roof.color,
+      roofTexture: sc.materials.roof.texture,
+      renderMode: sc.render.mode,
+      materials: sc.materials,
+      shadows: sc.render.shadows,
+      textures: sc.render.textures,
+      sunAngle: sc.render.sunAngle,
+      furniture: true,
+      labels: false,
+      ground: true,
+      levels: 'all',
+      dimensions: false
+    };
+  }
+
+  function getSheet3DView() {
+    if (!ED.View3D) return null;
+    if (App._sheet3dView) {
+      try { App._sheet3dView.setStore(App.store); } catch (e) { /* ignore */ }
+      return App._sheet3dView;
+    }
+    var wrap = document.createElement('div');
+    wrap.setAttribute('aria-hidden', 'true');
+    wrap.style.cssText = 'position:fixed;left:-20000px;top:0;width:1600px;height:900px;overflow:hidden;pointer-events:none;';
+    var canvas = document.createElement('canvas');
+    canvas.style.width = '1600px';
+    canvas.style.height = '900px';
+    wrap.appendChild(canvas);
+    document.body.appendChild(wrap);
+    try {
+      var view = new ED.View3D(canvas, { store: App.store });
+      view.setOptions(sheet3DOptions());
+      view.resize();
+      App._sheet3dView = view;
+      return view;
+    } catch (e) {
+      console.error('No se pudo crear la vista 3D para láminas:', e);
+      wrap.parentNode.removeChild(wrap);
+      return null;
+    }
+  }
+
+  function captureSheet3DImage() {
+    var view = getSheet3DView();
+    if (!view) return null;
+    try {
+      view.setOptions(sheet3DOptions());
+      view.setLevelFilter('all');
+      view.setPreset('iso');
+      view.render();
+      var shot = view.screenshot(1.6);
+      return shot || view.screenshot();
+    } catch (e) {
+      console.error('Captura 3D para lámina:', e);
+      return null;
+    }
+  }
+
+  function drawElevationPrimitive(ctx, pr, sx, ox, oy) {
+    if (!pr) return;
+    if (pr.kind === 'text') {
+      var anchor = pr.points && pr.points[0];
+      if (!anchor) return;
+      var size = Math.max(6, Math.min(64, Number(pr.size || 240) * sx));
+      ctx.font = '400 ' + size.toFixed(1) + 'px "Bahnschrift","Consolas","Segoe UI",monospace';
+      ctx.textAlign = pr.align === 'center' ? 'center' : (pr.align === 'right' ? 'right' : 'left');
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = pr.fill || '#24313d';
+      ctx.fillText(String(pr.text == null ? '' : pr.text), ox + anchor.x * sx, oy - anchor.y * sx);
+      return;
+    }
+    if (!Array.isArray(pr.points) || pr.points.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(ox + pr.points[0].x * sx, oy - pr.points[0].y * sx);
+    for (var i = 1; i < pr.points.length; i++) {
+      ctx.lineTo(ox + pr.points[i].x * sx, oy - pr.points[i].y * sx);
+    }
+    if (pr.kind === 'poly' && pr.closed !== false) ctx.closePath();
+    if (pr.kind === 'poly' && pr.fill) {
+      ctx.fillStyle = pr.fill;
+      ctx.fill();
+    }
+    if (pr.stroke) {
+      ctx.strokeStyle = pr.stroke;
+      ctx.lineWidth = Math.max(0.5, Math.min(9, Number(pr.width || 20) * sx));
+      ctx.stroke();
+    }
+  }
+
+  function captureElevationImage(type) {
+    if (!ED.Views || typeof ED.Views.build !== 'function') return null;
+    var view;
+    try { view = ED.Views.build(App.store.project, { type: type, levelId: 'all' }); } catch (e) { console.error('Vista de fachada:', e); return null; }
+    var b = view.bounds || { minX: 0, minY: 0, maxX: 1000, maxY: 1000, w: 1000, h: 1000 };
+    if (!(b.w > 0)) b.w = 1000;
+    if (!(b.h > 0)) b.h = 1000;
+    var W = 1800, H = 1100, pad = 72;
+    var canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#f8f6f0';
+    ctx.fillRect(0, 0, W, H);
+    var sx = Math.min((W - pad * 2) / b.w, (H - pad * 2) / b.h);
+    if (!(sx > 0) || !isFinite(sx)) sx = 0.02;
+    var ox = W / 2 - ((b.minX + b.maxX) / 2) * sx;
+    var oy = H / 2 + ((b.minY + b.maxY) / 2) * sx;
+    var prims = view.primitives || [];
+    for (var i = 0; i < prims.length; i++) drawElevationPrimitive(ctx, prims[i], sx, ox, oy);
+    ctx.strokeStyle = 'rgba(36,49,61,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, H - pad * 0.7);
+    ctx.lineTo(W - pad, H - pad * 0.7);
+    ctx.stroke();
+    return canvas.toDataURL('image/png');
+  }
+
+  function ensureSheetImage(sheet, force) {
+    if (!sheet || !isSheetImageContent(sheet.content)) return false;
+    var kind = sheet.content;
+    var preset = sheetImagePreset(kind);
+    var has = !!sheet.imageDataUrl;
+    var custom = kind === '3d' && sheet.imagePreset === 'custom';
+    var current = kind === '3d'
+      ? (has && (custom || !force))
+      : (has && sheet.imagePreset === preset && !force);
+    if (current) return false;
+    var shot = kind === '3d' ? captureSheet3DImage() : captureElevationImage(kind);
+    if (!shot) return false;
+    sheet.imageDataUrl = shot;
+    sheet.imagePreset = (kind === '3d' && custom && !force) ? 'custom' : preset;
+    sheet.imageGeneratedAt = new Date().toISOString();
+    return true;
+  }
+
+  function ensureSheetImages(force) {
+    var changed = false;
+    var sheets = (App.store && App.store.project && App.store.project.sheets) || [];
+    for (var i = 0; i < sheets.length; i++) {
+      try {
+        if (ensureSheetImage(sheets[i], !!force)) changed = true;
+      } catch (e) {
+        console.error('Imagen de lámina:', e);
+      }
+    }
+    if (changed) App.store.scheduleSave();
+    return changed;
+  }
+
+  function refreshSelectedSheetImage() {
+    var sheet = getSelectedSheet();
+    if (!sheet) return;
+    if (!isSheetImageContent(sheet.content)) { toast('Esta lámina no usa una vista gráfica.', 'info'); return; }
+    sheet.imagePreset = null;
+    ensureSheetImage(sheet, true);
+    scheduleSheetPreviews(40);
+    refreshProps();
+    toast('Vista de la lámina actualizada.', 'success', 2200);
   }
 
   function renderSheets() {
+    ensureSheetImages(false);
     ensureSheetSelection();
     var gallery = $('#sheetGallery');
     if (!gallery) return;
@@ -2767,6 +2975,7 @@
     if (!ED.Sheets || !ED.Sheets.createPDF) { toast('Módulo de PDF no disponible.', 'error'); return; }
     if (!App.store.project.sheets.length) { toast('Crea al menos una lámina antes de exportar.', 'warn'); return; }
     var list = (sheets && sheets.length) ? sheets : App.store.project.sheets;
+    ensureSheetImages(true);
     toast('Generando PDF vectorial de ' + list.length + ' lámina' + (list.length === 1 ? '' : 's') + '…', 'info', 4200);
     var btn = $('#btnExportPdf');
     btn.disabled = true;
@@ -2794,6 +3003,14 @@
   }
 
   // ================================================================== acciones de etapa
+  function stageHistoryHtml() {
+    var canUndo = App.store && App.store.canUndo && App.store.canUndo();
+    var canRedo = App.store && App.store.canRedo && App.store.canRedo();
+    var undoLabel = (App.store && App.store.undoLabel && App.store.undoLabel()) || '';
+    return '<button class="stage-action" data-stage-action="undo"' + (canUndo ? '' : ' disabled') + ' title="Deshacer' + (undoLabel ? ': ' + esc(undoLabel) : '') + ' (Ctrl+Z)">' + icon('undo', 14) + 'Deshacer</button>' +
+      '<button class="stage-action" data-stage-action="redo"' + (canRedo ? '' : ' disabled') + ' title="Rehacer (Ctrl+Y)">' + icon('redo', 14) + 'Rehacer</button>';
+  }
+
   function updateStageActions() {
     var wrap = $('#stageActions');
     if (!wrap) return;
@@ -2806,19 +3023,22 @@
             ? '<label class="stage-range">Posición <input type="range" id="sectionPos" min="5" max="95" step="1" value="' + App.sectionPosPct + '"></label>'
             : '') +
           '<button class="stage-action" data-stage-action="fit-view">' + icon('fit', 14) + 'Ajustar</button>' +
-          '<button class="stage-action" data-stage-action="view-plan">' + icon('wall', 14) + 'Volver a planta</button>';
+          '<button class="stage-action" data-stage-action="view-edit-plan">' + icon('wall', 14) + 'Editar en planta</button>' +
+          '<button class="stage-action" data-stage-action="view-plan">' + icon('wall', 14) + 'Volver a planta</button>' +
+          stageHistoryHtml();
       } else {
         html = '<button class="stage-action" data-stage-action="detect-rooms">' + icon('sparkle', 14) + 'Detectar ambientes</button>' +
           '<button class="stage-action" data-stage-action="auto-dims">' + icon('measure', 14) + 'Cotas generales</button>' +
           '<button class="stage-action" data-stage-action="grid">' + icon('grid', 14) + 'Rejilla</button>' +
           '<button class="stage-action" data-stage-action="roof-design">' + icon('roof', 14) + 'Diseñar techo</button>' +
-          '<button class="stage-action" data-stage-action="fit">' + icon('fit', 14) + 'Ajustar</button>';
+          '<button class="stage-action" data-stage-action="new-level">' + icon('plus', 14) + 'Añadir planta</button>' +
+          stageHistoryHtml();
       }
     } else if (App.view === '3d') {
       html = '<div class="stage-action-group">' +
-        ['iso', 'top', 'front', 'right'].map(function (p) {
+        ['iso', 'top', 'front', 'rear', 'right', 'left'].map(function (p) {
           return '<button class="stage-action' + (App.preset3d === p ? ' active' : '') + '" data-preset="' + p + '">' +
-            ({ iso: 'Iso', top: 'Planta', front: 'Frente', right: 'Lateral' }[p]) + '</button>';
+            ({ iso: 'Iso', top: 'Planta', front: 'Frente', rear: 'Post.', right: 'Der.', left: 'Izq.' }[p]) + '</button>';
         }).join('') + '</div>' +
         '<button class="stage-action" data-stage-action="fit3d">' + icon('fit', 14) + 'Encuadrar</button>' +
         '<button class="stage-action' + (sceneSettings().render.mode === 'realistic' ? ' active' : '') + '" data-stage-action="realistic">' + icon('sun', 14) + 'Realista</button>' +
@@ -2827,7 +3047,9 @@
         '<button class="stage-action" data-stage-action="capture3d">' + icon('camera', 14) + 'Captura</button>';
     } else {
       html = '<button class="stage-action" data-stage-action="new-sheet">' + icon('plus', 14) + 'Nueva lámina</button>' +
-        '<button class="stage-action" data-stage-action="export-pdf">' + icon('pdf', 14) + 'Exportar PDF</button>';
+        '<button class="stage-action" data-stage-action="refresh-sheets">' + icon('rotate', 14) + 'Actualizar vistas</button>' +
+        '<button class="stage-action" data-stage-action="export-pdf">' + icon('pdf', 14) + 'Exportar PDF</button>' +
+        stageHistoryHtml();
     }
     wrap.innerHTML = html;
     localize();
@@ -2870,11 +3092,19 @@
     var btn = e.target.closest('[data-stage-action]');
     if (!btn) return;
     var action = btn.getAttribute('data-stage-action');
+    if (action === 'undo') { if (App.store.undo()) afterHistory('Deshacer'); return; }
+    if (action === 'redo') { if (App.store.redo()) afterHistory('Rehacer'); return; }
+    if (action === 'new-level') { showLevelModal(); return; }
     if (action === 'realistic') { toggleRealistic(); return; }
     if (action === 'flight') { setFlight(!App.flight); return; }
     if (action === 'scene') { applyInspectorState('open'); setInspectorTab('scene'); return; }
     if (action === 'fit-view') { fitActiveView(); return; }
     if (action === 'view-plan') { setViewMode('plan'); return; }
+    if (action === 'view-edit-plan') {
+      setViewMode('plan');
+      toast('Edita el objeto seleccionado con todas las herramientas de planta.', 'info', 2600);
+      return;
+    }
     if (action === 'roof-design') { openRoofDesigner(); return; }
     if (action === 'detect-rooms') {
       var count = App.editor.detectRooms();
@@ -2885,6 +3115,11 @@
     else if (action === 'fit') { fitActiveView(); }
     else if (action === 'fit3d') { if (App.view3d && App.view3d.fit) App.view3d.fit(); if (App.view3d) App.view3d.render(); }
     else if (action === 'capture3d') capture3D();
+    else if (action === 'refresh-sheets') {
+      ensureSheetImages(true);
+      renderSheets();
+      toast('Vistas de las láminas actualizadas.', 'success', 2200);
+    }
     else if (action === 'new-sheet') addSheet();
     else if (action === 'export-pdf') exportPDF();
   }
@@ -3091,7 +3326,7 @@
       '<button class="btn btn-ghost btn-sm" data-action="project-info">' + icon('info', 13) + 'Datos</button>' +
       '<button class="btn btn-ghost btn-sm" data-action="detect-rooms">' + icon('sparkle', 13) + 'Ambientes</button>' +
       '</div></div>';
-    var statsHtml = '<div class="section"><div class="section-title">Nivel activo <span class="count">' + esc(level.name) + '</span></div>' +
+    var statsHtml = '<div class="section"><div class="section-title">Planta activa <span class="count">' + esc(level.name) + '</span></div>' +
       '<div class="stats-grid">' +
       '<div class="stat"><div class="v">' + fnum(areaValue(stats.roomArea), 2) + '<small>' + ED.Geo.unitAreaLabel(unitSys()) + '</small></div><div class="l">Área de ambientes</div></div>' +
       '<div class="stat"><div class="v">' + stats.roomCount + '</div><div class="l">Ambientes</div></div>' +
@@ -3103,7 +3338,7 @@
       '<div class="read-line"><span>Ambientes registrados</span><strong>' + all.rooms + '</strong></div>' +
       '<div class="read-line"><span>Mobiliario total</span><strong>' + all.items + '</strong></div>' +
       '<div class="read-line"><span>Láminas del juego</span><strong>' + p.sheets.length + '</strong></div>' +
-      '<div class="read-line"><span>Niveles</span><strong>' + p.levels.length + '</strong></div></div>';
+      '<div class="read-line"><span>Plantas</span><strong>' + p.levels.length + '</strong></div></div>';
     var tips = !started ?
       '<div class="section"><div class="section-title">Primeros pasos</div><div class="tips-list">' +
       '<div class="tip-row"><span class="n">1</span><span>Activa <strong>Muro</strong> y dibuja el perímetro con clics. Pulsa Esc para terminar.</span></div>' +
@@ -3335,7 +3570,8 @@
       '<div class="field-grid">' +
       field('Código', '<input class="input" data-sheet-field="sheetNo" value="' + esc(sheet.sheetNo || '') + '">') +
       field('Contenido', '<select class="select" data-sheet-field="content">' +
-        [['plan', 'Planta del nivel'], ['notes', 'Notas y cuadros'], ['cover', 'Portada'], ['3d', 'Vista 3D']].map(function (x) {
+        [['plan', 'Planta del nivel'], ['notes', 'Notas y cuadros'], ['cover', 'Portada'], ['3d', 'Perspectiva 3D'],
+          ['front', 'Fachada frontal'], ['rear', 'Fachada posterior'], ['right', 'Lateral derecha'], ['left', 'Lateral izquierda']].map(function (x) {
           return '<option value="' + x[0] + '"' + (sheet.content === x[0] ? ' selected' : '') + '>' + x[1] + '</option>';
         }).join('') + '</select>') +
       '</div></div>';
@@ -3357,9 +3593,12 @@
       checkRow('showFurniture', 'Mobiliario', sheet.showFurniture !== false) +
       checkRow('showDims', 'Cotas', sheet.showDims !== false) +
       '<div class="field" style="margin-top:8px"><label>Notas de la lámina</label><textarea class="textarea" data-sheet-field="notes" placeholder="Notas que aparecerán en la hoja...">' + esc(sheet.notes || '') + '</textarea></div>' +
-      (sheet.content === '3d' ? '<div class="modal-note" style="margin-top:8px">' + icon('camera', 15) + '<div>' + (sheet.imageDataUrl ? 'Esta lámina ya tiene una captura 3D.' : 'Esta lámina 3D aún no tiene imagen. Usa <strong>Captura a lámina</strong> desde la vista 3D.') + '</div></div>' : '') +
+      (isSheetImageContent(sheet.content) ? '<div class="modal-note" style="margin-top:8px">' + icon('camera', 15) + '<div>' +
+        (sheet.imageDataUrl ? 'Vista generada automáticamente desde el proyecto.' : 'La vista se generará al abrir la lámina.') +
+        ' Usa <strong>Actualizar vista</strong> si cambiaste el proyecto.</div></div>' : '') +
       '</div>';
     html += '<div class="section"><div class="section-title">Acciones</div><div class="prop-actions">' +
+      (isSheetImageContent(sheet.content) ? '<button class="btn btn-ghost btn-sm" data-action="sheet-refresh-image">' + icon('rotate', 12) + 'Actualizar vista</button>' : '') +
       '<button class="btn btn-ghost btn-sm" data-action="sheet-export">' + icon('pdf', 12) + 'PDF de esta lámina</button>' +
       '<button class="btn btn-ghost btn-sm" data-action="sheet-duplicate">' + icon('duplicate', 12) + 'Duplicar</button></div>' +
       '<div class="prop-actions"><button class="btn btn-ghost btn-sm" data-action="sheet-up">↑ Subir</button>' +
@@ -3385,7 +3624,18 @@
       App.store.act('Editar lámina', function () {
         if (sf === 'scale') sheet.scale = Number(sv) || 100;
         else if (sf === 'showDims' || sf === 'showFurniture' || sf === 'showRooms' || sf === 'showGrid') sheet[sf] = !!sv;
-        else sheet[sf] = sv;
+        else if (sf === 'content') {
+          var oldContent = sheet.content;
+          var oldTitle = sheet.title || '';
+          sheet.content = String(sv);
+          if (!oldTitle || oldTitle === sheetDefaultTitle(oldContent)) {
+            sheet.title = sheetDefaultTitle(sheet.content);
+          }
+          if (isSheetImageContent(sheet.content)) {
+            sheet.imageDataUrl = null;
+            sheet.imagePreset = null;
+          }
+        } else sheet[sf] = sv;
       });
       scheduleSheetPreviews(140);
       refreshProps();
@@ -3526,6 +3776,7 @@
     }
     else if (action === 'new-sheet') addSheet();
     else if (action === 'sheet-export') { var sh = getSelectedSheet(); if (sh) exportPDF([sh]); }
+    else if (action === 'sheet-refresh-image') refreshSelectedSheetImage();
     else if (action === 'sheet-duplicate') duplicateSheet();
     else if (action === 'sheet-delete') deleteSheet();
     else if (action === 'sheet-up') moveSheet(-1);
@@ -3768,17 +4019,19 @@
     if (!btn) return;
     var act = btn.getAttribute('data-layer-act');
     if (act === 'showall') {
-      App.store.project.layers.forEach(function (l) { l.visible = true; l.locked = false; });
-      App.store.touch();
+      App.store.act('Mostrar todas las capas', function () {
+        App.store.project.layers.forEach(function (l) { l.visible = true; l.locked = false; });
+      });
       refreshLayers();
       App.editor.render();
       return;
     }
     var layer = App.store.getLayer(btn.getAttribute('data-layer'));
     if (!layer) return;
-    if (act === 'visible') layer.visible = layer.visible === false;
-    else if (act === 'locked') layer.locked = !layer.locked;
-    App.store.touch();
+    App.store.act('Editar capa', function () {
+      if (act === 'visible') layer.visible = layer.visible === false;
+      else if (act === 'locked') layer.locked = !layer.locked;
+    });
     refreshLayers();
     App.editor.render();
     if (App.view === '3d') schedule3D();
@@ -4173,26 +4426,26 @@
     var active = App.store.activeLevelObj();
     if (!active) return;
     var levels = App.store.project.levels || [];
-    if (levels.length <= 1) { toast('El proyecto debe conservar al menos un nivel.', 'warn', 3200); return; }
+    if (levels.length <= 1) { toast('El proyecto debe conservar al menos una planta.', 'warn', 3200); return; }
     var counts = { walls: 0, items: 0, rooms: 0 };
     ['walls', 'items', 'rooms'].forEach(function (k) {
       counts[k] = (App.store.project[k] || []).filter(function (o) { return o.level === active.id; }).length;
     });
-    var body = '<p>¿Eliminar el nivel <strong>' + esc(active.name) + '</strong> y todos sus objetos?</p>' +
-      '<p class="modal-note" style="display:block">Se borrarán ' + counts.walls + ' muros, ' + counts.items + ' muebles y ' + counts.rooms + ' ambientes de ese nivel. Las láminas que lo usaban pasarán al primer nivel.</p>' +
+    var body = '<p>¿Eliminar la planta <strong>' + esc(active.name) + '</strong> y todos sus objetos?</p>' +
+      '<p class="modal-note" style="display:block">Se borrarán ' + counts.walls + ' muros, ' + counts.items + ' muebles y ' + counts.rooms + ' ambientes de esa planta. Las láminas que la usaban pasarán a la primera planta.</p>' +
       '<p class="field-hint">Puedes deshacerlo con Ctrl+Z.</p>';
-    var m = openModal({ title: 'Eliminar nivel', subtitle: active.name, body: body, wide: false,
-      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn" id="levelDeleteConfirm" style="background:#8a3b31;color:#fff">Eliminar nivel</button>' });
+    var m = openModal({ title: 'Eliminar planta', subtitle: active.name, body: body, wide: false,
+      footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn" id="levelDeleteConfirm" style="background:#8a3b31;color:#fff">Eliminar planta</button>' });
     $('#levelDeleteConfirm', m.root).addEventListener('click', function () {
-      var ok = App.store.act('Eliminar nivel', function () { return App.store.removeLevel(active.id); });
+      var ok = App.store.act('Eliminar planta', function () { return App.store.removeLevel(active.id); });
       m.close();
-      if (ok === false) { toast('No se pudo eliminar el nivel.', 'warn'); return; }
+      if (ok === false) { toast('No se pudo eliminar la planta.', 'warn'); return; }
       App.store.setActiveLevel(App.store.project.levels[0].id);
       applyGridToEditor();
       App.editor.render();
       refreshHeader(); refreshLevelTabs(); refreshProps(); refreshLayers(); refreshUndo();
       updateZoomStatus();
-      toast('Nivel eliminado. Puedes deshacer con Ctrl+Z.', 'success', 3200);
+      toast('Planta eliminada. Puedes deshacer con Ctrl+Z.', 'success', 3200);
     });
   }
 
@@ -4200,29 +4453,29 @@
     var levels = App.store.levels();
     var nextElev = 0;
     levels.forEach(function (l) { nextElev = Math.max(nextElev, n(l.elevation, 0) + n(l.height, 2800)); });
-    var body = '<div class="field"><label>Nombre del nivel</label><input class="input" id="lvlName" value="Nivel ' + (levels.length + 1) + '"></div>' +
+    var body = '<div class="field"><label>Nombre de la planta</label><input class="input" id="lvlName" value="Planta ' + (levels.length + 1) + '"></div>' +
       '<div class="field-grid">' +
       '<div class="field"><label>Elevación</label><div class="input-row"><input class="input" id="lvlElev" type="number" step="0.05" value="' + unitLenInput(nextElev) + '"><span class="input-unit">' + unitLenLabel() + '</span></div></div>' +
       '<div class="field"><label>Altura libre</label><div class="input-row"><input class="input" id="lvlHeight" type="number" step="0.05" value="' + unitLenInput(2800) + '"><span class="input-unit">' + unitLenLabel() + '</span></div></div>' +
-      '</div><div class="modal-note">' + icon('info', 15) + '<div>El nivel se apila automáticamente en la vista 3D según su elevación.</div></div>';
-    var footer = '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="lvlAdd">Añadir nivel</button>';
-    var m = openModal({ title: 'Añadir nivel', subtitle: 'Planta adicional del proyecto', body: body, footer: footer, narrow: true });
+      '</div><div class="modal-note">' + icon('info', 15) + '<div>La planta se apila automáticamente en la vista 3D según su elevación. Podrás dibujar en ella al crearla.</div></div>';
+    var footer = '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" id="lvlAdd">Añadir planta</button>';
+    var m = openModal({ title: 'Añadir planta', subtitle: 'Planta adicional del proyecto', body: body, footer: footer, narrow: true });
     $('#lvlAdd', m.root).addEventListener('click', function () {
-      var name = ($('#lvlName', m.root).value || '').trim() || ('Nivel ' + (levels.length + 1));
+      var name = ($('#lvlName', m.root).value || '').trim() || ('Planta ' + (levels.length + 1));
       var elev = parseLenInput(($('#lvlElev', m.root).value || 0));
       if (!isFinite(elev)) elev = nextElev;
       var height = Math.max(1500, parseLenInput(($('#lvlHeight', m.root).value || 0)));
       if (!isFinite(height) || height <= 0) height = 2800;
       var id = 'l' + Date.now().toString(36);
       while (App.store.levels().some(function (l) { return l.id === id; })) id += 'x';
-      App.store.act('Añadir nivel', function () {
+      App.store.act('Añadir planta', function () {
         App.store.project.levels.push({ id: id, name: name, elevation: elev, height: height });
       });
       App.store.setActiveLevel(id);
       refreshLevelTabs();
       refreshHeader();
       m.close();
-      toast('Nivel “' + name + '” añadido.', 'success', 2600);
+      toast('Planta “' + name + '” añadida.', 'success', 2600);
     });
   }
 
@@ -4244,10 +4497,11 @@
       shortcut('Configurar rejilla', ['Shift', 'G']) +
       '</div></div></div>' +
       '<hr style="border:0;border-top:1px solid #26323e;margin:18px 0">' +
-      '<div class="help-copy"><p><strong>Niveles.</strong> Añade niveles con el botón <strong>+</strong> de las pestañas de planta; el botón <strong>−</strong> elimina el nivel activo y todos sus objetos (con confirmación y opción de deshacer). Debe quedar al menos un nivel.</p>' +
+      '<div class="help-copy"><p><strong>Deshacer y rehacer.</strong> Usa los botones <strong>Deshacer</strong> y <strong>Rehacer</strong> de la barra de acciones, los iconos de la barra superior o <em>Ctrl+Z / Ctrl+Y</em>. El historial cubre dibujo, edición de propiedades, capas, láminas y cambios de nivel.</p>' +
+      '<p><strong>Plantas.</strong> El proyecto nuevo se llama <strong>Planta</strong> y solo tiene una. Para añadir otra, usa <strong>Añadir planta</strong> en la barra de acciones o el botón <strong>+</strong> junto a las pestañas; el botón <strong>−</strong> elimina la planta activa y todos sus objetos (con confirmación y opción de deshacer). Debe quedar al menos una planta.</p>' +
       '<p><strong>Archivos.</strong> El botón Guardar descarga el proyecto en formato <strong>.json</strong>; también puedes abrir archivos <strong>.json</strong> y los antiguos <strong>.engdraft</strong>. El autoguardado sigue usando el navegador.</p>' +
       '<p><strong>Flujo recomendado.</strong> Dibuja el perímetro con la herramienta Muro, inserta puertas y ventanas sobre los muros, y pulsa <strong>Detectar ambientes</strong> para etiquetar los recintos. Amuebla desde la biblioteca y comprueba el resultado en 3D.</p>' +
-      '<p><strong>Láminas y PDF.</strong> En la vista Láminas puedes escoger tamaño, orientación, escala y uno de los cuatro cajetines. El PDF se genera vectorial, con el plano nítido a cualquier zoom.</p>' +
+      '<p><strong>Láminas y PDF.</strong> En la vista Láminas puedes escoger tamaño, orientación, escala y uno de los cuatro cajetines. Además de planta, notas y portada, las láminas admiten <strong>perspectiva 3D</strong>, <strong>fachada frontal</strong>, <strong>fachada posterior</strong>, <strong>lateral derecha</strong> e <strong>izquierda</strong>; la imagen se genera automáticamente desde el proyecto. Usa <strong>Actualizar vista</strong> si cambiaste el proyecto. El PDF conserva el plano vectorial y las vistas como imágenes de alta resolución.</p>' +
       '<p><strong>DWG/DXF.</strong> El navegador no escribe el formato binario propietario DWG; EngDraft exporta DXF R12, el formato de intercambio de AutoCAD. Abre el DXF en AutoCAD y usa <em>Guardar como → DWG</em> si necesitas ese formato.</p>' +
       '<p><strong>Unidades.</strong> El selector del sistema de unidades está en el menú izquierdo (sección superior, junto a <em>ES/EN</em>) y alterna entre métrico (m · m²) e imperial (ft · ft²). También puedes cambiarlo en Datos del proyecto. Las cotas, áreas, propiedades y láminas se actualizan.</p>' +
       '<p><strong>Rejilla a medida.</strong> Con <em>Shift+G</em> o el botón <strong>Rejilla</strong> del menú izquierdo abres el cuadro de rejilla: separación de líneas, línea maestra, origen y un paso de ajuste independiente. Un paso fino (por ejemplo 5 cm o 1") permite dibujar muros y huecos con dimensiones exactas sin perder la referencia visual.</p>' +
@@ -4258,8 +4512,8 @@
       '<p><strong>Diseñar techo.</strong> Desde <em>Escena → Diseñar techo</em>, desde el botón <strong>Diseñar techo</strong> de la vista 2D o eligiendo <em>Mi diseño</em> en el selector rápido, se abre un lienzo donde arrastras los puntos del perfil (doble clic añade un punto, clic derecho lo quita). Puedes partir de los presets Plano, A dos aguas, Cuatro aguas, Arco o Spline y ajustar altura, alero y orientación de la cumbrera.</p>' +
       '<p><strong>Snaps.</strong> En el menú izquierdo, sección <em>Dibujo</em>, puedes activar o desactivar los snaps de <strong>Extremo</strong>, <strong>Medio</strong>, <strong>Centro</strong>, <strong>Cuadrante</strong>, <strong>Tangente</strong> y <strong>Perpendicular</strong>. El cursor muestra el tipo de punto capturado mientras dibujas o mueves objetos.</p>' +
       '<p><strong>Líneas, curvas y escalado.</strong> Las herramientas <em>Línea</em> (L) y <em>Curva</em> (B) dibujan geometría de referencia encadenada (la curva con tres clics). <em>Escalar</em> (X) escala la selección alrededor de un punto base: mueve el cursor para el factor o escribe un número y pulsa Enter; Esc cancela.</p>' +
-      '<p><strong>Vistas y secciones.</strong> En el menú izquierdo, la sección <em>Vistas</em> muestra la planta o genera el <strong>frontal</strong>, los <strong>laterales derecho e izquierdo</strong> y las <strong>secciones transversal y longitudinal</strong> del proyecto en el área 2D, en modo lectura. En las secciones puedes mover la posición del corte con el control <em>Posición</em>; los botones Ajustar y el zoom funcionan también sobre la vista generada, y <em>Volver a planta</em> regresa al editor.</p>' +
-      '<p><strong>Vistas editables.</strong> En las vistas frontal, laterales y secciones puedes hacer clic sobre un muro, una abertura, un mueble o el techo para seleccionarlo y editarlo desde Propiedades (o abrir Escena para el techo). La entidad seleccionada se resalta en ámbar y la vista se actualiza al cambiar los valores.</p>' +
+      '<p><strong>Vistas y secciones.</strong> En el menú izquierdo, la sección <em>Vistas</em> muestra la planta o genera el <strong>frontal</strong>, la <strong>posterior</strong>, los <strong>laterales derecho e izquierdo</strong> y las <strong>secciones transversal y longitudinal</strong> del proyecto en el área 2D, en modo lectura. En las secciones puedes mover la posición del corte con el control <em>Posición</em>; los botones Ajustar y el zoom funcionan también sobre la vista generada, y <em>Volver a planta</em> regresa al editor.</p>' +
+      '<p><strong>Vistas editables.</strong> En las vistas frontal, posterior, laterales y secciones puedes hacer clic sobre un muro, una abertura, un mueble o el techo para seleccionarlo y editarlo desde Propiedades (o abrir Escena para el techo). La entidad seleccionada se resalta en ámbar y la vista se actualiza al cambiar los valores. El botón <strong>Editar en planta</strong> te lleva al editor completo con la selección conservada.</p>' +
       '<p><strong>Idioma.</strong> El botón <em>ES / EN</em> del menú izquierdo cambia toda la interfaz entre español e inglés; la preferencia se recuerda en este navegador. El plano, el manual y los datos del proyecto no se traducen.</p>' +
       '<p><strong>Pantalla.</strong> En la sección <em>Pantalla</em> del menú izquierdo eliges Automático, Computadora, Tableta o Celular. Automático adapta la interfaz al tamaño de la ventana: en tableta el menú es más estrecho y en celular el menú de opciones y el panel de ajustes se abren como paneles deslizantes con los botones de la barra superior, dejando el plano a toda pantalla. La preferencia se recuerda en este navegador.</p>' +
       '<p><strong>Importar objetos.</strong> En <em>Biblioteca</em> pulsa <strong>Importar objeto (.glb / .obj)</strong>. El formato recomendado es <strong>GLB</strong> (glTF 2.0 binario): un solo archivo, estándar web y con materiales; OBJ también se acepta. Indica nombre y dimensiones reales y el objeto se añade a <em>Mis objetos</em> para colocarlo, verlo en 3D y exportarlo. FBX, 3DS y STL no se admiten.</p>' +

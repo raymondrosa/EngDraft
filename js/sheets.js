@@ -490,8 +490,12 @@
   }
 
   function normalizeContent(c) {
-    var s = String(c || 'plan').toLowerCase();
-    if (s === '3d' || s === 'vista3d' || s === '3D'.toLowerCase()) return '3d';
+    var s = String(c || 'plan').toLowerCase().replace(/^vista-/, '').replace(/^fachada-/, '');
+    if (s === '3d' || s === 'vista3d' || s === 'perspectiva') return '3d';
+    if (s === 'front' || s === 'frontal' || s === 'frente') return 'front';
+    if (s === 'rear' || s === 'posterior') return 'rear';
+    if (s === 'right' || s === 'lateral-derecha' || s === 'lateral derecha' || s === 'derecha') return 'right';
+    if (s === 'left' || s === 'lateral-izquierda' || s === 'lateral izquierda' || s === 'izquierda') return 'left';
     if (s === 'notes' || s === 'notas') return 'notes';
     if (s === 'cover' || s === 'portada') return 'cover';
     return 'plan';
@@ -1822,6 +1826,10 @@
     if (content === 'cover') return 'PORTADA';
     if (content === 'notes') return 'NOTAS Y CUADROS';
     if (content === '3d') return 'VISTA 3D';
+    if (content === 'front') return 'FACHADA FRONTAL';
+    if (content === 'rear') return 'FACHADA POSTERIOR';
+    if (content === 'right') return 'FACHADA LATERAL DERECHA';
+    if (content === 'left') return 'FACHADA LATERAL IZQUIERDA';
     return 'PLANTA';
   }
 
@@ -3697,6 +3705,10 @@
     if (c === 'notes') return 'Notas y cuadros';
     if (c === 'cover') return 'Portada';
     if (c === '3d') return 'Vista 3D';
+    if (c === 'front') return 'Fachada frontal';
+    if (c === 'rear') return 'Fachada posterior';
+    if (c === 'right') return 'Lateral derecha';
+    if (c === 'left') return 'Lateral izquierda';
     return 'Planta';
   }
 
@@ -3897,9 +3909,18 @@
 
   function paint3DContent(p, project, sheet, content, k, meta) {
     k = Math.max(k, 0.9);
+    var kind = normalizeContent(sheet && sheet.content);
+    var labels = {
+      '3d': { title: 'VISTA 3D — PERSPECTIVA', caption: 'PERSPECTIVA ARQUITECTÓNICA DEL PROYECTO' },
+      front: { title: 'FACHADA FRONTAL', caption: 'ELEVACIÓN FRONTAL DEL PROYECTO' },
+      rear: { title: 'FACHADA POSTERIOR', caption: 'ELEVACIÓN POSTERIOR DEL PROYECTO' },
+      right: { title: 'FACHADA LATERAL DERECHA', caption: 'ELEVACIÓN LATERAL DERECHA' },
+      left: { title: 'FACHADA LATERAL IZQUIERDA', caption: 'ELEVACIÓN LATERAL IZQUIERDA' }
+    };
+    var info = labels[kind] || labels['3d'];
     var x = content.x, y = content.y;
     var w = content.w, h = content.h;
-    p.text('VISTA 3D — PERSPECTIVA', x, y + 3.0 * k, {
+    p.text(info.title, x, y + 3.0 * k, {
       size: 2.9 * k, bold: true, color: INK, baseline: 'middle'
     });
     p.text(meta.levelText || meta.project, x + w, y + 3.0 * k, {
@@ -3928,7 +3949,7 @@
       drawn = p.image(url, dx, dy, dw, dh);
       if (drawn) {
         p.rect(dx, dy, dw, dh, { stroke: '#b9c2c9', lineWidth: 0.2 });
-        p.text('PERSPECTIVA ARQUITECTÓNICA DEL PROYECTO', x + w / 2,
+        p.text(info.caption, x + w / 2,
           by + bh - 3.0 * k, {
             size: Math.max(1.0, 1.5 * k), color: INK_SOFT,
             align: 'center', baseline: 'middle'
@@ -3939,11 +3960,11 @@
       var cx = x + w / 2;
       var markS = Math.min(18 * k, bh * 0.17);
       drawIsoMark(p, cx, by + bh * 0.38, markS, '#8d9aa5');
-      p.text('VISTA 3D NO DISPONIBLE', cx, by + bh * 0.63, {
+      p.text('VISTA NO DISPONIBLE', cx, by + bh * 0.63, {
         size: Math.min(4.4 * k, bh * 0.085), bold: true, color: INK,
         align: 'center', baseline: 'middle'
       });
-      var msg = 'Genere la vista 3D del proyecto y adjunte una captura para incluirla en esta lámina.';
+      var msg = 'Actualiza la vista desde las propiedades de la lámina para incluirla.';
       var msgStyle = { size: 2.1 * k, color: INK_SOFT };
       var lines = wrapTextLines(msg, Math.min(iw, 150 * k), msgStyle).slice(0, 3);
       var my = by + bh * 0.72;
@@ -4197,12 +4218,20 @@
     var contentName = content === 'cover' ? 'Portada'
       : content === 'notes' ? 'Notas y cuadros'
         : content === '3d' ? 'Vista 3D'
-          : (level ? cleanText(level.name, 'Planta') : 'Planta');
+          : content === 'front' ? 'Fachada frontal'
+            : content === 'rear' ? 'Fachada posterior'
+              : content === 'right' ? 'Lateral derecha'
+                : content === 'left' ? 'Lateral izquierda'
+                  : (level ? cleanText(level.name, 'Planta') : 'Planta');
     var title = cleanText(opts.title, '');
     if (!title) {
       if (content === 'cover') title = 'PORTADA';
       else if (content === 'notes') title = 'NOTAS Y CUADROS';
       else if (content === '3d') title = 'VISTA 3D';
+      else if (content === 'front') title = 'FACHADA FRONTAL';
+      else if (content === 'rear') title = 'FACHADA POSTERIOR';
+      else if (content === 'right') title = 'FACHADA LATERAL DERECHA';
+      else if (content === 'left') title = 'FACHADA LATERAL IZQUIERDA';
       else title = (level ? cleanText(level.name, 'PLANTA') : 'PLANTA').toUpperCase();
     }
     return {
@@ -4236,7 +4265,11 @@
     { id: 'plan', name: 'Planta' },
     { id: 'notes', name: 'Notas y cuadros' },
     { id: 'cover', name: 'Portada' },
-    { id: '3d', name: 'Vista 3D' }
+    { id: '3d', name: 'Perspectiva 3D' },
+    { id: 'front', name: 'Fachada frontal' },
+    { id: 'right', name: 'Lateral derecha' },
+    { id: 'left', name: 'Lateral izquierda' },
+    { id: 'rear', name: 'Fachada posterior' }
   ];
   Sheets.mmToPx = 3.0;
 
