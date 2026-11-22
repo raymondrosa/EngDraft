@@ -23,13 +23,19 @@ assert(S.TEMPLATES.length === 4);
 
 const project = ED.Templates.demo();
 for (const tpl of ['modern', 'classic', 'technical', 'municipal']) {
-  for (const content of ['plan', 'notes', 'cover', '3d']) {
+  for (const content of ['plan', 'notes', 'cover', '3d', 'front', 'rear', 'right', 'left']) {
     const sheet = S.createSheet(project, { template: tpl, content, levelId: 'l0', size: 'A3' });
     project.sheets.push(sheet);
     const b = S.planBounds(project, 'l0');
     assert(b.w > 0 && b.h > 0);
   }
 }
+assert(S.CONTENTS.some(c => c.id === 'front') && S.CONTENTS.some(c => c.id === 'rear'), 'Faltan contenidos de fachada');
+assert.strictEqual(S.createSheet(project, { content: 'front' }).title, 'FACHADA FRONTAL');
+assert.strictEqual(S.createSheet(project, { content: 'rear' }).title, 'FACHADA POSTERIOR');
+const blank = ED.Templates.create('blank');
+assert.strictEqual(blank.levels.length, 1, 'El proyecto en blanco debe tener una planta');
+assert.strictEqual(blank.levels[0].name, 'Planta', 'La primera planta debe llamarse Planta');
 
 // Canvas falso para validar la composición de las 4 plantillas.
 function fakeCanvas(cssW) {

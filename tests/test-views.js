@@ -145,18 +145,18 @@ function tiposDe(view) {
 }
 
 // =====================================================================
-// (a) ED.Views.TYPES — las 5 vistas del contrato §15.2
+// (a) ED.Views.TYPES — las 6 vistas actuales (incluye posterior)
 // =====================================================================
 assert(Array.isArray(ED.Views.TYPES), 'ED.Views.TYPES debe ser un array');
-assert.strictEqual(ED.Views.TYPES.length, 5,
-  'ED.Views.TYPES debe tener 5 vistas; tiene ' + ED.Views.TYPES.length);
-const IDS_ESPERADOS = ['front', 'right', 'left', 'sectionX', 'sectionY'];
+assert.strictEqual(ED.Views.TYPES.length, 6,
+  'ED.Views.TYPES debe tener 6 vistas; tiene ' + ED.Views.TYPES.length);
+const IDS_ESPERADOS = ['front', 'rear', 'right', 'left', 'sectionX', 'sectionY'];
 assert.deepStrictEqual(ED.Views.TYPES.map(function (t) { return t.id; }), IDS_ESPERADOS,
   'Ids de ED.Views.TYPES inesperados: ' + JSON.stringify(ED.Views.TYPES.map(function (t) { return t.id; })));
 ED.Views.TYPES.forEach(function (t) {
   assert(typeof t.name === 'string' && t.name.trim(), 'La vista ' + t.id + ' no tiene nombre visible');
 });
-console.log('Views: 5 tipos de vista registrados (' + IDS_ESPERADOS.join(', ') + ') — OK');
+console.log('Views: 6 tipos de vista registrados (' + IDS_ESPERADOS.join(', ') + ') — OK');
 
 // =====================================================================
 // (b) build() con el proyecto demo: todas las vistas

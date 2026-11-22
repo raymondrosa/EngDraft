@@ -55,7 +55,7 @@ assert(ED.View3D, 'View3D no registrado');
 const project = ED.Templates.demo();
 const store = new ED.Store(project);
 
-for (const preset of ['iso', 'top', 'front', 'right']) {
+for (const preset of ['iso', 'top', 'front', 'rear', 'right', 'left']) {
   const canvas = fakeCanvas(1000, 700);
   const v = new ED.View3D(canvas, { store });
   v.setOptions({ roof: true, furniture: true, labels: true, ground: true, levels: 'all' });
@@ -68,7 +68,7 @@ for (const preset of ['iso', 'top', 'front', 'right']) {
   assert(typeof shot === 'string' && shot.startsWith('data:image/png'), 'screenshot inválido');
   v.destroy();
 }
-console.log('View3D: 4 presets renderizados sin excepciones');
+console.log('View3D: 6 presets renderizados sin excepciones');
 
 // =====================================================================
 // Ampliación 1.2: techos, modo realista, materiales y vuelo de dron
