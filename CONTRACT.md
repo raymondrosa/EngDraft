@@ -127,18 +127,18 @@ project = {
   ],
   sheets: [
     {
-      id: "s1", name: "Planta baja",
+      id: "s1", name: "Planta",
       size: "A3",                   // A4 | A3 | A2 | A1 | Letter | Tabloid
       orientation: "landscape",     // landscape | portrait
       template: "modern",           // modern | classic | technical | municipal
       scale: 100,                   // denominador 1:100 (50, 75, 100, 125, 150, 200, 250)
-      content: "plan",              // plan | notes | cover | 3d
+      content: "plan",              // plan | notes | cover | 3d | front | rear | right | left
       levelId: "l0",
       sheetNo: "A-01",
-      title: "PLANTA BAJA",
+      title: "PLANTA",
       notes: "",
       showDims: true, showFurniture: true, showRooms: true, showGrid: false,
-      imageDataUrl: null            // solo content:"3d", captura opcional
+      imageDataUrl: null            // imagen generada para 3d/front/rear/right/left
     }
   ]
 }

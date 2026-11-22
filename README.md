@@ -30,7 +30,7 @@ Todos los datos se dibujan y se guardan en tu equipo. No se envía nada a ningú
 - **Puertas y ventanas tipadas**: hoja simple, doble hoja o corrediza en puertas; fija, corrediza, doble hoja o proyectante en ventanas; portón seccional o corredizo en garajes. El dibujo 2D, el 3D y las vistas cambian según el tipo, y el selector está en Propiedades del muro.
 - **Snaps avanzados**: extremo, medio, centro, cuadrante, tangente y perpendicular, activables por separado desde la sección **Dibujo** del menú izquierdo. El cursor indica el tipo de punto capturado en todas las herramientas.
 - **Líneas, curvas y escalado**: herramientas **Línea (L)** y **Curva (B)** para geometría de referencia encadenada, y **Escalar (X)** para ampliar o reducir la selección alrededor de un punto base (con factor por arrastre o numérico).
-- **Niveles**: añade plantas con **+** y elimina el nivel activo con **−** (confirmación y deshacer).
+- **Plantas**: el proyecto nuevo empieza con una sola planta llamada **Planta**; usa **Añadir planta** o **+** para crear otra y **−** para eliminar la activa (con confirmación y deshacer).
 
 ![Aberturas tipadas y selector de hoja](docs/aberturas-tipadas.png)
 
@@ -43,8 +43,9 @@ Todos los datos se dibujan y se guardan en tu equipo. No se envía nada a ningú
 - Ambientes con nombre, acabado, color y **área calculada**; detección automática de recintos cerrados.
 - Biblioteca de **65 accesorios** (sala, cocina, baño, dormitorio, exterior, **iluminación**, **plantas, jardines y vías**) y **objetos importados**; ver [Biblioteca de objetos](#biblioteca-de-objetos).
 - Cotas manuales y cotas generales automáticas, textos, norte, rejilla adaptativa, capas con visibilidad y bloqueo.
-- Selección, arrastre, rotación, duplicado, borrado, deshacer/rehacer y edición numérica de cada objeto.
-- Niveles ilimitados con pestañas de planta.
+- Selección, arrastre, rotación, duplicado, borrado y edición numérica de cada objeto.
+- **Deshacer / Rehacer** visibles en la barra de acciones y en la barra superior (`Ctrl+Z` / `Ctrl+Y`); el historial cubre dibujo, propiedades, capas, láminas y plantas.
+- Plantas ilimitadas con pestañas y el botón **Añadir planta**.
 
 La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfaz desde el control **Aa** de la barra de estado.
 
@@ -55,10 +56,10 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 ![Tamaño de letra de la interfaz](docs/menu-letra.png)
 
 ### Vistas y secciones
-- El menú izquierdo, sección **Vistas**, cambia el área 2D entre la **planta** editable y dibujos de **solo lectura** generados desde el proyecto: **frontal**, **lateral derecho**, **lateral izquierdo**, **sección transversal** y **sección longitudinal**.
+- El menú izquierdo, sección **Vistas**, cambia el área 2D entre la **planta** editable y dibujos de **solo lectura** generados desde el proyecto: **frontal**, **posterior**, **lateral derecho**, **lateral izquierdo**, **sección transversal** y **sección longitudinal**.
 - Los alzados muestran muros, huecos de puertas y ventanas, vidrios, antepechos, losas, terreno, techo (con todos los estilos, incluidos cuatro aguas y perfil propio) y etiquetas de nivel; las secciones cortan los muros con relleno y trama, dibujan la geometría posterior en líneas tenues y permiten mover la **posición del corte**.
 - La vista generada se puede ampliar con la rueda o los botones de zoom, arrastrar para desplazarla, ajustar al ancho con **Ajustar** y volver al editor con **Volver a planta**. Se dibujan con primitivas vectoriales propias (sin librerías) y respetan las unidades del proyecto.
-- **Vistas editables:** haz clic en un muro, una abertura, un mueble o el techo dentro de la vista para seleccionarlo y editarlo en Propiedades (o abrir Escena para el techo). La entidad se resalta en ámbar y la vista se actualiza al cambiar los valores.
+- **Vistas editables:** haz clic en un muro, una abertura, un mueble o el techo dentro de la vista para seleccionarlo y editarlo en Propiedades (o abrir Escena para el techo). La entidad se resalta en ámbar y la vista se actualiza al cambiar los valores. El botón **Editar en planta** lleva al editor completo conservando la selección.
 
 ![Abertura seleccionada y editable en la vista frontal](docs/vistas-editables.png)
 - **Sin deformación:** el grosor de líneas, marcos y muros se escala con la misma proporción que la geometría (no con un factor fijo), y el dibujo se recalcula al cambiar el tamaño de la ventana, la orientación o el modo de pantalla. En móvil se puede ampliar con pinza de dos dedos, doble toque o los botones de zoom.
@@ -96,7 +97,7 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 - **Vegetación y vehículos con volumen real**: palmeras, árboles, arbustos, setos y automóviles se dibujan con mallas 3D (troncos cilíndricos, copas esféricas, frondas curvas y ruedas), no como cajas. Las **vías curvas** también son superficies continuas con bordes y eje pintado.
 - **Vuelo de dron**: la cámara recorre la maqueta en bucle durante unos 14 segundos; se inicia y detiene desde **Escena** o con el botón **Vuelo**, y un clic sobre la vista 3D lo detiene.
 - Pisos por ambiente, mobiliario 3D, plantas, jardines y vías, etiquetas de ambiente y captura PNG de alta resolución para las láminas.
-- Presets **Iso / Planta / Frente / Lateral**, encuadre automático, filtro de nivel activo o ambos niveles.
+- Presets **Iso / Planta / Frente / Posterior / Lateral derecha / Lateral izquierda**, encuadre automático, filtro de planta activa o todas las plantas.
 - Órbita con arrastre, desplazamiento con botón derecho/Shift, rueda para zoom y doble clic para encuadrar.
 
 ![Vegetación y vehículos con volumen 3D real](docs/vegetacion-autos.png)
@@ -142,9 +143,9 @@ La rejilla se ajusta desde su propio cuadro (`Shift+G`) y la letra de la interfa
 ### Láminas y PDF
 - **4 cajetines profesionales**: Moderna, Clásica, Técnica y Municipal, con logo, proyecto, cliente, ubicación, ingeniero, licencia, escala, fecha, revisión, nivel, título y número de lámina.
 - Tamaños **A4, A3, A2, A1, Letter y Tabloid**, horizontal o vertical.
-- Contenidos: planta del nivel, notas y cuadros, portada y vista 3D con captura.
+- Contenidos: planta del nivel, notas y cuadros, portada, **perspectiva 3D**, **fachada frontal**, **fachada posterior**, **lateral derecha** y **lateral izquierda**. Las vistas se generan automáticamente desde el proyecto y pueden actualizarse desde Propiedades de la lámina.
 - Escala fija si cabe; si no cabe, se ajusta automáticamente y se anota la escala efectiva.
-- Exportación **PDF vectorial** (no rasteriza el plano), una página por lámina, con acentos y símbolos españoles.
+- Exportación **PDF**: plano vectorial y vistas rasterizadas de alta resolución, una página por lámina, con acentos y símbolos españoles.
 
 ![Lámina de planta](docs/lamina-planta.png)
 
