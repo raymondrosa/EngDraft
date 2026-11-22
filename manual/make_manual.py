@@ -216,7 +216,7 @@ r.font.name = FONT
 r.font.size = Pt(8)
 r.font.bold = True
 r.font.color.rgb = MUTED
-r = hp.add_run("\t\tVersi\u00f3n 1.1")
+r = hp.add_run("\t\tVersi\u00f3n 1.6")
 r.font.name = FONT
 r.font.size = Pt(8)
 r.font.color.rgb = MUTED
@@ -601,9 +601,9 @@ figure(IMG / "interfaz-anotada.png", "Zonas principales de la interfaz de EngDra
 make_table(["Zona", "Qué contiene", "Uso"], [
     ["1. Barra superior", "Proyecto, vistas, nuevo, abrir, guardar, deshacer/rehacer, PDF y DWG/DXF.", "Cambia de vista, guarda o exporta."],
     ["2. Pestañas de vista", "Plano 2D, Vista 3D y Láminas.", "Alterna el modo de trabajo."],
-    ["3. Pestañas de nivel", "Planta baja, Planta alta, +.", "Cambia de nivel o añade uno nuevo."],
+    ["3. Pestañas de planta", "Planta, Planta 2, + y −.", "Cambia de planta, añade otra o elimina la activa."],
     ["4. Barra de herramientas", "Seleccionar, mover, muro, puerta, ventana, ambiente, mueble, texto, cota y borrar.", "Elige la herramienta de dibujo."],
-    ["5. Acciones contextuales", "Detectar ambientes, cotas generales, ajustar; en 3D, presets y captura.", "Órdenes que cambian según la vista."],
+    ["5. Acciones contextuales", "Detectar ambientes, cotas generales, añadir planta, deshacer/rehacer; en 3D, presets y captura.", "Órdenes que cambian según la vista."],
     ["6. Controles de dibujo", "Rejilla, snap, orto, ajustar y zoom.", "Controlan la precisión y el encuadre."],
     ["7. Lienzo", "Plano o maqueta 3D.", "Zona de dibujo y edición."],
     ["8. Inspector", "Propiedades, Biblioteca y Capas.", "Edita el objeto seleccionado o inserta mobiliario."],
@@ -612,15 +612,15 @@ make_table(["Zona", "Qué contiene", "Uso"], [
 
 sub("2.3 Cambiar de vista")
 bullets([
-    "Plano 2D: dibujo técnico y edición precisa.",
+    "Plano 2D: dibujo técnico y edición precisa. Desde la sección Vistas puedes consultar frontal, posterior, laterales y secciones.",
     "Vista 3D: revisión volumétrica, presentación y captura de imagen.",
-    "Láminas: composición de hojas y exportación PDF.",
+    "Láminas: composición de hojas y exportación PDF, con plantas y fachadas automáticas.",
 ])
 para("Puedes cambiar con los botones superiores o con las teclas 1, 2 y 3.")
 
-sub("2.4 Niveles")
-para("Las pestañas junto a “Planta baja” permiten cambiar el nivel activo. El botón + añade un nivel con nombre, elevación y altura libre. Los objetos se dibujan en el nivel activo y se apilan en 3D según la elevación.")
-note("Antes de dibujar una planta nueva, comprueba que la pestaña del nivel correcto esté activa. Un error frecuente es dibujar en Planta baja cuando se quería trabajar en Planta alta.", "Consejo", "FFF6E3", AMBER)
+sub("2.4 Plantas")
+para("Las pestañas junto a “Planta” permiten cambiar la planta activa. El proyecto nuevo empieza con una sola planta llamada Planta; el botón + o la acción Añadir planta crea otra con nombre, elevación y altura libre. Los objetos se dibujan en la planta activa y se apilan en 3D según la elevación.")
+note("Antes de dibujar en una planta nueva, comprueba que su pestaña esté activa. Un error frecuente es dibujar en Planta cuando se quería trabajar en Planta 2.", "Consejo", "FFF6E3", AMBER)
 
 sub("2.5 Inspector y paneles")
 make_table(["Pestaña", "Contenido"], [
@@ -688,8 +688,8 @@ make_table(["Campo", "Ejemplo"], [
 ], [5.0, 11.6], font_size=9)
 para("Estos datos alimentan los cajetines de todas las láminas. Si los cambias después, se actualizan al volver a generar las hojas.")
 
-sub("3.4 Añadir niveles si hacen falta")
-para("Para una vivienda de una planta no necesitas más niveles. Si haces un dúplex, pulsa + junto a las pestañas de nivel, escribe el nombre, la elevación y la altura libre. Por ejemplo: Planta alta, elevación 2,80 m, altura 2,70 m.")
+sub("3.4 Añadir más plantas si hacen falta")
+para("Para una vivienda de una planta no necesitas más. Si haces un dúplex, pulsa Añadir planta (o + junto a las pestañas), escribe el nombre, la elevación y la altura libre. Por ejemplo: Planta 2, elevación 2,80 m, altura 2,70 m.")
 
 sub("3.5 Dibujar el perímetro")
 para("Activa la herramienta Muro (M). El cursor se convierte en una cruz y la barra de estado indica cómo continuar.")
@@ -852,13 +852,13 @@ bullets([
     "En Propiedades puedes editar posición, rotación y nombre.",
     "Duplicar crea una copia desplazada; es útil para sillas, mesas de noche y sanitarios.",
 ])
-para("Los muebles se colocan en el nivel activo y se guardan con el proyecto. La biblioteca es local: no descarga modelos de internet.")
+para("Los muebles se colocan en la planta activa y se guardan con el proyecto. La biblioteca es local: no descarga modelos de internet.")
 
 sub("4.6 Texto")
 para("Texto (T) abre un diálogo con contenido, tamaño y rotación. El texto se dibuja como anotación y se puede mover o editar en Propiedades. Usa textos con moderación: la información principal debe estar en las etiquetas de ambiente y las cotas.")
 
 sub("4.7 Cota")
-para("Cota (D) mide entre dos puntos y dibuja líneas de extensión, línea de cota, ticks y texto. La separación se controla con Offset en Propiedades. Las cotas se guardan en el nivel activo y se incluyen en la lámina si la opción Cotas está activa.")
+para("Cota (D) mide entre dos puntos y dibuja líneas de extensión, línea de cota, ticks y texto. La separación se controla con Offset en Propiedades. Las cotas se guardan en la planta activa y se incluyen en la lámina si la opción Cotas está activa.")
 
 sub("4.8 Borrar")
 para("Borrar (E) elimina el objeto bajo el cursor. También puedes seleccionar y pulsar Supr. El borrado se puede deshacer con Ctrl+Z. Al borrar un muro se eliminan sus aberturas asociadas; los ambientes no se recalculan automáticamente.")
@@ -875,13 +875,13 @@ make_table(["Capa", "Contenido"], [
 ], [4.0, 12.6], font_size=9)
 para("El icono del ojo muestra u oculta la capa; el candado la bloquea. Una capa oculta no se dibuja ni se puede seleccionar. Una capa bloqueada se ve pero no se puede editar. Usa capas para revisar el plano por partes y para evitar mover elementos por error.")
 
-sub("4.10 Niveles")
-para("Cada objeto pertenece a un nivel. La pestaña activa determina dónde se dibuja y qué se edita en 2D. En 3D puedes ver ambos niveles o solo el activo.")
+sub("4.10 Plantas")
+para("Cada objeto pertenece a una planta. La pestaña activa determina dónde se dibuja y qué se edita en 2D. En 3D puedes ver todas las plantas o solo la activa.")
 bullets([
-    "Añade un nivel con +.",
+    "Añade una planta con Añadir planta o con +.",
     "Define elevación y altura; la elevación se usa para apilar en 3D.",
-    "Cambia de nivel antes de dibujar.",
-    "Las láminas eligen el nivel que muestran.",
+    "Cambia de planta antes de dibujar.",
+    "Las láminas eligen la planta que muestran.",
 ])
 
 sub("4.11 Rejilla, snap y orto")
@@ -893,7 +893,8 @@ make_table(["Control", "Qué hace", "Cuándo usarlo"], [
 ], [3.5, 9.2, 4.3], font_size=8.8)
 
 sub("4.12 Deshacer, rehacer y autoguardado")
-para("Ctrl+Z deshace y Ctrl+Y rehace. El historial cubre las operaciones de dibujo y edición; el autoguardado guarda el proyecto en el navegador. Para conservar una copia fuera del navegador, descarga el .engdraft con Ctrl+S.")
+para("Usa los botones Deshacer y Rehacer de la barra de acciones (también están en la barra superior), o Ctrl+Z y Ctrl+Y. El historial cubre dibujo, propiedades, capas, láminas, cambios de planta y eliminación de plantas. El autoguardado guarda el proyecto en el navegador; para conservar una copia fuera del navegador, descarga el .engdraft con Ctrl+S.")
+note("Deshacer actúa sobre el proyecto, no sobre la cámara 3D ni el zoom. La barra de acciones indica con su tooltip la última operación que se deshará.", "Consejo", "FFF6E3", AMBER)
 
 # ================================================================== CAP 5
 chapter(5, "Vista 3D")
@@ -918,15 +919,16 @@ bullets([
 ])
 para("Si la maqueta se ve muy cargada, oculta muebles y etiquetas o enfoca un solo nivel. Para revisar la distribución interior, desactiva el techo.")
 
-sub("5.3 Captura a lámina")
-para("En la vista 3D, pulsa Captura a lámina. EngDraft toma una imagen PNG de la maqueta y crea una lámina A3 con contenido Vista 3D. Luego puedes cambiar el cajetín, el tamaño y la escala en Propiedades. La captura se incrusta en el PDF.")
-note("Si la captura tarda o la lámina queda en blanco, espera a que termine el render y vuelve a intentarlo. Puedes revisar la miniatura en la galería de láminas antes de exportar.", "Consejo", "FFF6E3", AMBER)
+sub("5.3 Captura y 3D automático en láminas")
+para("En la vista 3D, pulsa Captura a lámina para tomar una imagen PNG de la maqueta en la cámara actual y crear una lámina con contenido Perspectiva 3D. Además, cualquier lámina con contenido Perspectiva 3D, Fachada frontal, Fachada posterior o Lateral genera su imagen automáticamente desde el proyecto.")
+para("Si cambias muros, huecos o materiales, abre Propiedades de la lámina y pulsa Actualizar vista. Al exportar el PDF, EngDraft vuelve a generar las vistas automáticas para que la entrega esté al día. La captura manual se conserva como imagen personalizada.")
+note("Si la vista aparece en blanco, espera a que termine el render y pulsa Actualizar vista. Revisa la miniatura de la galería antes de exportar.", "Consejo", "FFF6E3", AMBER)
 
 sub("5.4 Buenas prácticas")
 bullets([
     "Revisa la 3D después de cada cambio importante de muros o niveles.",
     "Comprueba que las puertas y ventanas estén a la altura correcta.",
-    "Usa el nivel activo para revisar plantas interiores y ambos niveles para la volumetría.",
+    "Usa la planta activa para revisar interiores y todas las plantas para la volumetría.",
     "La maqueta no reemplaza un render profesional ni un modelo BIM.",
 ])
 
@@ -985,15 +987,19 @@ make_table(["Contenido", "Qué muestra"], [
     ["Planta", "Dibujo del nivel con muros, aberturas, mobiliario, ambientes y cotas opcionales."],
     ["Notas y cuadros", "Notas generales, cuadro de ambientes con áreas, cuadro de mobiliario y resumen de superficies."],
     ["Portada", "Título del proyecto, datos, miniatura de planta y lista de láminas."],
-    ["Vista 3D", "Captura de la maqueta, si se generó desde la vista 3D."],
+    ["Perspectiva 3D", "Imagen automática de la maqueta en perspectiva isométrica. También admite una captura manual desde la vista 3D."],
+    ["Fachada frontal", "Elevación frontal generada desde muros, puertas, ventanas y techo."],
+    ["Fachada posterior", "Elevación posterior del proyecto."],
+    ["Lateral derecha", "Elevación lateral derecha."],
+    ["Lateral izquierda", "Elevación lateral izquierda."],
 ], [4.2, 12.4], font_size=9)
-para("Puedes activar o desactivar nombres de ambientes, mobiliario y cotas por lámina. Así puedes tener una hoja de planta amueblada y otra limpia para revisión.")
+para("Las vistas de fachada se generan automáticamente y se incrustan en el PDF como imágenes de alta resolución. Puedes activar o desactivar nombres de ambientes, mobiliario y cotas en las láminas de planta; las fachadas no usan esas capas porque solo muestran la envolvente y sus huecos.")
 
 sub("6.5 Exportar el PDF")
 bullets([
     "Exportar PDF en la barra superior o en la galería genera todas las láminas del proyecto.",
     "PDF de esta lámina, en Propiedades, exporta solo la hoja seleccionada.",
-    "El PDF es vectorial: el plano mantiene calidad al hacer zoom.",
+    "El PDF conserva el plano vectorial; las perspectivas y fachadas se incrustan como imágenes de alta resolución.",
     "Cada lámina es una página. El nombre del archivo se toma del proyecto.",
 ])
 
@@ -1025,7 +1031,7 @@ para("Cada cambio se guarda en el navegador después de una breve pausa. La barr
 note("El autoguardado no viaja entre navegadores, equipos ni direcciones web. Si abres la app desde otra carpeta o desde GitHub Pages, verás otro almacenamiento. La copia .engdraft es la única portable.", "Importante", "FDECEC", "C0392B")
 
 sub("7.3 Exportar DXF")
-para("El botón DWG/DXF abre un diálogo para exportar el nivel activo o todos los niveles. El resultado es un archivo DXF ASCII R12 en milímetros, con capas separadas:")
+para("El botón DWG/DXF abre un diálogo para exportar la planta activa o todas las plantas. El resultado es un archivo DXF ASCII R12 en milímetros, con capas separadas:")
 make_table(["Capa DXF", "Contenido"], [
     ["A-WALL", "Muros y sus contornos."],
     ["A-DOOR", "Puertas, hojas y arcos."],
@@ -1098,12 +1104,12 @@ sub("8.6 Capas y presentación")
 para("Mantén las capas ordenadas y usa su visibilidad para generar vistas limpias. Para una entrega, puedes ocultar mobiliario y dejar solo muros, ambientes y cotas; para una presentación, muestra el mobiliario. Recuerda que una capa oculta no se selecciona ni se imprime en la lámina.")
 para("El color de capa se usa en el editor; en PDF el plano se dibuja con línea técnica. No dependas del color para transmitir información esencial.")
 
-sub("8.7 Niveles y 3D")
+sub("8.7 Plantas y 3D")
 bullets([
     "Comprueba la elevación de cada nivel antes de dibujar.",
-    "Revisa que los muros de planta alta se apoyen sobre la planta baja.",
+    "Revisa que los muros de Planta 2 se apoyen sobre Planta.",
     "Usa la vista 3D para detectar muros faltantes o huecos mal ubicados.",
-    "Si una planta no se ve bien, enfoca el nivel activo y desactiva el techo.",
+    "Si una planta no se ve bien, enfoca la planta activa y desactiva el techo.",
 ])
 
 sub("8.8 Antes de entregar")
@@ -1192,10 +1198,11 @@ make_table(["Problema", "Causa probable", "Solución"], [
 
 sub("10.2 Problemas de 3D y láminas")
 make_table(["Problema", "Causa probable", "Solución"], [
-    ["La 3D está vacía", "No hay muros en el nivel o el módulo aún no cargó.", "Cambia a 3D después de dibujar; espera el render."],
+    ["La 3D está vacía", "No hay muros en la planta o el módulo aún no cargó.", "Cambia a 3D después de dibujar; espera el render."],
     ["No veo el interior", "El techo está activo.", "Desactiva Techo."],
     ["La lámina se ve pequeña", "La escala elegida no cabe y se ajustó.", "Usa una hoja mayor o una escala menor."],
-    ["El PDF no incluye la captura 3D", "La lámina se creó sin imagen.", "Vuelve a 3D y usa Captura a lámina."],
+    ["La lámina 3D no muestra imagen", "La vista aún no se generó.", "Pulsa Actualizar vista en Propiedades de la lámina."],
+    ["La fachada no coincide con el plano", "El proyecto cambió después de generar la imagen.", "Pulsa Actualizar vista; al exportar el PDF también se regenera."],
     ["El PDF tarda", "Muchas láminas o imágenes.", "Exporta por partes o usa PDF de esta lámina."],
 ], [5.3, 5.0, 6.3], font_size=8.4)
 
@@ -1305,7 +1312,7 @@ doc.add_page_break()
 h = doc.add_heading("EngDraft en una frase", level=1)
 p_border(h, "bottom", AMBER, 12, 8)
 para("Dibuja la idea, revísala en 3D y entrégala en PDF o DXF. EngDraft está pensado para que el trabajo técnico empiece rápido y termine documentado.", size=14, color=DARK_HEX, align=WD_ALIGN_PARAGRAPH.LEFT)
-para("Gracias por usar EngDraft. Este manual corresponde a la versión 1.1. Los archivos de ejemplo y la documentación técnica se incluyen en la carpeta del proyecto.", space_before=10)
+para("Gracias por usar EngDraft. Este manual corresponde a la versión 1.6. Los archivos de ejemplo y la documentación técnica se incluyen en la carpeta del proyecto.", space_before=10)
 
 sub("Recursos incluidos")
 make_table(["Archivo o carpeta", "Para qué sirve"], [
@@ -1321,7 +1328,7 @@ note("Antes de construir: verifica el proyecto con un profesional habilitado y c
 # Pie de cierre
 p = doc.add_paragraph()
 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = p.add_run("ENGDRAFT  ·  MANUAL DE USO  ·  VERSIÓN 1.1  ·  2026")
+r = p.add_run("ENGDRAFT  ·  MANUAL DE USO  ·  VERSIÓN 1.6  ·  2026")
 r.font.name = FONT
 r.font.size = Pt(8)
 r.font.color.rgb = MUTED

@@ -53,7 +53,7 @@ def cover():
     d.text((338, 242), "DISEÑO RESIDENCIAL 2D · 3D", font=f(FONT_BAHN, 23), fill=(163, 177, 190))
     d.text((338, 292), "Por Prof. Raymond Rosa Ávila", font=f(FONT_SB, 22), fill=(158, 174, 188))
     d.text((W - 330, 165), "MANUAL DE USO", font=f(FONT_SB, 22), fill=AMBER)
-    d.text((W - 330, 198), "Versión 1.1", font=f(FONT, 19), fill=(139, 154, 168))
+    d.text((W - 330, 198), "Versión 1.6", font=f(FONT, 19), fill=(139, 154, 168))
 
     d.text((140, 500), "Manual", font=f(FONT_B, 132), fill=(247, 250, 252))
     d.text((140, 645), "de uso", font=f(FONT_B, 132), fill=(247, 250, 252))
@@ -97,7 +97,7 @@ def cover():
     d.text((card_x, card_y + target_h + 24), "Residencia Aurora · proyecto demostración incluido", font=f(FONT, 20), fill=(146, 160, 174))
 
     d.line([(140, 2200), (W - 140, 2200)], fill=(53, 68, 83), width=1)
-    d.text((140, 2222), "Versión 1.1 · 2026 · Prof. Raymond Rosa Ávila", font=f(FONT, 19), fill=(128, 142, 156))
+    d.text((140, 2222), "Versión 1.6 · 2026 · Prof. Raymond Rosa Ávila", font=f(FONT, 19), fill=(128, 142, 156))
     d.text((W - 300, 2222), "ENGDRAFT", font=f(FONT_B, 21), fill=AMBER)
     im.save(IMG / "cover.png", optimize=True)
     print("cover.png", im.size)
@@ -109,7 +109,7 @@ def annotate_interface():
     marks = [
         (1, 1270, 29, "Barra superior"),
         (2, 1000, 29, "Vistas"),
-        (3, 167, 80, "Niveles"),
+        (3, 167, 80, "Plantas"),
         (4, 31, 300, "Herramientas"),
         (5, 1248, 80, "Acciones"),
         (6, 250, 130, "Dibujo"),
